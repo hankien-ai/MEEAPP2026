@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "MEE BEAUTY SPA"
+description = "A responsive spa management application shell for daily operations, including dashboard, customers, catalog, packages, POS, staff, attendance, loyalty, reports, booking, expenses, and settings modules."
+version = "1.0.0"
+id = "artifacts/mee-beauty-spa"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 25777
+
+[services.development]
+run = "pnpm --filter @workspace/mee-beauty-spa run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/mee-beauty-spa", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/mee-beauty-spa/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "25777"
+BASE_PATH = "/"

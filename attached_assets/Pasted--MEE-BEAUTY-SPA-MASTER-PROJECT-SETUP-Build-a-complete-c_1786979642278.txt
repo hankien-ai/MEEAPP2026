@@ -1,0 +1,1108 @@
+# MEE BEAUTY SPA — MASTER PROJECT SETUP
+
+Build a complete, clean, scalable **Spa Management Web Application** called **MEE BEAUTY SPA**.
+
+This first task is ONLY to create the complete application foundation/app shell.
+
+The application must be fully navigable and visually functional, but detailed business logic will be implemented module-by-module later.
+
+Do NOT try to fully implement all business logic in this first task.
+
+---
+
+## 1. TECHNOLOGY STACK — MUST FOLLOW
+
+Use exactly:
+
+* React
+* Vite
+* TypeScript
+* Tailwind CSS
+* shadcn/ui
+* React Router
+* Supabase
+* PostgreSQL through Supabase
+* Supabase Storage
+* Supabase Realtime
+* Vercel-compatible deployment
+
+Do NOT migrate to Next.js.
+
+Do NOT introduce another frontend framework.
+
+Use a clean TypeScript architecture.
+
+---
+
+# 2. DEVELOPMENT PRINCIPLE
+
+This application will be developed progressively.
+
+The first version must behave like a **complete empty application shell**.
+
+Think of it as:
+
+> "A fully designed and architected application with empty modules, ready to be implemented one module at a time."
+
+Every major module must already have:
+
+* Route
+* Page
+* Layout
+* Navigation item
+* Empty state
+* Loading state
+* Error state where appropriate
+* Basic reusable components
+* Proper TypeScript types
+* Module-specific folder structure
+
+Do NOT implement complicated business logic yet.
+
+Do NOT create fake business logic that will later conflict with the real implementation.
+
+Mock/demo data may be used only where needed to make the interface visually functional.
+
+Clearly separate mock data from future Supabase data access.
+
+---
+
+# 3. CORE ARCHITECTURE
+
+Use a modular architecture.
+
+DO NOT put the entire application into App.tsx.
+
+DO NOT create giant files.
+
+DO NOT mix unrelated business logic.
+
+Recommended structure:
+
+```text
+src/
+├── app/
+│   ├── router/
+│   ├── providers/
+│   └── config/
+│
+├── modules/
+│   ├── dashboard/
+│   ├── customers/
+│   ├── catalog/
+│   ├── packages/
+│   ├── pos/
+│   ├── staff/
+│   ├── attendance/
+│   ├── loyalty/
+│   ├── reports/
+│   ├── booking/
+│   ├── expenses/
+│   └── settings/
+│
+├── components/
+│   ├── ui/
+│   ├── layout/
+│   └── shared/
+│
+├── hooks/
+├── lib/
+│   ├── supabase/
+│   └── utils/
+│
+├── services/
+├── types/
+├── validations/
+└── data/
+```
+
+Each module should be independently organized.
+
+For example:
+
+```text
+modules/customers/
+├── pages/
+├── components/
+├── hooks/
+├── services/
+├── types/
+└── validations/
+```
+
+Use the same pattern for other modules.
+
+Shared components should contain ONLY genuinely shared functionality.
+
+---
+
+# 4. APPLICATION NAME
+
+Display brand name:
+
+**MEE BEAUTY SPA**
+
+Use a clean, premium, modern spa-management aesthetic.
+
+Do not create an overly decorative beauty website.
+
+This is a professional management application.
+
+---
+
+# 5. DESIGN DIRECTION
+
+The UI should be:
+
+* Clean
+* Minimal
+* Professional
+* Fast to operate
+* Mobile-first
+* Easy for spa staff
+* Suitable for daily POS operation
+* Suitable for iPhone
+* Responsive on iPad
+* Responsive on desktop
+* Light/Dark mode supported
+
+Avoid:
+
+* Excessive gradients
+* Excessive animations
+* Huge decorative cards
+* Complicated dashboards
+* Too many colors
+* Excessive shadows
+* Unnecessary visual effects
+
+Prioritize usability over decoration.
+
+---
+
+# 6. RESPONSIVE DESIGN
+
+Mobile is important.
+
+The application must work well on:
+
+* iPhone
+* Android phones
+* iPad
+* Laptop
+* Desktop
+
+Design mobile-first.
+
+On desktop:
+
+* Sidebar navigation
+* Main content area
+
+On mobile:
+
+* Compact header
+* Bottom navigation or mobile navigation
+* Sidebar converted into a mobile drawer where appropriate
+
+Tables must have a usable mobile presentation.
+
+Do NOT simply shrink desktop tables until they become unusable.
+
+---
+
+# 7. THEME
+
+Implement:
+
+* Light mode
+* Dark mode
+* Theme switcher
+
+Use CSS variables/design tokens so colors can be changed centrally.
+
+Do not hard-code colors throughout components.
+
+---
+
+# 8. MAIN APPLICATION LAYOUT
+
+Create:
+
+```text
+┌─────────────────────────────────────────────┐
+│ Header                                      │
+├──────────────┬──────────────────────────────┤
+│              │                              │
+│ Sidebar      │ Main Content                 │
+│              │                              │
+│ Dashboard    │                              │
+│ Customers    │                              │
+│ Services     │                              │
+│ Packages     │                              │
+│ POS          │                              │
+│ Staff        │                              │
+│ Attendance   │                              │
+│ Loyalty      │                              │
+│ Reports      │                              │
+│ Booking      │                              │
+│ Expenses     │                              │
+│ Settings     │                              │
+│              │                              │
+└──────────────┴──────────────────────────────┘
+```
+
+Use a reusable AppLayout.
+
+---
+
+# 9. ROUTES
+
+Create routes for all major modules.
+
+```text
+/
+ /dashboard
+
+ /customers
+ /customers/:id
+
+ /catalog
+ /catalog/services
+ /catalog/products
+
+ /packages
+
+ /pos
+
+ /staff
+ /staff/commissions
+ /attendance
+
+ /loyalty
+
+ /reports
+
+ /booking
+
+ /expenses
+
+ /settings
+```
+
+The application should navigate correctly between all routes.
+
+Do not leave broken links.
+
+---
+
+# 10. DASHBOARD
+
+Create a professional dashboard shell.
+
+Use mock data only for visual demonstration.
+
+Show cards such as:
+
+* Today's revenue
+* Monthly revenue
+* Customers today
+* New customers
+* Appointments
+* Outstanding debt
+* Package usage
+* Staff activity
+
+Also include placeholder sections for:
+
+* Recent transactions
+* Today's customers
+* Revenue overview
+* Staff performance
+
+Do not implement final calculations yet.
+
+Clearly structure the dashboard so real Supabase data can replace mock data later.
+
+---
+
+# 11. CUSTOMERS MODULE
+
+Create a complete UI shell for customer management.
+
+Include:
+
+* Customer list
+* Search
+* Add customer
+* Edit customer
+* Customer profile page
+* Customer photos section
+* Notes section
+* Tags section
+* Package status section
+* Loyalty section
+* Service history section
+* Payment history section
+
+Search should visually support:
+
+* Name
+* Phone number
+
+Do not implement the final database logic yet.
+
+Create clean types/interfaces for Customer.
+
+---
+
+# 12. CATALOG MODULE
+
+Create one unified catalog system with two item types:
+
+```text
+SERVICE
+PRODUCT
+```
+
+Important:
+
+Do NOT use "tag" as the primary technical distinction.
+
+Use:
+
+```text
+item_type = SERVICE | PRODUCT
+```
+
+Tags/categories can be separate.
+
+## SERVICE
+
+UI can later support:
+
+* Name
+* Price
+* Sales commission
+* Performance commission
+* Duration
+* Status
+* Category/tag
+
+Do NOT show inventory controls for services.
+
+## PRODUCT
+
+UI can later support:
+
+* Name
+* Selling price
+* Stock
+* Stock in
+* Stock out
+* Inventory history
+* Minimum stock
+* Category/tag
+* Status
+
+Inventory functionality should only appear for PRODUCT.
+
+Future fields such as:
+
+* Cost price
+* Supplier
+* Lot
+* Expiration date
+
+may be reserved for future expansion.
+
+---
+
+# 13. PACKAGES MODULE
+
+Create package management UI.
+
+A package may contain multiple services.
+
+Example:
+
+```text
+Package A
+
+Facial × 5
+Acne Care × 3
+CO2 × 2
+```
+
+The package UI must support the concept of:
+
+* Package
+* Package items
+* Quantity per service
+* Expiration date
+* Price
+* Active/inactive
+
+Also prepare UI structures for customer-specific package customization.
+
+Important future requirement:
+
+A customer may modify/exchange services inside their purchased package without modifying the original package template.
+
+Do not implement complicated logic yet, but the architecture must allow this.
+
+---
+
+# 14. POS MODULE
+
+Create a professional POS interface.
+
+The intended future flow is:
+
+```text
+Customer
+→ Services / Packages / Products
+→ Staff
+→ Discount / Gift
+→ Payment
+```
+
+The POS UI should support the concepts of:
+
+* Customer selection
+* Service selection
+* Package selection
+* Product selection
+* Seller
+* Performing staff
+* Percentage discount
+* Fixed amount discount
+* Gift service
+* Payment
+* Debt
+
+Payment methods:
+
+* Cash
+* Bank transfer
+* QR
+* Debt
+
+An invoice may contain:
+
+* Multiple packages
+* Multiple services
+* Multiple products
+
+Do NOT fully implement payment/accounting logic yet.
+
+Create clean component boundaries so POS does not contain customer/package/service logic directly.
+
+---
+
+# 15. STAFF MODULE
+
+Create staff management UI.
+
+Support future concepts:
+
+* Staff profile
+* Role
+* Permissions
+* PIN
+* Active/inactive
+* Commission
+* Attendance
+* Performance
+
+Do NOT enforce authentication yet.
+
+---
+
+# 16. PERMISSIONS ARCHITECTURE
+
+Do NOT hard-code permissions into UI components.
+
+Prepare a permission system concept:
+
+```text
+Role
+   ↓
+Permissions
+   ↓
+User
+```
+
+Permissions should eventually be selectable individually.
+
+Example permission categories:
+
+```text
+Customers
+Services
+Products
+Packages
+POS
+Staff
+Attendance
+Loyalty
+Reports
+Booking
+Expenses
+Settings
+```
+
+Each permission can eventually be enabled/disabled.
+
+Do not fully implement production authorization yet.
+
+---
+
+# 17. ATTENDANCE MODULE
+
+Create UI for:
+
+* Check in
+* Check out
+* Working days
+* Late
+* Early leave
+* Approved leave
+* Unapproved leave
+
+Authentication/PIN is NOT required during development.
+
+---
+
+# 18. LOYALTY MODULE
+
+Prepare UI for two loyalty modes:
+
+```text
+POINT
+SESSION
+```
+
+A customer can use one loyalty mode at a time, but the system must allow the loyalty program to be changed later.
+
+Both can have expiration dates.
+
+POINT mode will eventually support:
+
+```text
+Money spent
+→ points earned
+→ points redeemed
+```
+
+SESSION mode:
+
+```text
+Money spent
+→ sessions earned
+→ sessions redeemed
+```
+
+Future support:
+
+* Partial points + cash payment
+* Expiration
+* Loyalty transaction history
+
+Do not fully implement the calculations yet.
+
+---
+
+# 19. COMMISSION ARCHITECTURE
+
+Prepare the application for two independent commission concepts:
+
+## Sales commission
+
+The staff member who sells a service/package may receive sales commission.
+
+## Performance commission
+
+The staff member who actually performs a service receives the commission configured for that service.
+
+Important:
+
+Performance commission is based on the ACTUAL SERVICE PERFORMED.
+
+It does not matter whether the service came from:
+
+* Direct purchase
+* Package
+* Gift service
+
+The architecture must support:
+
+```text
+Seller
+Performing Staff
+Actual Service
+Commission
+```
+
+Do not implement final commission calculations yet.
+
+---
+
+# 20. REPORTS
+
+Create report pages and UI shells for:
+
+* Revenue
+* Customers
+* New customers
+* Returning customers
+* Services
+* Staff performance
+* Commissions
+* Expenses
+* Debt
+* Package sales
+* Package usage
+
+Reports should support:
+
+* Daily
+* Weekly
+* Monthly
+* Custom date range
+
+Prepare export button UI for Excel.
+
+Final calculations will be implemented later.
+
+---
+
+# 21. BOOKING
+
+Create a booking module shell only.
+
+Future architecture should support:
+
+```text
+Customer
+→ Appointment
+→ Service
+→ Staff
+→ Room/Bed
+```
+
+Booking is a future feature.
+
+Do not spend development effort on advanced booking logic now.
+
+---
+
+# 22. EXPENSES
+
+Create an expense management shell.
+
+Future fields:
+
+* Category
+* Amount
+* Date
+* Note
+* Attachment
+* Created by
+
+Do not implement final accounting logic yet.
+
+---
+
+# 23. MULTI-TENANT / MULTI-BRANCH ARCHITECTURE
+
+This is very important.
+
+The system must be designed from the beginning to support multiple organizations and branches.
+
+Conceptual structure:
+
+```text
+Organization
+    ↓
+Branches
+    ↓
+Users / Staff
+    ↓
+Customers
+Services
+Packages
+Invoices
+Products
+Expenses
+...
+```
+
+Current deployment may use one organization and one branch.
+
+Do NOT hard-code MEE BEAUTY SPA as the only possible organization in database logic.
+
+The UI can still display:
+
+**MEE BEAUTY SPA**
+
+---
+
+# 24. CUSTOMER LOYALTY / PACKAGE / REVENUE DESIGN
+
+Do not hard-code these concepts into UI.
+
+Prepare separate domain types for:
+
+* Customer
+* Customer Package
+* Package Item
+* Package Session
+* Loyalty Account
+* Loyalty Transaction
+* Invoice
+* Invoice Item
+* Payment
+* Commission
+
+These will be implemented later with Supabase.
+
+---
+
+# 25. DATABASE FOUNDATION
+
+Connect the project to Supabase using environment variables.
+
+Use:
+
+```text
+VITE_SUPABASE_URL
+VITE_SUPABASE_ANON_KEY
+```
+
+Do NOT hard-code credentials.
+
+Create a clean Supabase client module.
+
+Prepare database migration/schema files if appropriate.
+
+At minimum, prepare the conceptual database foundation for:
+
+```text
+organizations
+branches
+users / profiles
+staff
+
+customers
+customer_photos
+customer_notes
+customer_tags
+
+catalog_items
+services
+products
+
+packages
+package_items
+customer_packages
+package_sessions
+
+invoices
+invoice_items
+payments
+
+staff_commissions
+attendance
+
+loyalty_accounts
+loyalty_transactions
+
+expenses
+
+audit_logs
+```
+
+Do not overbuild every column yet.
+
+The database will be refined module-by-module.
+
+---
+
+# 26. SUPABASE STORAGE
+
+Prepare Storage integration for customer photos.
+
+Do not require photo upload during the initial shell if unnecessary.
+
+Create clean service boundaries so storage logic does not leak into UI components.
+
+---
+
+# 27. SUPABASE REALTIME
+
+Prepare the application architecture for future realtime updates.
+
+Do not implement complex realtime subscriptions yet.
+
+---
+
+# 28. AUTHENTICATION — DEVELOPMENT MODE
+
+IMPORTANT:
+
+Authentication is NOT a priority in this first build.
+
+Create the architecture so authentication can be added later.
+
+For development:
+
+```text
+DEV_MODE = true
+```
+
+Authentication must be bypassed.
+
+The app should open directly into the dashboard.
+
+Use a mock development user such as:
+
+```text
+DEV ADMIN
+```
+
+Do NOT require PIN.
+
+Do NOT show a login wall during development.
+
+Clearly isolate development authentication from production authentication.
+
+Later we will implement:
+
+```text
+Supabase Auth
+→ PIN 6 digits
+→ User
+→ Role
+→ Permissions
+→ RLS
+```
+
+Do not weaken production security because of DEV_MODE.
+
+---
+
+# 29. AUDIT LOG
+
+Prepare an audit log architecture.
+
+Important actions will eventually record:
+
+* Who
+* What action
+* Which record
+* When
+* Old value
+* New value
+
+Important transactional records must not simply disappear when deleted.
+
+Future deletion behavior:
+
+```text
+Active
+→ Trash / Archived
+```
+
+instead of immediate permanent deletion.
+
+Do not implement a full audit engine yet.
+
+---
+
+# 30. ERROR / LOADING / EMPTY STATES
+
+Every module should have reusable states:
+
+* Loading
+* Empty
+* Error
+* Success
+* Confirmation
+
+Avoid blank screens.
+
+Example empty state:
+
+```text
+No customers yet
+
+Add your first customer to get started.
+[ Add Customer ]
+```
+
+---
+
+# 31. MOCK DATA
+
+Use realistic Vietnamese spa demo data where necessary.
+
+Example:
+
+* Vietnamese names
+* Vietnamese phone numbers
+* VND prices
+* Spa services
+* Products
+
+But clearly separate mock/demo data from actual Supabase services.
+
+Do NOT pretend mock data is real persisted data.
+
+---
+
+# 32. CODE QUALITY
+
+Follow these rules strictly:
+
+* TypeScript strict mode
+* Reusable components
+* Small focused components
+* Avoid unnecessary duplication
+* No giant files
+* No giant components
+* No business logic inside presentation components when avoidable
+* Use services/hooks for data operations
+* Use validation schemas where appropriate
+* Use clear naming
+* Avoid `any` unless absolutely necessary
+* Keep modules isolated
+
+If a shared utility is truly shared, place it in shared infrastructure.
+
+Do not prematurely create an enormous global abstraction layer.
+
+---
+
+# 33. PERFORMANCE
+
+The app should remain lightweight.
+
+Avoid unnecessary libraries.
+
+Do not install packages unless they are actually useful.
+
+Use lazy loading/code splitting for major routes where appropriate.
+
+Optimize mobile interactions.
+
+---
+
+# 34. VERCEL COMPATIBILITY
+
+Ensure the project builds successfully with:
+
+```bash
+npm run build
+```
+
+The application must be deployable to Vercel.
+
+Do not use server-specific features that require a Node backend.
+
+Use Vite-compatible environment variables.
+
+Create/update:
+
+```text
+.env.example
+```
+
+with:
+
+```text
+VITE_SUPABASE_URL=
+VITE_SUPABASE_ANON_KEY=
+```
+
+Never commit real secrets.
+
+---
+
+# 35. README
+
+Create a concise README explaining:
+
+* Project purpose
+* Tech stack
+* Folder structure
+* How to install
+* How to run
+* Environment variables
+* How Supabase is connected
+* How to build
+* How to deploy to Vercel
+* DEV_MODE behavior
+* Development roadmap
+
+---
+
+# 36. IMPORTANT DEVELOPMENT ROADMAP
+
+The application will later be implemented in this order:
+
+```text
+1. Customer
+2. Service + Product
+3. Package
+4. POS
+5. Staff + Commission
+6. Attendance
+7. Loyalty
+8. Reports
+9. Booking
+10. Authentication
+11. Permissions
+12. Supabase RLS
+13. Production deployment
+```
+
+The first task is NOT to fully implement these.
+
+The first task is to create the complete shell and architecture so every module is ready.
+
+---
+
+# 37. FINAL REQUIREMENTS
+
+Before finishing this task:
+
+1. Make sure the application starts successfully.
+2. Make sure all routes work.
+3. Make sure navigation works.
+4. Make sure mobile layout works.
+5. Make sure dark/light mode works.
+6. Make sure Supabase client configuration exists.
+7. Make sure no secrets are hard-coded.
+8. Make sure DEV_MODE bypasses authentication.
+9. Make sure all modules have a usable UI shell.
+10. Make sure TypeScript/build has no errors.
+11. Make sure `npm run build` succeeds.
+12. Make sure the architecture is modular and easy to extend.
+13. Do not remove planned modules.
+14. Do not invent complex business rules.
+15. Do not implement authentication yet.
+16. Do not create a monolithic codebase.
+
+After completing the implementation, provide a concise summary of:
+
+* What was created
+* Folder architecture
+* Routes
+* Installed dependencies
+* Supabase setup
+* Environment variables required
+* Build result
+* Any remaining warnings/errors
+
+The result should feel like a **real, polished, empty spa management application ready for progressive implementation**, not a generic starter template.
