@@ -3,6 +3,7 @@
 -- This migration is intentionally schema-only: no demo records, auth flow, or RLS.
 
 create extension if not exists "pgcrypto";
+create extension if not exists "btree_gist";
 
 create type public.catalog_item_type as enum ('SERVICE', 'PRODUCT');
 create type public.catalog_item_status as enum ('ACTIVE', 'INACTIVE');
@@ -16,6 +17,20 @@ create type public.attendance_status as enum (
   'LEAVE_APPROVED',
   'LEAVE_UNAPPROVED'
 );
+create type public.salary_type as enum (
+  'SALARY_MONTHLY',
+  'SALARY_DAILY',
+  'SALARY_HOURLY'
+);
+create type public.payroll_period_status as enum (
+  'DRAFT',
+  'CALCULATED',
+  'APPROVED',
+  'PAID',
+  'VOID'
+);
+create type public.payroll_adjustment_type as enum ('BONUS', 'DEDUCTION');
+create type public.payroll_payment_method as enum ('CASH', 'BANK_TRANSFER', 'QR');
 
 create or replace function public.set_updated_at()
 returns trigger
@@ -76,6 +91,25 @@ create table public.staff (
   archived_at timestamptz,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
+);
+
+create table public.staff_salary_settings (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete restrict,
+  branch_id uuid not null references public.branches(id) on delete restrict,
+  staff_id uuid not null references public.staff(id) on delete restrict,
+  salary_type public.salary_type not null,
+  salary_amount numeric(12, 2) not null check (salary_amount >= 0),
+  effective_from date not null,
+  effective_to date,
+  is_active boolean not null default true,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (effective_to is null or effective_to > effective_from),
+  exclude using gist (
+    staff_id with =,
+    daterange(effective_from, coalesce(effective_to, 'infinity'::date), '[)') with &&
+  )
 );
 
 create table public.customers (
@@ -308,6 +342,82 @@ create table public.attendance (
   unique (staff_id, work_date)
 );
 
+create table public.payroll_periods (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete restrict,
+  branch_id uuid not null references public.branches(id) on delete restrict,
+  period_start date not null,
+  period_end date not null,
+  status public.payroll_period_status not null default 'DRAFT',
+  note text,
+  created_by uuid references public.profiles(id) on delete set null,
+  approved_by uuid references public.profiles(id) on delete set null,
+  approved_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (period_end >= period_start),
+  unique (branch_id, period_start, period_end)
+);
+
+create table public.payroll_records (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete restrict,
+  branch_id uuid not null references public.branches(id) on delete restrict,
+  payroll_period_id uuid not null references public.payroll_periods(id) on delete restrict,
+  staff_id uuid not null references public.staff(id) on delete restrict,
+  base_salary numeric(12, 2) not null default 0 check (base_salary >= 0),
+  attendance_salary numeric(12, 2) not null default 0 check (attendance_salary >= 0),
+  overtime_amount numeric(12, 2) not null default 0 check (overtime_amount >= 0),
+  commission_amount numeric(12, 2) not null default 0 check (commission_amount >= 0),
+  bonus_amount numeric(12, 2) not null default 0 check (bonus_amount >= 0),
+  deduction_amount numeric(12, 2) not null default 0 check (deduction_amount >= 0),
+  total_amount numeric(12, 2) not null default 0 check (total_amount >= 0),
+  worked_days numeric(8, 2) not null default 0 check (worked_days >= 0),
+  worked_hours numeric(8, 2) not null default 0 check (worked_hours >= 0),
+  late_count integer not null default 0 check (late_count >= 0),
+  leave_approved_count integer not null default 0 check (leave_approved_count >= 0),
+  leave_unapproved_count integer not null default 0 check (leave_unapproved_count >= 0),
+  sales_revenue numeric(12, 2) not null default 0 check (sales_revenue >= 0),
+  performance_revenue numeric(12, 2) not null default 0 check (performance_revenue >= 0),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (payroll_period_id, staff_id)
+);
+
+create table public.payroll_record_commissions (
+  id uuid primary key default gen_random_uuid(),
+  payroll_record_id uuid not null references public.payroll_records(id) on delete restrict,
+  staff_commission_id uuid not null references public.staff_commissions(id) on delete restrict,
+  amount numeric(12, 2) not null check (amount >= 0),
+  created_at timestamptz not null default timezone('utc', now()),
+  unique (payroll_record_id, staff_commission_id)
+);
+
+create table public.payroll_adjustments (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete restrict,
+  branch_id uuid not null references public.branches(id) on delete restrict,
+  payroll_record_id uuid not null references public.payroll_records(id) on delete restrict,
+  adjustment_type public.payroll_adjustment_type not null,
+  amount numeric(12, 2) not null check (amount > 0),
+  reason text not null,
+  created_by uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table public.payroll_payments (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete restrict,
+  branch_id uuid not null references public.branches(id) on delete restrict,
+  payroll_record_id uuid not null references public.payroll_records(id) on delete restrict,
+  amount numeric(12, 2) not null check (amount > 0),
+  payment_method public.payroll_payment_method not null,
+  paid_at timestamptz not null default timezone('utc', now()),
+  reference text,
+  created_by uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
 create table public.loyalty_accounts (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete restrict,
@@ -378,6 +488,18 @@ create index invoice_items_invoice_id_idx on public.invoice_items (invoice_id);
 create index payments_invoice_id_idx on public.payments (invoice_id);
 create index staff_commissions_staff_period_idx on public.staff_commissions (staff_id, period_start, period_end);
 create index attendance_branch_date_idx on public.attendance (branch_id, work_date);
+create index staff_salary_settings_staff_effective_idx
+  on public.staff_salary_settings (staff_id, effective_from desc);
+create index payroll_periods_organization_branch_status_idx
+  on public.payroll_periods (organization_id, branch_id, status);
+create index payroll_records_staff_period_idx
+  on public.payroll_records (staff_id, payroll_period_id);
+create index payroll_record_commissions_commission_idx
+  on public.payroll_record_commissions (staff_commission_id);
+create index payroll_adjustments_record_idx
+  on public.payroll_adjustments (payroll_record_id);
+create index payroll_payments_record_paid_idx
+  on public.payroll_payments (payroll_record_id, paid_at desc);
 create index loyalty_transactions_account_created_idx on public.loyalty_transactions (loyalty_account_id, created_at desc);
 create index expenses_organization_branch_date_idx on public.expenses (organization_id, branch_id, incurred_on desc);
 create index audit_logs_organization_created_idx on public.audit_logs (organization_id, created_at desc);
@@ -396,6 +518,10 @@ for each row execute function public.set_updated_at();
 
 create trigger staff_set_updated_at
 before update on public.staff
+for each row execute function public.set_updated_at();
+
+create trigger staff_salary_settings_set_updated_at
+before update on public.staff_salary_settings
 for each row execute function public.set_updated_at();
 
 create trigger customers_set_updated_at
@@ -440,6 +566,14 @@ for each row execute function public.set_updated_at();
 
 create trigger attendance_set_updated_at
 before update on public.attendance
+for each row execute function public.set_updated_at();
+
+create trigger payroll_periods_set_updated_at
+before update on public.payroll_periods
+for each row execute function public.set_updated_at();
+
+create trigger payroll_records_set_updated_at
+before update on public.payroll_records
 for each row execute function public.set_updated_at();
 
 create trigger loyalty_accounts_set_updated_at
