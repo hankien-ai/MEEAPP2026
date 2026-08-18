@@ -1,0 +1,95 @@
+We are now starting PHASE 1 — CUSTOMER.
+
+IMPORTANT:
+- Use the existing Vite + React + TypeScript architecture.
+- Use the existing Supabase client in src/services/supabase.ts.
+- Do NOT change the existing database foundation migration.
+- Do NOT modify POS, staff, payroll, attendance, inventory, permissions, authentication, PIN, RLS, or other modules.
+- Do NOT redesign the whole application.
+- Do NOT use mock/demo data for the Customer module after this task.
+- Keep the existing UI style and layout as much as possible.
+- Keep the code modular and isolated inside the customer feature.
+
+FIRST:
+Inspect the current project structure and identify:
+1. Current Customer page/component.
+2. Where Customer currently uses data/demo.ts or other mock data.
+3. Existing Supabase client.
+4. Existing branch selector / organization context.
+5. Existing Customer types.
+
+Do NOT start coding until this inspection is complete.
+
+Then implement ONLY the Customer data layer and connect the existing Customer UI to Supabase.
+
+Required Customer service functions:
+
+- getCustomers()
+- getCustomer(id)
+- createCustomer(input)
+- updateCustomer(id, input)
+- archiveCustomer(id)
+- searchCustomers(query)
+
+Search must support:
+- customer name
+- phone number
+
+Customer records use the existing database structure:
+
+customers:
+- id
+- organization_id
+- branch_id
+- full_name
+- phone
+- email
+- birthday
+- gender
+- archived_at
+- created_at
+- updated_at
+
+Important:
+- Do not hard-delete customers.
+- Archive by setting archived_at.
+- Normal customer list must exclude archived customers.
+- Search must also exclude archived customers unless explicitly requested.
+- Do not invent database columns.
+
+Organization and branch:
+- Inspect the existing branch selector/context first.
+- Reuse existing organization/branch information if already available.
+- Do not create duplicate organization/branch architecture.
+- If organization/branch context does not exist yet, STOP and report exactly what is missing instead of inventing a new architecture.
+
+Customer UI:
+- Keep the existing customer page.
+- Replace demo/mock customer data with Supabase data.
+- Make Add Customer actually INSERT into Supabase.
+- Make Edit Customer actually UPDATE Supabase.
+- Make Archive Customer update archived_at.
+- Make search use the database.
+- Add proper loading, empty, and error states.
+- Do not implement photos, packages, loyalty, debt, notes, or POS logic yet unless those UI elements already exist. Leave them as placeholders for later phases.
+
+Testing:
+1. Run TypeScript/typecheck.
+2. Run production build.
+3. Verify the Customer page can load from Supabase.
+4. Verify create/update/archive/search code paths.
+5. Do NOT run supabase db push.
+6. Do NOT modify the existing migration.
+7. Do NOT add demo customers.
+
+At the end, report:
+- Files changed
+- Files created
+- What is now connected to Supabase
+- Any blocker
+- Any missing organization/branch context
+- Typecheck result
+- Build result
+
+Stop after PHASE 1 CUSTOMER DATA + BASIC CRUD.
+Do not continue to other modules.
