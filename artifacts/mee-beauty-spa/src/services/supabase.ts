@@ -1,24 +1,9 @@
-/**
- * Supabase boundary for the frontend. Demo screens intentionally use data/demo.ts.
- * Replace the service implementations with Supabase queries when the data model is ready.
- */
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { createClient } from "@supabase/supabase-js";
 
-export const supabaseConfig = {
-  url: import.meta.env.VITE_SUPABASE_URL ?? '',
-  anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY ?? '',
-};
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 
-export const isSupabaseConfigured = Boolean(supabaseConfig.url && supabaseConfig.anonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-let client: SupabaseClient | null = null;
-
-/**
- * Lazily creates a single browser client once Supabase environment variables
- * are available. The shell intentionally stays usable without configuration.
- */
-export function getSupabaseClient(): SupabaseClient | null {
-  if (!isSupabaseConfigured) return null;
-  client ??= createClient(supabaseConfig.url, supabaseConfig.anonKey);
-  return client;
-}
+export const DEFAULT_ORG_ID = "4fc2ef26-2fa6-43c1-9e7f-7362ac747a26";
+export const DEFAULT_BRANCH_ID = "677f6f26-77d1-4a26-ab13-7c2f5a2994f9";
