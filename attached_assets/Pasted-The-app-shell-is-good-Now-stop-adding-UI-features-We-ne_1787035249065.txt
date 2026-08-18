@@ -1,0 +1,90 @@
+The app shell is good. Now stop adding UI features.
+
+We need to connect this project to the REAL Supabase project and create the initial database foundation.
+
+IMPORTANT:
+- Do NOT create a new Supabase project.
+- Do NOT replace Supabase with another database.
+- Do NOT implement production authentication yet.
+- Do NOT implement the detailed business logic yet.
+- Keep DEV_MODE authentication bypass enabled.
+
+First inspect the current project and confirm whether Supabase is actually connected or only configured in code.
+
+Then prepare the Supabase database foundation using migrations/schema.
+
+Create the initial tables and relationships for:
+
+organizations
+branches
+profiles
+staff
+customers
+customer_photos
+customer_notes
+customer_tags
+catalog_items
+services
+products
+packages
+package_items
+customer_packages
+invoices
+invoice_items
+payments
+staff_commissions
+attendance
+loyalty_accounts
+loyalty_transactions
+expenses
+audit_logs
+
+Important architecture requirements:
+
+1. Multi-tenant from the beginning:
+organization → branches → users/staff and business data.
+
+2. catalog_items must distinguish:
+SERVICE
+PRODUCT
+
+Services must NOT have inventory behavior.
+
+Products must support future inventory behavior.
+
+3. Do not over-engineer columns yet.
+Create a clean extensible foundation that we will refine module-by-module.
+
+4. Use proper UUID primary keys where appropriate.
+
+5. Add created_at and updated_at where appropriate.
+
+6. Do not hard-delete important transactional records.
+
+7. Prepare soft-delete/archive fields where appropriate.
+
+8. Do not create fake/mock database records unless clearly marked as seed/demo data.
+
+9. Create a proper migration file so the database schema is reproducible.
+
+10. Prepare Supabase Storage architecture for customer photos, but do not implement complex upload workflows yet.
+
+11. Do NOT enable production RLS/authentication yet if that would block DEV_MODE.
+However, structure the schema so RLS can be added safely later.
+
+12. Verify the application can connect to the configured Supabase project.
+
+13. Verify the migration/schema is valid.
+
+14. Do not modify unrelated UI unless necessary.
+
+At the end, report clearly:
+
+- Is the project actually connected to Supabase?
+- What Supabase project is being used?
+- What tables were created?
+- What migrations were created?
+- What still needs to be configured manually?
+- Are there any errors?
+
+Do NOT claim Supabase is connected unless you actually verified it.
