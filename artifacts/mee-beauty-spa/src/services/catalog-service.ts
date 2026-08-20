@@ -1,316 +1,551 @@
-import { supabase } from "../lib/supabase";
-import {
-  Category,
-  ServiceItem,
-  ProductItem,
-  ServicePackage,
-  PackageItemDetail,
-  TenantContext,
-  CatalogType,
-} from "../types/catalog";
+import { supabase, DEFAULT_ORG_ID, DEFAULT_BRANCH_ID } from "./supabase";
 
+const tenant = {
+  organizationId: DEFAULT_ORG_ID,
+  branchId: DEFAULT_BRANCH_ID,
+};
+
+export const fetchCategories = async (type?: "service" | "product") => {
+  let query = supabase
+    .from("categories")
+    .select("*")
+    .eq("organization_id", tenant.organizationId)
+    .eq("branch_id", tenant.branchId)
+    .order("name");
+
+  if (type) query = query.eq("type", type);
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  return data || [];
+};
+
+export const fetchServices = async (search = "") => {
+  let query = supabase
+    .from("catalog_items")
+    .select(`
+      *,
+      services (
+        id,
+        duration_minutes,
+        sales_commission_rate,
+        performance_commission_rate
+      )
+    `)
+    .eq("organization_id", tenant.organizationId)
+    .eq("branch_id", tenant.branchId)
+    .eq("item_type", "SERVICE")
+    .order("created_at", { ascending: false });
+
+  if (search.trim()) {
+    query = query.or(
+      `name.ilike.%${search}%,code.ilike.%${search}%`,
+    );
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  return (data || []).map((item: any) => ({
+    id: item.id,
+    name: item.name,
+    code: item.code || "",
+    category: item.category || "",
+    price: Number(item.price || 0),
+    status: item.status === "ACTIVE" ? "active" : "inactive",
+    service_details: {
+      duration_minutes:
+        Number(item.services?.[0]?.duration_minutes || 0),
+      sales_commission_rate:
+        Number(item.services?.[0]?.sales_commission_rate || 0),
+      performance_commission_rate:
+        Number(item.services?.[0]?.performance_commission_rate || 0),
+    },
+  }));
+};
+
+export const fetchProducts = async (search = "") => {
+  let query = supabase
+    .from("catalog_items")
+    .select(`
+      *,
+      products (
+        id,
+        cost_price,
+        selling_price,
+        stock_quantity,
+        minimum_stock,
+        unit
+      )
+    `)
+    .eq("organization_id", tenant.organizationId)
+    .eq("branch_id", tenant.branchId)
+    .eq("item_type", "PRODUCT")
+    .order("created_at", { ascending: false });
+
+  if (search.trim()) {
+    query = query.or(
+      `name.ilike.%${search}%,code.ilike.%${search}%`,
+    );
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  return (data || []).map((item: any) => ({
+    id: item.id,
+    name: item.name,
+    code: item.code || "",
+    category: item.category || "",
+    price: Number(item.price || 0),
+    status: item.status === "ACTIVE" ? "active" : "inactive",
+    product_details: {
+      cost_price:
+        Number(item.products?.[0]?.cost_price || 0),
+      selling_price:
+        Number(item.products?.[0]?.selling_price || 0),
+      stock_quantity:
+        Number(item.products?.[0]?.stock_quantity || 0),
+      minimum_stock:
+        Number(item.products?.[0]?.minimum_stock || 0),
+      unit: item.products?.[0]?.unit || "unit",
+    },
+  }));
+};
+
+export const toggleCatalogItemStatus = async (
+  id: string,
+  nextStatus: "active" | "inactive",
+) => {
+  const { error } = await supabase
+    .from("catalog_items")
+    .update({
+      status: nextStatus === "active" ? "ACTIVE" : "INACTIVE",
+    })
+    .eq("id", id)
+    .eq("organization_id", tenant.organizationId)
+    .eq("branch_id", tenant.branchId);
+
+  if (error) throw error;
+};
+
+export const createService = async (input: {
+  code: string;
+  name: string;
+  category?: string;
+  description?: string;
+  price: number;
+  duration_minutes: number;
+  sales_commission_rate?: number;
+  performance_commission_rate?: number;
+}) => {
+  const { data: item, error: itemError } = await supabase
+    .from("catalog_items")
+    .insert({
+      organization_id: tenant.organizationId,
+      branch_id: tenant.branchId,
+      item_type: "SERVICE",
+      code: input.code,
+      name: input.name,
+      category: input.category || null,
+      description: input.description || null,
+      price: input.price,
+      status: "ACTIVE",
+    })
+    .select()
+    .single();
+
+  if (itemError) throw itemError;
+
+  const { data: service, error: serviceError } = await supabase
+    .from("services")
+    .insert({
+      catalog_item_id: item.id,
+      duration_minutes: input.duration_minutes,
+      sales_commission_rate: input.sales_commission_rate || 0,
+      performance_commission_rate:
+        input.performance_commission_rate || 0,
+    })
+    .select()
+    .single();
+
+  if (serviceError) {
+    await supabase
+      .from("catalog_items")
+      .delete()
+      .eq("id", item.id);
+
+    throw serviceError;
+  }
+
+  return {
+    ...item,
+    service,
+  };
+};
+
+export const createProduct = async (input: {
+  code: string;
+  name: string;
+  category?: string;
+  description?: string;
+  cost_price: number;
+  selling_price: number;
+  stock_quantity?: number;
+  minimum_stock?: number;
+  unit?: string;
+}) => {
+  const { data: item, error: itemError } = await supabase
+    .from("catalog_items")
+    .insert({
+      organization_id: tenant.organizationId,
+      branch_id: tenant.branchId,
+      item_type: "PRODUCT",
+      code: input.code,
+      name: input.name,
+      category: input.category || null,
+      description: input.description || null,
+      price: input.selling_price,
+      status: "ACTIVE",
+    })
+    .select()
+    .single();
+
+  if (itemError) throw itemError;
+
+  const { data: product, error: productError } = await supabase
+    .from("products")
+    .insert({
+      catalog_item_id: item.id,
+      cost_price: input.cost_price,
+      selling_price: input.selling_price,
+      stock_quantity: input.stock_quantity || 0,
+      minimum_stock: input.minimum_stock || 0,
+      unit: input.unit || "unit",
+    })
+    .select()
+    .single();
+
+  if (productError) {
+    await supabase
+      .from("catalog_items")
+      .delete()
+      .eq("id", item.id);
+
+    throw productError;
+  }
+
+  return {
+    ...item,
+    product,
+  };
+};
+
+export const fetchPackages = async (
+  type: "SERVICE" | "PRODUCT",
+  search = "",
+) => {
+  let query = supabase
+    .from("packages")
+    .select(`
+      *,
+      package_items (
+        id,
+        item_type,
+        service_id,
+        product_id,
+        quantity,
+        price_override
+      )
+    `)
+    .eq("organization_id", tenant.organizationId)
+    .eq("branch_id", tenant.branchId)
+    .eq("type", type)
+    .order("created_at", { ascending: false });
+
+  if (search.trim()) {
+    query = query.or(
+      `name.ilike.%${search}%,code.ilike.%${search}%`,
+    );
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  return data || [];
+};
+
+export const createPackage = async (input: {
+  code: string;
+  name: string;
+  type: "SERVICE" | "PRODUCT";
+  price: number;
+  validity_days: number;
+  description?: string;
+  items: Array<{
+    item_type: "SERVICE" | "PRODUCT";
+    service_id?: string;
+    product_id?: string;
+    quantity: number;
+    price_override?: number | null;
+  }>;
+}) => {
+  const { data: pkg, error: packageError } = await supabase
+    .from("packages")
+    .insert({
+      organization_id: tenant.organizationId,
+      branch_id: tenant.branchId,
+      code: input.code,
+      name: input.name,
+      type: input.type,
+      price: input.price,
+      validity_days: input.validity_days,
+      description: input.description || null,
+      is_active: true,
+    })
+    .select()
+    .single();
+
+  if (packageError) throw packageError;
+
+  if (input.items.length > 0) {
+    const rows = input.items.map((item) => ({
+      package_id: pkg.id,
+      item_type: item.item_type,
+      service_id: item.service_id || null,
+      product_id: item.product_id || null,
+      quantity: item.quantity,
+      price_override: item.price_override ?? null,
+    }));
+
+    const { error: itemError } = await supabase
+      .from("package_items")
+      .insert(rows);
+
+    if (itemError) {
+      await supabase
+        .from("packages")
+        .delete()
+        .eq("id", pkg.id);
+
+      throw itemError;
+    }
+  }
+
+  return pkg;
+};
+
+/**
+ * Backward compatibility layer
+ * Các màn hình cũ vẫn dùng catalogService.*
+ * API mới vẫn dùng fetchServices/fetchProducts/...
+ */
 export const catalogService = {
-  // --- CATEGORIES ---
-  async getCategories(
-    tenant: TenantContext,
-    type?: CatalogType,
-  ): Promise<Category[]> {
+  getCategories: async (
+    tenantContext: {
+      organizationId: string;
+      branchId: string;
+    },
+    type?: "service" | "product",
+  ) => {
     let query = supabase
       .from("categories")
       .select("*")
-      .eq("organization_id", tenant.organizationId)
-      .eq("branch_id", tenant.branchId);
+      .eq("organization_id", tenantContext.organizationId)
+      .eq("branch_id", tenantContext.branchId)
+      .order("name");
 
-    if (type) query = query.eq("type", type);
+    if (type) {
+      query = query.eq("type", type);
+    }
 
-    const { data, error } = await query.order("name");
+    const { data, error } = await query;
+
     if (error) throw error;
+
     return data || [];
   },
 
-  async saveCategory(
-    tenant: TenantContext,
-    category: Partial<Category>,
-  ): Promise<Category> {
-    const payload = {
-      ...category,
-      organization_id: tenant.organizationId,
-      branch_id: tenant.branchId,
-    };
-
-    const { data, error } = category.id
-      ? await supabase
-          .from("categories")
-          .update(payload)
-          .eq("id", category.id)
-          .select()
-          .single()
-      : await supabase.from("categories").insert(payload).select().single();
-
-    if (error) throw error;
-    return data;
-  },
-
-  async deleteCategory(tenant: TenantContext, id: string): Promise<void> {
-    // Kiểm tra xem có service/product nào đang gán category này không
-    const { count: serviceCount } = await supabase
-      .from("services")
-      .select("id", { count: "exact", head: true })
-      .eq("category_id", id);
-
-    const { count: productCount } = await supabase
-      .from("products")
-      .select("id", { count: "exact", head: true })
-      .eq("category_id", id);
-
-    if ((serviceCount || 0) > 0 || (productCount || 0) > 0) {
-      throw new Error(
-        "Không thể xóa danh mục đang có sản phẩm hoặc dịch vụ liên kết.",
-      );
-    }
-
-    const { error } = await supabase
-      .from("categories")
-      .delete()
-      .eq("id", id)
-      .eq("organization_id", tenant.organizationId)
-      .eq("branch_id", tenant.branchId);
-
-    if (error) throw error;
-  },
-
-  // --- SERVICES ---
-  async getServices(
-    tenant: TenantContext,
-    filters?: { search?: string; categoryId?: string; status?: string },
-  ): Promise<ServiceItem[]> {
+  getServices: async (
+    tenantContext: {
+      organizationId: string;
+      branchId: string;
+    },
+    filters?: {
+      search?: string;
+      categoryId?: string;
+      status?: string;
+    },
+  ) => {
     let query = supabase
-      .from("services")
-      .select("*, categories(name)")
-      .eq("organization_id", tenant.organizationId)
-      .eq("branch_id", tenant.branchId);
+      .from("catalog_items")
+      .select(`
+        *,
+        services (
+          id,
+          duration_minutes,
+          sales_commission_rate,
+          performance_commission_rate
+        )
+      `)
+      .eq("organization_id", tenantContext.organizationId)
+      .eq("branch_id", tenantContext.branchId)
+      .eq("item_type", "SERVICE")
+      .order("created_at", { ascending: false });
 
-    if (filters?.categoryId)
-      query = query.eq("category_id", filters.categoryId);
-    if (filters?.status) query = query.eq("status", filters.status);
-    if (filters?.search) {
+    if (filters?.search?.trim()) {
       query = query.or(
         `name.ilike.%${filters.search}%,code.ilike.%${filters.search}%`,
       );
     }
 
-    const { data, error } = await query.order("created_at", {
-      ascending: false,
-    });
-    if (error) throw error;
-    return data || [];
-  },
-
-  async saveService(
-    tenant: TenantContext,
-    service: Partial<ServiceItem>,
-  ): Promise<ServiceItem> {
-    const payload = {
-      ...service,
-      organization_id: tenant.organizationId,
-      branch_id: tenant.branchId,
-    };
-
-    const { data, error } = service.id
-      ? await supabase
-          .from("services")
-          .update(payload)
-          .eq("id", service.id)
-          .select()
-          .single()
-      : await supabase.from("services").insert(payload).select().single();
+    const { data, error } = await query;
 
     if (error) throw error;
-    return data;
+
+    return (data || []).map((item: any) => ({
+      id: item.id,
+      organization_id: item.organization_id,
+      branch_id: item.branch_id,
+      category_id: null,
+      code: item.code || "",
+      name: item.name,
+      price: Number(item.price || 0),
+      duration: Number(
+        item.services?.[0]?.duration_minutes || 0,
+      ),
+      description: item.description || "",
+      status:
+        item.status === "ACTIVE"
+          ? "active"
+          : "inactive",
+      categories: item.category
+        ? { name: item.category }
+        : undefined,
+      created_at: item.created_at,
+    }));
   },
 
-  async deleteService(tenant: TenantContext, id: string): Promise<void> {
-    const { error } = await supabase
-      .from("services")
-      .delete()
-      .eq("id", id)
-      .eq("organization_id", tenant.organizationId)
-      .eq("branch_id", tenant.branchId);
-
-    if (error) throw error;
-  },
-
-  // --- PRODUCTS ---
-  async getProducts(
-    tenant: TenantContext,
-    filters?: { search?: string; categoryId?: string; status?: string },
-  ): Promise<ProductItem[]> {
+  getProducts: async (
+    tenantContext: {
+      organizationId: string;
+      branchId: string;
+    },
+    filters?: {
+      search?: string;
+      categoryId?: string;
+      status?: string;
+    },
+  ) => {
     let query = supabase
-      .from("products")
-      .select("*, categories(name)")
-      .eq("organization_id", tenant.organizationId)
-      .eq("branch_id", tenant.branchId);
+      .from("catalog_items")
+      .select(`
+        *,
+        products (
+          id,
+          cost_price,
+          selling_price,
+          stock_quantity,
+          minimum_stock,
+          unit
+        )
+      `)
+      .eq("organization_id", tenantContext.organizationId)
+      .eq("branch_id", tenantContext.branchId)
+      .eq("item_type", "PRODUCT")
+      .order("created_at", { ascending: false });
 
-    if (filters?.categoryId)
-      query = query.eq("category_id", filters.categoryId);
-    if (filters?.status) query = query.eq("status", filters.status);
-    if (filters?.search) {
-      query = query.or(
-        `name.ilike.%${filters.search}%,sku.ilike.%${filters.search}%`,
-      );
-    }
-
-    const { data, error } = await query.order("created_at", {
-      ascending: false,
-    });
-    if (error) throw error;
-    return data || [];
-  },
-
-  async saveProduct(
-    tenant: TenantContext,
-    product: Partial<ProductItem>,
-  ): Promise<ProductItem> {
-    const payload = {
-      ...product,
-      organization_id: tenant.organizationId,
-      branch_id: tenant.branchId,
-    };
-
-    const { data, error } = product.id
-      ? await supabase
-          .from("products")
-          .update(payload)
-          .eq("id", product.id)
-          .select()
-          .single()
-      : await supabase.from("products").insert(payload).select().single();
-
-    if (error) throw error;
-    return data;
-  },
-
-  async deleteProduct(tenant: TenantContext, id: string): Promise<void> {
-    const { error } = await supabase
-      .from("products")
-      .delete()
-      .eq("id", id)
-      .eq("organization_id", tenant.organizationId)
-      .eq("branch_id", tenant.branchId);
-
-    if (error) throw error;
-  },
-
-  // --- PACKAGES (GÓI DỊCH VỤ / GÓI SẢN PHẨM) ---
-  async getPackages(
-    tenant: TenantContext,
-    type: CatalogType,
-    filters?: { search?: string; status?: string },
-  ): Promise<ServicePackage[]> {
-    let query = supabase
-      .from("packages")
-      .select("*, package_items(*)")
-      .eq("organization_id", tenant.organizationId)
-      .eq("branch_id", tenant.branchId)
-      .eq("type", type);
-
-    if (filters?.status) query = query.eq("status", filters.status);
-    if (filters?.search) {
+    if (filters?.search?.trim()) {
       query = query.or(
         `name.ilike.%${filters.search}%,code.ilike.%${filters.search}%`,
       );
     }
 
-    const { data, error } = await query.order("created_at", {
-      ascending: false,
-    });
+    const { data, error } = await query;
+
     if (error) throw error;
-    return data || [];
+
+    return (data || []).map((item: any) => ({
+      id: item.id,
+      organization_id: item.organization_id,
+      branch_id: item.branch_id,
+      category_id: null,
+      sku: item.code || "",
+      name: item.name,
+      cost_price: Number(
+        item.products?.[0]?.cost_price || 0,
+      ),
+      selling_price: Number(
+        item.products?.[0]?.selling_price || 0,
+      ),
+      unit: item.products?.[0]?.unit || "unit",
+      description: item.description || "",
+      status:
+        item.status === "ACTIVE"
+          ? "active"
+          : "inactive",
+      categories: item.category
+        ? { name: item.category }
+        : undefined,
+      created_at: item.created_at,
+    }));
   },
 
-  async savePackage(
-    tenant: TenantContext,
-    pkg: Partial<ServicePackage>,
-    items: PackageItemDetail[],
-  ): Promise<ServicePackage> {
-    const pkgPayload = {
-      code: pkg.code || "",
-      name: pkg.name || "",
-      type: pkg.type || "service",
-      price: pkg.price || 0,
-      validity_days: pkg.validity_days || 30,
-      description: pkg.description || "",
-      status: pkg.status || "active",
-      organization_id: tenant.organizationId,
-      branch_id: tenant.branchId,
-    };
-
-    let savedPackageId = pkg.id;
-
-    if (pkg.id) {
-      const { error } = await supabase
-        .from("packages")
-        .update(pkgPayload)
-        .eq("id", pkg.id)
-        .eq("organization_id", tenant.organizationId)
-        .eq("branch_id", tenant.branchId);
-
-      if (error) throw error;
-
-      // Xóa sạch các package_items cũ để ghi đè item mới, tránh nhân đôi
-      const { error: deleteItemsErr } = await supabase
-        .from("package_items")
-        .delete()
-        .eq("package_id", pkg.id)
-        .eq("organization_id", tenant.organizationId)
-        .eq("branch_id", tenant.branchId);
-
-      if (deleteItemsErr) throw deleteItemsErr;
-    } else {
-      const { data, error } = await supabase
-        .from("packages")
-        .insert(pkgPayload)
-        .select()
+  deleteService: async (
+    tenantContext: {
+      organizationId: string;
+      branchId: string;
+    },
+    id: string,
+  ) => {
+    const { data: service, error: findError } =
+      await supabase
+        .from("services")
+        .select("catalog_item_id")
+        .eq("id", id)
         .single();
-      if (error) throw error;
-      savedPackageId = data.id;
-    }
 
-    if (items.length > 0 && savedPackageId) {
-      const itemPayloads = items.map((it) => ({
-        package_id: savedPackageId,
-        organization_id: tenant.organizationId,
-        branch_id: tenant.branchId,
-        item_type: it.item_type,
-        item_id: it.item_id,
-        quantity: Number(it.quantity) || 1,
-        unit_price: Number(it.unit_price) || 0,
-      }));
+    if (findError) throw findError;
 
-      const { error: insertErr } = await supabase
-        .from("package_items")
-        .insert(itemPayloads);
-      if (insertErr) throw insertErr;
-    }
+    const { error } = await supabase
+      .from("catalog_items")
+      .delete()
+      .eq("id", service.catalog_item_id)
+      .eq(
+        "organization_id",
+        tenantContext.organizationId,
+      )
+      .eq("branch_id", tenantContext.branchId);
 
-    // Fetch lại full package bao gồm items
-    const { data: updated, error: fetchErr } = await supabase
-      .from("packages")
-      .select("*, package_items(*)")
-      .eq("id", savedPackageId)
-      .single();
-
-    if (fetchErr) throw fetchErr;
-    return updated;
+    if (error) throw error;
   },
 
-  async deletePackage(tenant: TenantContext, id: string): Promise<void> {
+  deleteProduct: async (
+    tenantContext: {
+      organizationId: string;
+      branchId: string;
+    },
+    id: string,
+  ) => {
+    const { data: product, error: findError } =
+      await supabase
+        .from("products")
+        .select("catalog_item_id")
+        .eq("id", id)
+        .single();
+
+    if (findError) throw findError;
+
     const { error } = await supabase
-      .from("packages")
+      .from("catalog_items")
       .delete()
-      .eq("id", id)
-      .eq("organization_id", tenant.organizationId)
-      .eq("branch_id", tenant.branchId);
+      .eq("id", product.catalog_item_id)
+      .eq(
+        "organization_id",
+        tenantContext.organizationId,
+      )
+      .eq("branch_id", tenantContext.branchId);
 
     if (error) throw error;
   },
