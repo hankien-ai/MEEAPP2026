@@ -6,80 +6,89 @@ import { defineConfig } from 'vite';
 
 import runtimeErrorOverlay from '@replit/vite-plugin-runtime-error-modal';
 
-const isProduction = process.env.NODE_ENV === 'production';
-const isReplit = process.env.REPL_ID !== undefined;
+export default defineConfig(({ command, mode }) => {
+  // PORT chỉ cần khi chạy dev/preview.
+  // Vercel build (`vite build`) không cung cấp PORT.
+  const port = Number(process.env.PORT || 5173);
 
-// PORT không được bắt buộc trong quá trình Vercel build.
-// Nếu có PORT thì dùng, nếu không thì dùng 5000.
-const port = Number(process.env.PORT) || 5000;
+  // BASE_PATH không bắt buộc.
+  // Nếu không có thì deploy app ở root domain.
+  const basePath = process.env.BASE_PATH || '/';
 
-// BASE_PATH cũng không được bắt buộc.
-// Vercel/Vite production mặc định chạy tại root.
-const basePath = process.env.BASE_PATH || '/';
+  const isProduction = mode === 'production';
+  const isReplit = process.env.REPL_ID !== undefined;
 
-export default defineConfig({
-  base: basePath,
+  return {
+    base: basePath,
 
-  plugins: [
-    react(),
-    tailwindcss(),
+    plugins: [
+      react(),
+      tailwindcss(),
 
-    // Chỉ dùng runtime error overlay khi development.
-    ...(!isProduction ? [runtimeErrorOverlay()] : []),
+      // Runtime error overlay chỉ dùng trong development.
+      ...(command === 'serve'
+        ? [runtimeErrorOverlay()]
+        : []),
 
-    // Chỉ load các plugin Replit khi thực sự chạy trên Replit.
-    ...(!isProduction && isReplit
-      ? [
-          await import('@replit/vite-plugin-cartographer').then((m) =>
-            m.cartographer({
-              root: path.resolve(import.meta.dirname, '..'),
-            }),
-          ),
+      // Các plugin riêng của Replit chỉ chạy khi đang ở Replit.
+      ...(command === 'serve' &&
+      !isProduction &&
+      isReplit
+        ? [
+            import('@replit/vite-plugin-cartographer').then((m) =>
+              m.cartographer({
+                root: path.resolve(import.meta.dirname, '..'),
+              }),
+            ),
+            import('@replit/vite-plugin-dev-banner').then((m) =>
+              m.devBanner(),
+            ),
+          ]
+        : []),
+    ],
 
-          await import('@replit/vite-plugin-dev-banner').then((m) =>
-            m.devBanner(),
-          ),
-        ]
-      : []),
-  ],
+    resolve: {
+      alias: {
+        '@': path.resolve(import.meta.dirname, 'src'),
 
-  resolve: {
-    alias: {
-      '@': path.resolve(import.meta.dirname, 'src'),
+        '@assets': path.resolve(
+          import.meta.dirname,
+          '..',
+          '..',
+          'attached_assets',
+        ),
+      },
 
-      '@assets': path.resolve(
+      dedupe: ['react', 'react-dom'],
+    },
+
+    root: path.resolve(import.meta.dirname),
+
+    build: {
+      outDir: path.resolve(
         import.meta.dirname,
-        '..',
-        '..',
-        'attached_assets',
+        'dist/public',
       ),
+      emptyOutDir: true,
     },
 
-    dedupe: ['react', 'react-dom'],
-  },
-
-  root: path.resolve(import.meta.dirname),
-
-  build: {
-    outDir: path.resolve(import.meta.dirname, 'dist/public'),
-    emptyOutDir: true,
-  },
-
-  server: {
-    port,
-    strictPort: false,
-    host: '0.0.0.0',
-    allowedHosts: true,
-
-    fs: {
-      strict: true,
+    // Chỉ cấu hình server khi chạy dev.
+    // Không ảnh hưởng tới Vercel production build.
+    server: {
+      port,
+      strictPort: false,
+      host: '0.0.0.0',
+      allowedHosts: true,
+      fs: {
+        strict: true,
+      },
     },
-  },
 
-  preview: {
-    port,
-    host: '0.0.0.0',
-    allowedHosts: true,
-  },
+    preview: {
+      port,
+      host: '0.0.0.0',
+      allowedHosts: true,
+    },
+  };
 });
-```;
+```
