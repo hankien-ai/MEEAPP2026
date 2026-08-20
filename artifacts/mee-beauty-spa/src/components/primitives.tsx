@@ -1,59 +1,50 @@
-import React from "react";
+import React, {
+  ReactNode,
+  ButtonHTMLAttributes,
+  InputHTMLAttributes,
+  TextareaHTMLAttributes,
+  SelectHTMLAttributes,
+} from "react";
 
 // --- BUTTON ---
-export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?:
-    | "primary"
-    | "secondary"
-    | "outline"
-    | "danger"
-    | "ghost"
-    | "success"
-    | "warning";
+export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: "primary" | "secondary" | "outline" | "danger" | "ghost";
   size?: "sm" | "md" | "lg";
   isLoading?: boolean;
-  children: React.ReactNode;
+  children?: ReactNode;
 }
 
 export function Button({
   variant = "primary",
   size = "md",
   isLoading = false,
-  children,
   className = "",
-  type = "button",
   disabled,
+  children,
   ...props
 }: ButtonProps) {
-  const baseStyles =
-    "inline-flex items-center justify-center font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed";
+  const baseStyle =
+    "inline-flex items-center justify-center font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed";
 
-  const variantStyles: Record<string, string> = {
+  const variants = {
     primary: "bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500",
-    secondary: "bg-gray-600 text-white hover:bg-gray-700 focus:ring-gray-500",
+    secondary:
+      "bg-emerald-600 text-white hover:bg-emerald-700 focus:ring-emerald-500",
     outline:
-      "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:ring-blue-500",
+      "border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 focus:ring-blue-500",
     danger: "bg-red-600 text-white hover:bg-red-700 focus:ring-red-500",
-    ghost: "bg-transparent text-gray-700 hover:bg-gray-100 focus:ring-gray-500",
-    success: "bg-green-600 text-white hover:bg-green-700 focus:ring-green-500",
-    warning:
-      "bg-yellow-600 text-white hover:bg-yellow-700 focus:ring-yellow-500",
+    ghost: "text-gray-600 hover:bg-gray-100 focus:ring-gray-400",
   };
 
-  const sizeStyles = {
-    sm: "px-2.5 py-1.5 text-xs",
+  const sizes = {
+    sm: "px-3 py-1.5 text-xs",
     md: "px-4 py-2 text-sm",
-    lg: "px-6 py-3 text-base",
+    lg: "px-5 py-2.5 text-base",
   };
-
-  const combinedClassName =
-    `${baseStyles} ${variantStyles[variant] || variantStyles.primary} ${sizeStyles[size] || sizeStyles.md} ${className}`.trim();
 
   return (
     <button
-      type={type}
-      className={combinedClassName}
+      className={`${baseStyle} ${variants[variant]} ${sizes[size]} ${className}`}
       disabled={disabled || isLoading}
       {...props}
     >
@@ -75,10 +66,10 @@ export function Button({
             <path
               className="opacity-75"
               fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
             />
           </svg>
-          {children}
+          Đang xử lý...
         </span>
       ) : (
         children
@@ -89,343 +80,195 @@ export function Button({
 
 // --- CARD ---
 export interface CardProps {
-  title?: React.ReactNode;
-  subtitle?: React.ReactNode;
-  action?: React.ReactNode;
-  children: React.ReactNode;
+  title?: ReactNode;
+  action?: ReactNode;
+  children: ReactNode;
   className?: string;
-  footer?: React.ReactNode;
 }
 
-export function Card({
-  title,
-  subtitle,
-  action,
-  children,
-  className = "",
-  footer,
-}: CardProps) {
+export function Card({ title, action, children, className = "" }: CardProps) {
   return (
     <div
-      className={`bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden ${className}`.trim()}
+      className={`bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden ${className}`}
     >
-      {(title || subtitle || action) && (
-        <div className="border-b border-gray-200 px-4 py-3 bg-gray-50 flex items-center justify-between">
-          <div>
-            {title && (
-              <h3 className="text-lg font-medium text-gray-900">{title}</h3>
-            )}
-            {subtitle && (
-              <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>
-            )}
-          </div>
+      {(title || action) && (
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+          {typeof title === "string" ? (
+            <h3 className="font-semibold text-gray-900 text-base">{title}</h3>
+          ) : (
+            title
+          )}
           {action && <div>{action}</div>}
         </div>
       )}
-      <div className="p-4">{children}</div>
-      {footer && (
-        <div className="border-t border-gray-200 px-4 py-3 bg-gray-50">
-          {footer}
-        </div>
-      )}
+      <div className="p-5">{children}</div>
     </div>
   );
 }
 
-// --- PANEL ---
-export interface PanelProps {
-  title?: React.ReactNode;
-  subtitle?: React.ReactNode;
-  actions?: React.ReactNode;
-  action?: React.ReactNode;
-  children: React.ReactNode;
-  className?: string;
-  footer?: React.ReactNode;
-}
-
+// --- PANEL COMPONENTS ---
 export function Panel({
-  title,
-  subtitle,
-  actions,
-  action,
   children,
   className = "",
-  footer,
-}: PanelProps) {
-  const headerAction = actions || action;
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
   return (
     <div
-      className={`bg-white rounded-lg border border-gray-200 shadow-sm p-4 ${className}`.trim()}
+      className={`bg-white rounded-xl border border-gray-200 shadow-sm ${className}`}
     >
-      {(title || subtitle || headerAction) && (
-        <div className="flex items-center justify-between pb-3 mb-3 border-b border-gray-100">
-          <div>
-            {title && (
-              <h4 className="font-semibold text-gray-800 text-base">{title}</h4>
-            )}
-            {subtitle && (
-              <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>
-            )}
-          </div>
-          {headerAction && <div>{headerAction}</div>}
-        </div>
-      )}
-      <div>{children}</div>
-      {footer && (
-        <div className="mt-4 pt-3 border-t border-gray-100">{footer}</div>
-      )}
+      {children}
     </div>
   );
-}
-
-// --- PANEL HEADER ---
-export interface PanelHeaderProps {
-  title?: React.ReactNode;
-  subtitle?: React.ReactNode;
-  action?: React.ReactNode;
-  actions?: React.ReactNode;
-  children?: React.ReactNode;
-  className?: string;
 }
 
 export function PanelHeader({
   title,
-  subtitle,
   action,
-  actions,
-  children,
   className = "",
-}: PanelHeaderProps) {
-  const headerAction = action || actions;
+}: {
+  title: ReactNode;
+  action?: ReactNode;
+  className?: string;
+}) {
   return (
     <div
-      className={`flex items-center justify-between pb-3 mb-3 border-b border-gray-100 ${className}`.trim()}
+      className={`px-5 py-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${className}`}
     >
-      <div>
-        {title && (
-          <h4 className="font-semibold text-gray-800 text-base">{title}</h4>
-        )}
-        {subtitle && <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>}
-        {children}
-      </div>
-      {headerAction && <div>{headerAction}</div>}
+      {typeof title === "string" ? (
+        <h3 className="text-lg font-bold text-gray-900">{title}</h3>
+      ) : (
+        title
+      )}
+      {action && <div>{action}</div>}
     </div>
   );
 }
 
-// --- PANEL CONTENT ---
-export interface PanelContentProps {
-  children: React.ReactNode;
+export function PanelContent({
+  children,
+  className = "",
+}: {
+  children: ReactNode;
   className?: string;
-}
-
-export function PanelContent({ children, className = "" }: PanelContentProps) {
-  return <div className={className}>{children}</div>;
+}) {
+  return <div className={`p-5 ${className}`}>{children}</div>;
 }
 
 // --- PAGE HEADER ---
-export interface PageHeaderProps {
-  title: string;
-  description?: string;
-  subtitle?: string;
-  action?: React.ReactNode;
-  actions?: React.ReactNode;
-  children?: React.ReactNode;
-  className?: string;
-}
-
 export function PageHeader({
   title,
   description,
-  subtitle,
   action,
-  actions,
-  children,
-  className = "",
-}: PageHeaderProps) {
-  const desc = description || subtitle;
-  const actionContent = action || actions || children;
-
+}: {
+  title: string;
+  description?: string;
+  action?: ReactNode;
+}) {
   return (
-    <div
-      className={`flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-4 mb-6 border-b border-gray-200 ${className}`.trim()}
-    >
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-200">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-gray-900">
+        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
           {title}
         </h1>
-        {desc && <p className="mt-1 text-sm text-gray-500">{desc}</p>}
+        {description && (
+          <p className="text-sm text-gray-500 mt-1">{description}</p>
+        )}
       </div>
-      {actionContent && (
-        <div className="flex items-center gap-3">{actionContent}</div>
-      )}
+      {action && <div className="flex items-center gap-2">{action}</div>}
     </div>
   );
 }
 
 // --- INPUT ---
-export interface InputProps
-  extends React.InputHTMLAttributes<HTMLInputElement> {
+export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
-  helperText?: string;
 }
 
-export function Input({
-  label,
-  error,
-  helperText,
-  className = "",
-  ...props
-}: InputProps) {
+export function Input({ label, error, className = "", ...props }: InputProps) {
   return (
-    <div className="w-full space-y-1">
+    <div className="w-full">
       {label && (
-        <label className="block text-sm font-medium text-gray-700">
+        <label className="block text-xs font-semibold text-gray-700 mb-1">
           {label}
         </label>
       )}
       <input
-        className={`w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 ${error ? "border-red-500" : ""} ${className}`.trim()}
+        className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-gray-300 disabled:bg-gray-100 ${
+          error ? "border-red-500 focus:ring-red-500" : ""
+        } ${className}`}
         {...props}
       />
-      {error && <p className="text-xs text-red-500">{error}</p>}
-      {helperText && !error && (
-        <p className="text-xs text-gray-500">{helperText}</p>
-      )}
+      {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
     </div>
   );
 }
 
 // --- TEXTAREA ---
 export interface TextareaProps
-  extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
+  extends TextareaHTMLAttributes<HTMLTextAreaElement> {
   label?: string;
   error?: string;
-  helperText?: string;
 }
 
 export function Textarea({
   label,
   error,
-  helperText,
   className = "",
+  rows = 3,
   ...props
 }: TextareaProps) {
   return (
-    <div className="w-full space-y-1">
+    <div className="w-full">
       {label && (
-        <label className="block text-sm font-medium text-gray-700">
+        <label className="block text-xs font-semibold text-gray-700 mb-1">
           {label}
         </label>
       )}
       <textarea
-        className={`w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 ${error ? "border-red-500" : ""} ${className}`.trim()}
+        rows={rows}
+        className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-gray-300 disabled:bg-gray-100 ${
+          error ? "border-red-500 focus:ring-red-500" : ""
+        } ${className}`}
         {...props}
       />
-      {error && <p className="text-xs text-red-500">{error}</p>}
-      {helperText && !error && (
-        <p className="text-xs text-gray-500">{helperText}</p>
-      )}
+      {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
     </div>
   );
 }
 
-export const TextArea = Textarea;
-
 // --- SELECT ---
-export interface SelectProps
-  extends React.SelectHTMLAttributes<HTMLSelectElement> {
+export interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   label?: string;
   error?: string;
-  helperText?: string;
-  children: React.ReactNode;
 }
 
 export function Select({
   label,
   error,
-  helperText,
   children,
   className = "",
   ...props
 }: SelectProps) {
   return (
-    <div className="w-full space-y-1">
+    <div className="w-full">
       {label && (
-        <label className="block text-sm font-medium text-gray-700">
+        <label className="block text-xs font-semibold text-gray-700 mb-1">
           {label}
         </label>
       )}
       <select
-        className={`w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 ${error ? "border-red-500" : ""} ${className}`.trim()}
+        className={`w-full px-3 py-2 text-sm border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 border-gray-300 ${
+          error ? "border-red-500 focus:ring-red-500" : ""
+        } ${className}`}
         {...props}
       >
         {children}
       </select>
-      {error && <p className="text-xs text-red-500">{error}</p>}
-      {helperText && !error && (
-        <p className="text-xs text-gray-500">{helperText}</p>
-      )}
+      {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
     </div>
-  );
-}
-
-// --- FORM GROUP ---
-export interface FormGroupProps {
-  label?: string;
-  error?: string;
-  children: React.ReactNode;
-  className?: string;
-}
-
-export function FormGroup({
-  label,
-  error,
-  children,
-  className = "",
-}: FormGroupProps) {
-  return (
-    <div className={`space-y-1 ${className}`.trim()}>
-      {label && (
-        <label className="block text-sm font-medium text-gray-700">
-          {label}
-        </label>
-      )}
-      {children}
-      {error && <p className="text-xs text-red-500">{error}</p>}
-    </div>
-  );
-}
-
-// --- BADGE ---
-export interface BadgeProps {
-  variant?: "success" | "warning" | "danger" | "info" | "default" | string;
-  children: React.ReactNode;
-  className?: string;
-}
-
-export function Badge({
-  variant = "default",
-  children,
-  className = "",
-}: BadgeProps) {
-  const variantStyles: Record<string, string> = {
-    success: "bg-green-100 text-green-800 border-green-200",
-    warning: "bg-yellow-100 text-yellow-800 border-yellow-200",
-    danger: "bg-red-100 text-red-800 border-red-200",
-    info: "bg-blue-100 text-blue-800 border-blue-200",
-    default: "bg-gray-100 text-gray-800 border-gray-200",
-  };
-
-  const style = variantStyles[variant] || variantStyles.default;
-
-  return (
-    <span
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${style} ${className}`.trim()}
-    >
-      {children}
-    </span>
   );
 }
 
@@ -433,50 +276,26 @@ export function Badge({
 export interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
-  title?: string;
-  children: React.ReactNode;
-  footer?: React.ReactNode;
-  size?: "sm" | "md" | "lg" | "xl";
+  title: string;
+  children: ReactNode;
 }
 
-export function Modal({
-  isOpen,
-  onClose,
-  title,
-  children,
-  footer,
-  size = "md",
-}: ModalProps) {
+export function Modal({ isOpen, onClose, title, children }: ModalProps) {
   if (!isOpen) return null;
 
-  const sizeClasses = {
-    sm: "max-w-sm",
-    md: "max-w-lg",
-    lg: "max-w-2xl",
-    xl: "max-w-4xl",
-  };
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black bg-opacity-50 p-4">
-      <div
-        className={`relative w-full ${sizeClasses[size] || sizeClasses.md} rounded-lg bg-white shadow-xl overflow-hidden`}
-      >
-        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 bg-gray-50">
-          <h3 className="text-lg font-medium text-gray-900">{title || ""}</h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in">
+      <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] flex flex-col overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+          <h3 className="text-lg font-bold text-gray-900">{title}</h3>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 focus:outline-none"
-            type="button"
+            className="text-gray-400 hover:text-gray-600 text-xl font-bold p-1 rounded hover:bg-gray-100"
           >
-            ✕
+            &times;
           </button>
         </div>
-        <div className="p-6">{children}</div>
-        {footer && (
-          <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex justify-end gap-2">
-            {footer}
-          </div>
-        )}
+        <div className="p-6 overflow-y-auto flex-1">{children}</div>
       </div>
     </div>
   );
@@ -486,196 +305,101 @@ export function Modal({
 export interface TableProps<T> {
   headers: string[];
   data: T[];
-  renderRow: (item: T, index: number) => React.ReactNode;
-  className?: string;
-  emptyText?: string;
+  renderRow: (item: T, index: number) => ReactNode;
 }
 
-export function Table<T>({
-  headers,
-  data,
-  renderRow,
-  className = "",
-  emptyText = "Không có dữ liệu",
-}: TableProps<T>) {
+export function Table<T>({ headers, data, renderRow }: TableProps<T>) {
   return (
-    <div
-      className={`w-full overflow-x-auto border border-gray-200 rounded-lg ${className}`.trim()}
-    >
-      <table className="w-full text-left text-sm text-gray-700 border-collapse">
-        <thead className="bg-gray-50 border-b border-gray-200 text-xs uppercase font-semibold text-gray-600">
-          <tr>
-            {headers.map((header, idx) => (
-              <th key={idx} className="p-3">
-                {header}
+    <div className="w-full overflow-x-auto">
+      <table className="w-full text-left border-collapse text-sm">
+        <thead>
+          <tr className="bg-gray-50 border-b border-gray-200">
+            {headers.map((h, idx) => (
+              <th
+                key={idx}
+                className="p-3 font-semibold text-gray-600 text-xs uppercase tracking-wider"
+              >
+                {h}
               </th>
             ))}
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200 bg-white">
-          {data.length === 0 ? (
-            <tr>
-              <td
-                colSpan={headers.length}
-                className="p-6 text-center text-gray-500"
-              >
-                {emptyText}
-              </td>
-            </tr>
-          ) : (
-            data.map((item, index) => renderRow(item, index))
-          )}
+          {data.map((item, index) => renderRow(item, index))}
         </tbody>
       </table>
     </div>
   );
 }
 
-// --- STAT CARD ---
-export interface StatCardProps {
-  title: string;
-  value: string | number;
-  description?: string;
-  icon?: React.ReactNode;
-  trend?: {
-    value: string | number;
-    isPositive: boolean;
-  };
+// --- BADGE ---
+export interface BadgeProps {
+  variant?: "success" | "warning" | "danger" | "info" | "neutral";
+  children: ReactNode;
   className?: string;
 }
 
-export function StatCard({
-  title,
-  value,
-  description,
-  icon,
-  trend,
+export function Badge({
+  variant = "neutral",
+  children,
   className = "",
-}: StatCardProps) {
+}: BadgeProps) {
+  const styles = {
+    success: "bg-emerald-100 text-emerald-800 border-emerald-200",
+    warning: "bg-amber-100 text-amber-800 border-amber-200",
+    danger: "bg-rose-100 text-rose-800 border-rose-200",
+    info: "bg-blue-100 text-blue-800 border-blue-200",
+    neutral: "bg-gray-100 text-gray-800 border-gray-200",
+  };
+
   return (
-    <div
-      className={`bg-white rounded-lg border border-gray-200 p-5 shadow-sm ${className}`.trim()}
+    <span
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${styles[variant]} ${className}`}
     >
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-medium text-gray-500">{title}</p>
-        {icon && (
-          <div className="p-2 bg-blue-50 rounded-lg text-blue-600">{icon}</div>
-        )}
-      </div>
-      <div className="mt-2 flex items-baseline justify-between">
-        <p className="text-2xl font-semibold text-gray-900">{value}</p>
-        {trend && (
-          <span
-            className={`inline-flex items-center text-xs font-semibold ${trend.isPositive ? "text-green-600" : "text-red-600"}`}
-          >
-            {trend.isPositive ? "↑" : "↓"} {trend.value}
-          </span>
-        )}
-      </div>
-      {description && (
-        <p className="mt-1 text-xs text-gray-500">{description}</p>
-      )}
-    </div>
+      {children}
+    </span>
   );
 }
 
 // --- SPINNER ---
-export function Spinner({
-  size = "md",
-  className = "",
-}: {
-  size?: "sm" | "md" | "lg";
-  className?: string;
-}) {
-  const sizeMap = {
-    sm: "h-4 w-4",
-    md: "h-8 w-8",
-    lg: "h-12 w-12",
-  };
+export function Spinner({ className = "" }: { className?: string }) {
   return (
-    <div className={`flex justify-center items-center ${className}`.trim()}>
-      <div
-        className={`animate-spin rounded-full border-b-2 border-blue-600 ${sizeMap[size]}`}
-      />
-    </div>
-  );
-}
-
-// --- ALERT ---
-export interface AlertProps {
-  variant?: "info" | "success" | "warning" | "danger";
-  title?: string;
-  children: React.ReactNode;
-  className?: string;
-}
-
-export function Alert({
-  variant = "info",
-  title,
-  children,
-  className = "",
-}: AlertProps) {
-  const styles = {
-    info: "bg-blue-50 border-blue-200 text-blue-800",
-    success: "bg-green-50 border-green-200 text-green-800",
-    warning: "bg-yellow-50 border-yellow-200 text-yellow-800",
-    danger: "bg-red-50 border-red-200 text-red-800",
-  };
-
-  return (
-    <div
-      className={`p-4 rounded-md border ${styles[variant]} ${className}`.trim()}
-    >
-      {title && <h5 className="font-semibold mb-1 text-sm">{title}</h5>}
-      <div className="text-sm">{children}</div>
+    <div className={`flex items-center justify-center ${className}`}>
+      <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
     </div>
   );
 }
 
 // --- EMPTY STATE ---
-export interface EmptyStateProps {
-  title?: string;
-  description?: string;
-  action?: React.ReactNode;
-  icon?: React.ReactNode;
-  className?: string;
-}
-
 export function EmptyState({
-  title = "Không có dữ liệu",
+  title,
   description,
   action,
-  icon,
-  className = "",
-}: EmptyStateProps) {
-  return (
-    <div
-      className={`flex flex-col items-center justify-center p-8 text-center bg-gray-50 rounded-lg border border-dashed border-gray-300 ${className}`.trim()}
-    >
-      {icon && <div className="mb-3 text-gray-400 text-3xl">{icon}</div>}
-      <h4 className="text-sm font-semibold text-gray-700">{title}</h4>
-      {description && (
-        <p className="mt-1 text-xs text-gray-500 max-w-sm">{description}</p>
-      )}
-      {action && <div className="mt-4">{action}</div>}
-    </div>
-  );
-}
-
-// --- LOADING ---
-export function Loading({
-  text = "Đang tải...",
-  className = "",
 }: {
-  text?: string;
-  className?: string;
+  title: string;
+  description?: string;
+  action?: ReactNode;
 }) {
   return (
-    <div
-      className={`flex flex-col items-center justify-center p-8 gap-2 text-gray-500 ${className}`.trim()}
-    >
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-      <span className="text-sm">{text}</span>
+    <div className="flex flex-col items-center justify-center p-8 text-center bg-gray-50 rounded-xl border border-dashed border-gray-300">
+      <svg
+        className="w-12 h-12 text-gray-400 mb-3"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="1.5"
+          d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"
+        />
+      </svg>
+      <h4 className="text-base font-semibold text-gray-800">{title}</h4>
+      {description && (
+        <p className="text-xs text-gray-500 mt-1 max-w-sm">{description}</p>
+      )}
+      {action && <div className="mt-4">{action}</div>}
     </div>
   );
 }
