@@ -3,6 +3,9 @@ export type CatalogStatus = "ACTIVE" | "INACTIVE";
 export type CategoryType = "service" | "product";
 export type CategoryStatus = "active" | "inactive";
 
+// Kiểu hoa hồng: % hoặc Tiền cố định
+export type CommissionType = "PERCENT" | "FIXED";
+
 // Catalog Item cơ sở trong DB
 export interface CatalogItem {
   id: string;
@@ -24,6 +27,10 @@ export interface ServiceDetail {
   duration_minutes: number;
   sales_commission_rate: number;
   performance_commission_rate: number;
+  sales_commission_type: CommissionType;
+  sales_commission_value: number;
+  performance_commission_type: CommissionType;
+  performance_commission_value: number;
 }
 
 // Bảng products mở rộng
@@ -43,6 +50,10 @@ export interface ServiceItem extends CatalogItem {
   duration_minutes?: number;
   sales_commission_rate?: number;
   performance_commission_rate?: number;
+  sales_commission_type?: CommissionType;
+  sales_commission_value?: number;
+  performance_commission_type?: CommissionType;
+  performance_commission_value?: number;
 }
 
 export interface ProductItem extends CatalogItem {
@@ -68,10 +79,9 @@ export interface Category {
 export interface PackageItem {
   id?: string;
   package_id?: string;
-  service_id: string; // Tham chiếu đến services.id
+  service_id: string;
   quantity: number;
   price_override?: number | null;
-  // Thông tin hiển thị JOIN
   service_name?: string;
   service_code?: string;
 }

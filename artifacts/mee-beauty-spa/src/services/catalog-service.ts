@@ -74,7 +74,6 @@ export async function deleteCategory(
   id: string,
   categoryName: string,
 ): Promise<void> {
-  // Kiểm tra xem category name có đang được dùng trong catalog_items không
   const { count, error: checkErr } = await supabase
     .from("catalog_items")
     .select("id", { count: "exact", head: true })
@@ -142,7 +141,6 @@ export async function createService(payload: {
   sales_commission_rate?: number;
   performance_commission_rate?: number;
 }): Promise<ServiceItem> {
-  // BƯỚC 1: Insert catalog_items
   const { data: catItem, error: itemErr } = await supabase
     .from("catalog_items")
     .insert({
@@ -161,7 +159,6 @@ export async function createService(payload: {
 
   if (itemErr) throw itemErr;
 
-  // BƯỚC 2: Insert services
   const { data: sDetail, error: sErr } = await supabase
     .from("services")
     .insert({
@@ -197,7 +194,6 @@ export async function updateService(
     performance_commission_rate?: number;
   },
 ): Promise<void> {
-  // BƯỚC 1: Update catalog_items
   const { error: itemErr } = await supabase
     .from("catalog_items")
     .update({
@@ -212,7 +208,6 @@ export async function updateService(
 
   if (itemErr) throw itemErr;
 
-  // BƯỚC 2: Update services
   const { error: sErr } = await supabase
     .from("services")
     .update({
@@ -226,17 +221,15 @@ export async function updateService(
 }
 
 export async function deleteService(catalogItemId: string): Promise<void> {
-  // Lấy services.id tương ứng
   const { data: sData, error: sFetchErr } = await supabase
     .from("services")
     .select("id")
     .eq("catalog_item_id", catalogItemId)
-    .single();
+    .maybeSingle();
 
   if (sFetchErr) throw sFetchErr;
 
   if (sData?.id) {
-    // Kiểm tra package_items có dùng service này không
     const { count, error: pkgCheckErr } = await supabase
       .from("package_items")
       .select("id", { count: "exact", head: true })
@@ -248,7 +241,6 @@ export async function deleteService(catalogItemId: string): Promise<void> {
       throw new Error("Dịch vụ đang nằm trong gói, không thể xóa.");
     }
 
-    // Xóa từ services trước
     const { error: sDelErr } = await supabase
       .from("services")
       .delete()
@@ -256,7 +248,6 @@ export async function deleteService(catalogItemId: string): Promise<void> {
     if (sDelErr) throw sDelErr;
   }
 
-  // Xóa catalog_items
   const { error: catDelErr } = await supabase
     .from("catalog_items")
     .delete()
@@ -314,7 +305,6 @@ export async function createProduct(payload: {
   minimum_stock: number;
   unit: string;
 }): Promise<ProductItem> {
-  // BƯỚC 1: catalog_items
   const { data: catItem, error: itemErr } = await supabase
     .from("catalog_items")
     .insert({
@@ -333,7 +323,6 @@ export async function createProduct(payload: {
 
   if (itemErr) throw itemErr;
 
-  // BƯỚC 2: products
   const { data: pDetail, error: pErr } = await supabase
     .from("products")
     .insert({
@@ -374,7 +363,6 @@ export async function updateProduct(
     unit: string;
   },
 ): Promise<void> {
-  // BƯỚC 1: update catalog_items
   const { error: itemErr } = await supabase
     .from("catalog_items")
     .update({
@@ -389,7 +377,6 @@ export async function updateProduct(
 
   if (itemErr) throw itemErr;
 
-  // BƯỚC 2: update products
   const { error: pErr } = await supabase
     .from("products")
     .update({
@@ -405,7 +392,6 @@ export async function updateProduct(
 }
 
 export async function deleteProduct(catalogItemId: string): Promise<void> {
-  // Delete from products
   const { error: pErr } = await supabase
     .from("products")
     .delete()
@@ -413,7 +399,6 @@ export async function deleteProduct(catalogItemId: string): Promise<void> {
 
   if (pErr) throw pErr;
 
-  // Delete from catalog_items
   const { error: itemErr } = await supabase
     .from("catalog_items")
     .delete()
@@ -461,8 +446,7 @@ export async function fetchPackages(): Promise<Package[]> {
 
   if (itemErr) throw itemErr;
 
-  // Lấy danh sách service detail để hiển thị tên service
-  const serviceIds = (items || []).map((i) => i.service_id);
+  const serviceIds = (items || []).map((i) => i.service_id).filter(Boolean);
   let serviceNameMap = new Map<string, { name: string; code: string }>();
 
   if (serviceIds.length > 0) {
@@ -588,7 +572,6 @@ export async function updatePackage(
 
   if (pkgErr) throw pkgErr;
 
-  // Xóa cũ và thêm lại package_items
   await supabase.from("package_items").delete().eq("package_id", packageId);
 
   if (items.length > 0) {
@@ -633,7 +616,6 @@ export async function togglePackageStatus(
   return nextActive;
 }
 
-// Named Export cho compatibility
 export const catalogService = {
   fetchCategories,
   createCategory,

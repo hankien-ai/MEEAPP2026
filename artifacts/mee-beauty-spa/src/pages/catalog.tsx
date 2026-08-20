@@ -4,7 +4,6 @@ import {
   Plus,
   Edit2,
   Trash2,
-  Filter,
   Package as PackageIcon,
   ShoppingBag,
   Scissors,
@@ -14,7 +13,6 @@ import {
   CheckCircle2,
   RefreshCw,
   Clock,
-  Layers,
 } from "lucide-react";
 import {
   ServiceItem,
@@ -55,20 +53,17 @@ export default function CatalogManagementPage() {
     message: string;
   } | null>(null);
 
-  // States Dữ liệu
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [packages, setPackages] = useState<Package[]>([]);
 
-  // Filter state
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<
     "ALL" | "ACTIVE" | "INACTIVE"
   >("ALL");
 
-  // Modal States
   const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
   const [editingService, setEditingService] = useState<ServiceItem | null>(
     null,
@@ -85,7 +80,6 @@ export default function CatalogManagementPage() {
   const [isPackageModalOpen, setIsPackageModalOpen] = useState(false);
   const [editingPackage, setEditingPackage] = useState<Package | null>(null);
 
-  // Delete Confirm Modal State
   const [confirmDelete, setConfirmDelete] = useState<{
     type: ActiveTab;
     id: string;
@@ -98,7 +92,6 @@ export default function CatalogManagementPage() {
     setTimeout(() => setNotification(null), 4000);
   };
 
-  // Load Data dựa theo Tab
   const loadData = async () => {
     setLoading(true);
     try {
@@ -148,7 +141,6 @@ export default function CatalogManagementPage() {
     }).format(amount || 0);
   };
 
-  // Filtered Services
   const filteredServices = useMemo(() => {
     return services.filter((s) => {
       const matchSearch =
@@ -160,7 +152,6 @@ export default function CatalogManagementPage() {
     });
   }, [services, searchTerm, categoryFilter, statusFilter]);
 
-  // Filtered Products
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
       const matchSearch =
@@ -172,7 +163,6 @@ export default function CatalogManagementPage() {
     });
   }, [products, searchTerm, categoryFilter, statusFilter]);
 
-  // Category Toggle & Handlers
   const handleToggleStatus = async (
     id: string,
     currentStatus: CatalogStatus,
@@ -227,7 +217,6 @@ export default function CatalogManagementPage() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6 bg-slate-50 min-h-screen">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">
@@ -248,7 +237,6 @@ export default function CatalogManagementPage() {
         </button>
       </div>
 
-      {/* Toast Notification */}
       {notification && (
         <div
           className={`flex items-center justify-between p-4 rounded-lg border ${
@@ -271,7 +259,6 @@ export default function CatalogManagementPage() {
         </div>
       )}
 
-      {/* Tabs Header */}
       <div className="flex border-b border-slate-200 bg-white rounded-t-lg px-4 pt-2">
         <button
           onClick={() => setActiveTab("services")}
@@ -319,7 +306,6 @@ export default function CatalogManagementPage() {
         </button>
       </div>
 
-      {/* TAB 1: DỊCH VỤ */}
       {activeTab === "services" && (
         <div className="space-y-4">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
@@ -461,7 +447,6 @@ export default function CatalogManagementPage() {
         </div>
       )}
 
-      {/* TAB 2: SẢN PHẨM */}
       {activeTab === "products" && (
         <div className="space-y-4">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
@@ -617,7 +602,6 @@ export default function CatalogManagementPage() {
         </div>
       )}
 
-      {/* TAB 3: DANH MỤC */}
       {activeTab === "categories" && (
         <div className="space-y-6">
           <div className="flex justify-end">
@@ -634,7 +618,6 @@ export default function CatalogManagementPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Nhóm Dịch vụ */}
             <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm space-y-3">
               <div className="flex items-center justify-between border-b pb-2">
                 <h3 className="font-bold text-slate-800 flex items-center gap-2">
@@ -700,7 +683,6 @@ export default function CatalogManagementPage() {
               </div>
             </div>
 
-            {/* Nhóm Sản phẩm */}
             <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm space-y-3">
               <div className="flex items-center justify-between border-b pb-2">
                 <h3 className="font-bold text-slate-800 flex items-center gap-2">
@@ -769,7 +751,6 @@ export default function CatalogManagementPage() {
         </div>
       )}
 
-      {/* TAB 4: GÓI DỊCH VỤ */}
       {activeTab === "packages" && (
         <div className="space-y-4">
           <div className="flex justify-between items-center bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
@@ -879,7 +860,6 @@ export default function CatalogManagementPage() {
         </div>
       )}
 
-      {/* MODAL CỦA DỊCH VỤ */}
       {isServiceModalOpen && (
         <ServiceFormModal
           isOpen={isServiceModalOpen}
@@ -904,7 +884,6 @@ export default function CatalogManagementPage() {
         />
       )}
 
-      {/* MODAL CỦA SẢN PHẨM */}
       {isProductModalOpen && (
         <ProductFormModal
           isOpen={isProductModalOpen}
@@ -929,7 +908,6 @@ export default function CatalogManagementPage() {
         />
       )}
 
-      {/* MODAL DANH MỤC */}
       {isCategoryModalOpen && (
         <CategoryFormModal
           isOpen={isCategoryModalOpen}
@@ -953,7 +931,6 @@ export default function CatalogManagementPage() {
         />
       )}
 
-      {/* MODAL GÓI DỊCH VỤ */}
       {isPackageModalOpen && (
         <PackageFormModal
           isOpen={isPackageModalOpen}
@@ -978,7 +955,6 @@ export default function CatalogManagementPage() {
         />
       )}
 
-      {/* MODAL XÁC NHẬN XÓA */}
       {confirmDelete && (
         <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg p-6 max-w-sm w-full space-y-4 shadow-xl">
@@ -1008,11 +984,7 @@ export default function CatalogManagementPage() {
   );
 }
 
-// ==================== COMPONENT MODAL SUB-FORMS ====================
-
-// 1. Service Modal
 function ServiceFormModal({
-  isOpen,
   onClose,
   editingService,
   categories,
@@ -1201,9 +1173,7 @@ function ServiceFormModal({
   );
 }
 
-// 2. Product Modal
 function ProductFormModal({
-  isOpen,
   onClose,
   editingProduct,
   categories,
@@ -1408,9 +1378,7 @@ function ProductFormModal({
   );
 }
 
-// 3. Category Modal
 function CategoryFormModal({
-  isOpen,
   onClose,
   editingCategory,
   onSave,
@@ -1510,9 +1478,7 @@ function CategoryFormModal({
   );
 }
 
-// 4. Package Modal
 function PackageFormModal({
-  isOpen,
   onClose,
   editingPackage,
   availableServices,
@@ -1545,12 +1511,10 @@ function PackageFormModal({
 
   const addItemRow = () => {
     if (availableServices.length === 0) return;
-    const firstService = availableServices[0];
-    if (firstService.service_id) {
-      setItems([
-        ...items,
-        { service_id: firstService.service_id, quantity: 1 },
-      ]);
+    const validService = availableServices.find((s) => s.service_id || s.id);
+    if (validService) {
+      const targetId = validService.service_id || validService.id;
+      setItems([...items, { service_id: targetId, quantity: 1 }]);
     }
   };
 
@@ -1648,7 +1612,6 @@ function PackageFormModal({
             ></textarea>
           </div>
 
-          {/* Dịch vụ trong gói */}
           <div className="border-t pt-3 space-y-2">
             <div className="flex items-center justify-between">
               <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
@@ -1684,11 +1647,14 @@ function PackageFormModal({
                       }}
                       className="flex-1 p-1.5 border border-slate-300 rounded text-xs bg-white"
                     >
-                      {availableServices.map((s) => (
-                        <option key={s.service_id || s.id} value={s.service_id}>
-                          {s.name} ({s.code})
-                        </option>
-                      ))}
+                      {availableServices.map((s) => {
+                        const targetId = s.service_id || s.id;
+                        return (
+                          <option key={targetId} value={targetId}>
+                            {s.name} ({s.code})
+                          </option>
+                        );
+                      })}
                     </select>
                     <input
                       type="number"
