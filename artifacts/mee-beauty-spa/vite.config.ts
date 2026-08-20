@@ -1,4 +1,3 @@
-```ts
 import path from 'path';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
@@ -25,7 +24,6 @@ export default defineConfig({
               root: path.resolve(import.meta.dirname, '..'),
             }),
           ),
-
           await import('@replit/vite-plugin-dev-banner').then((m) =>
             m.devBanner(),
           ),
@@ -36,7 +34,6 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, 'src'),
-
       '@assets': path.resolve(
         import.meta.dirname,
         '..',
@@ -44,7 +41,6 @@ export default defineConfig({
         'attached_assets',
       ),
     },
-
     dedupe: ['react', 'react-dom'],
   },
 
@@ -60,7 +56,6 @@ export default defineConfig({
     strictPort: true,
     host: '0.0.0.0',
     allowedHosts: true,
-
     fs: {
       strict: true,
     },
@@ -72,4 +67,3 @@ export default defineConfig({
     allowedHosts: true,
   },
 });
-```;
