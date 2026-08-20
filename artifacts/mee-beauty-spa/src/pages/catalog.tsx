@@ -1,308 +1,193 @@
-import { useMemo, useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
-  Box,
-  Clock3,
-  Edit3,
-  Filter,
-  Grid2X2,
-  PackagePlus,
-  Plus,
-  Search,
-  Sparkles,
-  ToggleLeft,
-} from "lucide-react";
-import { Link, useLocation } from "wouter";
-import { demoCatalog, formatVnd } from "@/data/demo";
-import type { CatalogItem } from "@/types/domain";
-import {
-  Badge,
-  Modal,
-  PageHeader,
-  Panel,
-  PanelHeader,
-  Toast,
-} from "@/components/primitives";
+  fetchServices,
+  fetchProducts,
+  toggleCatalogItemStatus,
+} from "../services/catalog-service";
+import { ServiceItemDomain, ProductItemDomain } from "../types/domain";
 
-function CatalogForm({
-  onClose,
-  onSave,
-}: {
-  onClose: () => void;
-  onSave: (item: CatalogItem) => void;
-}) {
-  const [name, setName] = useState("");
-  const [kind, setKind] = useState<"service" | "product">("service");
-  const [price, setPrice] = useState("");
-  const submit = (event: React.FormEvent) => {
-    event.preventDefault();
-    onSave({
-      id: `item-${Date.now()}`,
-      organizationId: "org-mee",
-      name: name || "Danh mục mới",
-      kind,
-      category: kind === "service" ? "Dịch vụ" : "Sản phẩm",
-      price: Number(price) || 0,
-      active: true,
-      durationMinutes: kind === "service" ? 60 : undefined,
-      stock: kind === "product" ? 0 : undefined,
-      unit: kind === "product" ? "sản phẩm" : undefined,
-    });
-  };
-  return (
-    <Modal
-      title="Thêm vào danh mục"
-      description="Tạo nhanh một mục demo để kiểm tra luồng vận hành."
-      onClose={onClose}
-    >
-      <form onSubmit={submit} className="space-y-4 p-5">
-        <div>
-          <label className="label" htmlFor="catalog-name">
-            Tên mục
-          </label>
-          <input
-            id="catalog-name"
-            className="input"
-            required
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            data-testid="input-catalog-name"
-            placeholder="Tên dịch vụ hoặc sản phẩm"
-          />
-        </div>
-        <div>
-          <label className="label" htmlFor="catalog-kind">
-            Loại
-          </label>
-          <select
-            id="catalog-kind"
-            className="input"
-            value={kind}
-            onChange={(event) =>
-              setKind(event.target.value as "service" | "product")
-            }
-            data-testid="select-catalog-kind"
-          >
-            <option value="service">Dịch vụ</option>
-            <option value="product">Sản phẩm</option>
-          </select>
-        </div>
-        <div>
-          <label className="label" htmlFor="catalog-price">
-            Giá niêm yết (VND)
-          </label>
-          <input
-            id="catalog-price"
-            className="input"
-            type="number"
-            min="0"
-            value={price}
-            onChange={(event) => setPrice(event.target.value)}
-            data-testid="input-catalog-price"
-            placeholder="680000"
-          />
-        </div>
-        <div className="flex justify-end gap-2 pt-2">
-          <button
-            type="button"
-            className="btn btn-soft"
-            onClick={onClose}
-            data-testid="button-cancel-catalog"
-          >
-            Huỷ
-          </button>
-          <button
-            type="submit"
-            className="btn btn-primary"
-            data-testid="button-save-catalog"
-          >
-            <Plus size={15} /> Lưu mục
-          </button>
-        </div>
-      </form>
-    </Modal>
+export const CatalogPage: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<"SERVICES" | "PRODUCTS">(
+    "SERVICES",
   );
-}
+  const [services, setServices] = useState<ServiceItemDomain[]>([]);
+  const [products, setProducts] = useState<ProductItemDomain[]>([]);
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-export default function CatalogPage() {
-  const [location] = useLocation();
-  const [items, setItems] = useState(demoCatalog);
-  const [query, setQuery] = useState("");
-  const [formOpen, setFormOpen] = useState(false);
-  const [toast, setToast] = useState("");
-  const activeKind = location.endsWith("/services")
-    ? "service"
-    : location.endsWith("/products")
-      ? "product"
-      : "all";
-  const shown = useMemo(
-    () =>
-      items.filter(
-        (item) =>
-          (activeKind === "all" || item.kind === activeKind) &&
-          item.name.toLowerCase().includes(query.toLowerCase()),
-      ),
-    [activeKind, items, query],
-  );
-  const save = (item: CatalogItem) => {
-    setItems((current) => [item, ...current]);
-    setFormOpen(false);
-    setToast("Đã thêm mục mới vào danh mục demo.");
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setErrorMessage(null);
+    try {
+      if (activeTab === "SERVICES") {
+        const data = await fetchServices(search);
+        setServices(data);
+      } else {
+        const data = await fetchProducts(search);
+        setProducts(data);
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || "Lỗi khi tải dữ liệu từ Supabase");
+    } finally {
+      setLoading(false);
+    }
+  }, [activeTab, search]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const handleToggleStatus = async (
+    id: string,
+    currentStatus: "active" | "inactive",
+  ) => {
+    try {
+      const nextStatus = currentStatus === "active" ? "inactive" : "active";
+      await toggleCatalogItemStatus(id, nextStatus);
+      await loadData();
+    } catch (err: any) {
+      alert(err.message);
+    }
   };
+
   return (
-    <div className="page-wrap">
-      <PageHeader
-        kicker="Thiết lập vận hành"
-        title="Danh mục"
-        subtitle="Một nơi cho toàn bộ dịch vụ, sản phẩm và giá bán của MEE."
-        actions={
+    <div className="p-6">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">Catalog Management</h1>
+        <div className="flex gap-2">
           <button
-            className="btn btn-primary"
-            onClick={() => setFormOpen(true)}
-            data-testid="button-add-catalog-item"
+            className={`px-4 py-2 rounded ${activeTab === "SERVICES" ? "bg-blue-600 text-white" : "bg-gray-100"}`}
+            onClick={() => setActiveTab("SERVICES")}
           >
-            <Plus size={15} /> Thêm danh mục
+            Services
           </button>
-        }
-      />
-      <div className="mb-5 tab-bar">
-        <Link
-          href="/catalog"
-          className={`tab ${activeKind === "all" ? "active" : ""}`}
-          data-testid="tab-catalog-all"
-        >
-          Tất cả <span className="ml-1 opacity-60">{items.length}</span>
-        </Link>
-        <Link
-          href="/catalog/services"
-          className={`tab ${activeKind === "service" ? "active" : ""}`}
-          data-testid="tab-catalog-services"
-        >
-          Dịch vụ{" "}
-          <span className="ml-1 opacity-60">
-            {items.filter((i) => i.kind === "service").length}
-          </span>
-        </Link>
-        <Link
-          href="/catalog/products"
-          className={`tab ${activeKind === "product" ? "active" : ""}`}
-          data-testid="tab-catalog-products"
-        >
-          Sản phẩm{" "}
-          <span className="ml-1 opacity-60">
-            {items.filter((i) => i.kind === "product").length}
-          </span>
-        </Link>
-      </div>
-      <Panel testId="panel-catalog">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
-          <div className="relative min-w-[220px] flex-1">
-            <Search
-              size={16}
-              className="absolute left-3 top-3 text-muted-foreground"
-            />
-            <input
-              className="input pl-9"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Tìm trong danh mục..."
-              data-testid="input-search-catalog"
-            />
-          </div>
           <button
-            className="btn btn-soft"
-            onClick={() => setToast("Bộ lọc tồn kho sẽ được kết nối sau.")}
-            data-testid="button-filter-catalog"
+            className={`px-4 py-2 rounded ${activeTab === "PRODUCTS" ? "bg-blue-600 text-white" : "bg-gray-100"}`}
+            onClick={() => setActiveTab("PRODUCTS")}
           >
-            <Filter size={15} /> Lọc
+            Products
           </button>
-        </div>
-        <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
-          {shown.map((item) => (
-            <div
-              className="panel catalog-card"
-              key={item.id}
-              data-testid={`card-catalog-${item.id}`}
-            >
-              <div className="flex items-start justify-between">
-                <div className="catalog-orb">
-                  {item.kind === "service" ? (
-                    <Sparkles size={18} />
-                  ) : (
-                    <Box size={18} />
-                  )}
-                </div>
-                <button
-                  className="btn btn-ghost !p-2"
-                  onClick={() => setToast(`Đang mở chỉnh sửa ${item.name}.`)}
-                  aria-label={`Sửa ${item.name}`}
-                  data-testid={`button-edit-catalog-${item.id}`}
-                >
-                  <Edit3 size={15} />
-                </button>
-              </div>
-              <div className="mt-5 flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-extrabold">{item.name}</h3>
-                  <div className="mt-1 text-[11px] text-muted-foreground">
-                    {item.category}
-                  </div>
-                </div>
-                <Badge tone={item.kind === "service" ? "green" : "coral"}>
-                  {item.kind === "service" ? "Dịch vụ" : "Sản phẩm"}
-                </Badge>
-              </div>
-              <div className="mt-5 flex items-center justify-between border-t border-border pt-3">
-                <span className="font-mono-app text-sm font-medium">
-                  {formatVnd(item.price)}
-                </span>
-                <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                  {item.kind === "service" ? (
-                    <>
-                      <Clock3 size={12} /> {item.durationMinutes} phút
-                    </>
-                  ) : (
-                    <>
-                      <PackagePlus size={12} /> Còn {item.stock} {item.unit}
-                    </>
-                  )}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-        {shown.length === 0 && (
-          <div
-            className="p-8 text-center text-xs text-muted-foreground"
-            data-testid="empty-catalog"
-          >
-            Không có mục phù hợp.
-          </div>
-        )}
-      </Panel>
-      <div className="mt-4 grid gap-3 sm:grid-cols-3">
-        <div className="notice">
-          <ToggleLeft size={16} />
-          <div>
-            <strong className="text-xs">Danh mục đang hoạt động</strong>
-            <p className="mt-1 text-[11px] opacity-75">
-              8 mục · Giá bán theo chi nhánh
-            </p>
-          </div>
-        </div>
-        <div className="notice">
-          <Grid2X2 size={16} />
-          <div>
-            <strong className="text-xs">Phân loại rõ ràng</strong>
-            <p className="mt-1 text-[11px] opacity-75">
-              Dịch vụ và sản phẩm độc lập
-            </p>
-          </div>
         </div>
       </div>
-      {formOpen && (
-        <CatalogForm onClose={() => setFormOpen(false)} onSave={save} />
+
+      <div className="mb-4">
+        <input
+          type="text"
+          placeholder={`Tìm kiếm ${activeTab === "SERVICES" ? "dịch vụ" : "sản phẩm"}...`}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full max-w-md px-3 py-2 border rounded"
+        />
+      </div>
+
+      {errorMessage && (
+        <div className="p-4 mb-4 text-red-700 bg-red-100 rounded border border-red-300">
+          {errorMessage}
+        </div>
       )}
-      {toast && <Toast message={toast} onClose={() => setToast("")} />}
+
+      {loading ? (
+        <p>Đang tải dữ liệu từ Supabase...</p>
+      ) : activeTab === "SERVICES" ? (
+        <table className="w-full border-collapse border">
+          <thead>
+            <tr className="bg-gray-50 border-b">
+              <th className="p-2 text-left border">Tên dịch vụ</th>
+              <th className="p-2 text-left border">Danh mục</th>
+              <th className="p-2 text-right border">Giá (VNĐ)</th>
+              <th className="p-2 text-right border">Thời lượng (phút)</th>
+              <th className="p-2 text-center border">Trạng thái</th>
+              <th className="p-2 text-center border">Thao tác</th>
+            </tr>
+          </thead>
+          <tbody>
+            {services.map((item) => (
+              <tr key={item.id} className="border-b hover:bg-gray-50">
+                <td className="p-2 border">{item.name}</td>
+                <td className="p-2 border">{item.category}</td>
+                <td className="p-2 border text-right">
+                  {item.price.toLocaleString()}
+                </td>
+                <td className="p-2 border text-right">
+                  {item.service_details.duration_minutes}
+                </td>
+                <td className="p-2 border text-center">
+                  <span
+                    className={`px-2 py-1 rounded text-xs ${item.status === "active" ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}`}
+                  >
+                    {item.status}
+                  </span>
+                </td>
+                <td className="p-2 border text-center">
+                  <button
+                    onClick={() => handleToggleStatus(item.id, item.status)}
+                    className="text-sm text-blue-600 underline"
+                  >
+                    Đổi trạng thái
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <table className="w-full border-collapse border">
+          <thead>
+            <tr className="bg-gray-50 border-b">
+              <th className="p-2 text-left border">Tên sản phẩm</th>
+              <th className="p-2 text-left border">Danh mục</th>
+              <th className="p-2 text-right border">Giá bán (VNĐ)</th>
+              <th className="p-2 text-right border">Tồn kho</th>
+              <th className="p-2 text-right border">Tồn tối thiểu</th>
+              <th className="p-2 text-left border">Đơn vị</th>
+              <th className="p-2 text-center border">Trạng thái</th>
+              <th className="p-2 text-center border">Thao tác</th>
+            </tr>
+          </thead>
+          <tbody>
+            {products.map((item) => (
+              <tr key={item.id} className="border-b hover:bg-gray-50">
+                <td className="p-2 border">{item.name}</td>
+                <td className="p-2 border">{item.category}</td>
+                <td className="p-2 border text-right">
+                  {item.product_details.selling_price.toLocaleString()}
+                </td>
+                <td className="p-2 border text-right font-medium">
+                  {item.product_details.stock_quantity}
+                </td>
+                <td className="p-2 border text-right">
+                  {item.product_details.minimum_stock}
+                </td>
+                <td className="p-2 border">{item.product_details.unit}</td>
+                <td className="p-2 border text-center">
+                  <span
+                    className={`px-2 py-1 rounded text-xs ${item.status === "active" ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}`}
+                  >
+                    {item.status}
+                  </span>
+                </td>
+                <td className="p-2 border text-center">
+                  <button
+                    onClick={() => handleToggleStatus(item.id, item.status)}
+                    className="text-sm text-blue-600 underline"
+                  >
+                    Đổi trạng thái
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
-}
+};
+
+// Thêm export default để sửa lỗi Vite runtime error
+
+export const ServicesPage = CatalogPage;
+export const ProductsPage = CatalogPage;
+export const CombosPage = CatalogPage;
+export const PricingPage = CatalogPage;
+export default CatalogPage;

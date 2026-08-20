@@ -1,48 +1,101 @@
-import { type ReactNode } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
-import { ErrorBoundary } from '@/components/error-boundary';
-import { Toaster } from '@/components/ui/toaster';
-import { TooltipProvider } from '@/components/ui/tooltip';
-import { AppShell } from '@/components/app-shell';
-import DashboardPage from '@/pages/dashboard';
-import { CustomerProfilePage, CustomersPage } from '@/pages/customers';
-import CatalogPage from '@/pages/catalog';
-import { AttendancePage, BookingPage, ExpensesPage, LoyaltyPage, PackagesPage, PosPage, ReportsPage, SettingsPage, StaffPage } from '@/pages/operations';
-import NotFound from '@/pages/not-found';
+import React, { useState } from "react";
+import DashboardPage from "./pages/dashboard";
+import CustomersPage, { CustomerProfilePage } from "./pages/customers";
+import CatalogPage from "./pages/catalog";
+import OperationsPage from "./pages/operations";
+import StaffPage from "./pages/staff";
+import NotFoundPage from "./pages/not-found";
 
-const queryClient = new QueryClient();
+export function App() {
+  const [activeTab, setActiveTab] = useState<string>("dashboard");
 
-function RoutedErrorBoundary({ children }: { children: ReactNode }) {
-  const [location] = useLocation();
-  return <ErrorBoundary resetKey={location}>{children}</ErrorBoundary>;
-}
+  const renderContent = () => {
+    switch (activeTab) {
+      case "dashboard":
+        return <DashboardPage />;
+      case "customers":
+        return <CustomersPage />;
+      case "catalog":
+        return <CatalogPage />;
+      case "operations":
+        return <OperationsPage />;
+      case "staff":
+        return <StaffPage />;
+      default:
+        return <NotFoundPage />;
+    }
+  };
 
-function Router() {
-  return <AppShell><RoutedErrorBoundary><Switch>
-    <Route path="/" component={DashboardPage} />
-    <Route path="/dashboard" component={DashboardPage} />
-    <Route path="/customers" component={CustomersPage} />
-    <Route path="/customers/:id" component={CustomerProfilePage} />
-    <Route path="/catalog" component={CatalogPage} />
-    <Route path="/catalog/services" component={CatalogPage} />
-    <Route path="/catalog/products" component={CatalogPage} />
-    <Route path="/packages" component={PackagesPage} />
-    <Route path="/pos" component={PosPage} />
-    <Route path="/staff" component={StaffPage} />
-    <Route path="/staff/commissions" component={StaffPage} />
-    <Route path="/attendance" component={AttendancePage} />
-    <Route path="/loyalty" component={LoyaltyPage} />
-    <Route path="/reports" component={ReportsPage} />
-    <Route path="/booking" component={BookingPage} />
-    <Route path="/expenses" component={ExpensesPage} />
-    <Route path="/settings" component={SettingsPage} />
-    <Route component={NotFound} />
-  </Switch></RoutedErrorBoundary></AppShell>;
-}
+  return (
+    <div className="min-h-screen bg-gray-100 flex flex-col">
+      <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-lg">
+            M
+          </div>
+          <h1 className="text-xl font-bold text-gray-900">
+            Mee Beauty Spa - Management
+          </h1>
+        </div>
+        <nav className="flex items-center gap-2">
+          <button
+            onClick={() => setActiveTab("dashboard")}
+            className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+              activeTab === "dashboard"
+                ? "bg-blue-50 text-blue-600"
+                : "text-gray-600 hover:bg-gray-100"
+            }`}
+          >
+            Tổng quan
+          </button>
+          <button
+            onClick={() => setActiveTab("customers")}
+            className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+              activeTab === "customers"
+                ? "bg-blue-50 text-blue-600"
+                : "text-gray-600 hover:bg-gray-100"
+            }`}
+          >
+            Khách hàng
+          </button>
+          <button
+            onClick={() => setActiveTab("catalog")}
+            className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+              activeTab === "catalog"
+                ? "bg-blue-50 text-blue-600"
+                : "text-gray-600 hover:bg-gray-100"
+            }`}
+          >
+            Danh mục
+          </button>
+          <button
+            onClick={() => setActiveTab("operations")}
+            className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+              activeTab === "operations"
+                ? "bg-blue-50 text-blue-600"
+                : "text-gray-600 hover:bg-gray-100"
+            }`}
+          >
+            Vận hành
+          </button>
+          <button
+            onClick={() => setActiveTab("staff")}
+            className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+              activeTab === "staff"
+                ? "bg-blue-50 text-blue-600"
+                : "text-gray-600 hover:bg-gray-100"
+            }`}
+          >
+            Nhân viên
+          </button>
+        </nav>
+      </header>
 
-function App() {
-  return <QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><Router /></WouterRouter><Toaster /></TooltipProvider></QueryClientProvider>;
+      <main className="flex-1 p-6 max-w-7xl w-full mx-auto">
+        {renderContent()}
+      </main>
+    </div>
+  );
 }
 
 export default App;

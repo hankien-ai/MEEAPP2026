@@ -1,318 +1,218 @@
 import { supabase } from "./supabase";
-import {
-  ServiceItemDomain,
-  ProductItemDomain,
-  CreateServiceInput,
-  UpdateServiceInput,
-  CreateProductInput,
-  UpdateProductInput,
-} from "../types/domain";
+import { CatalogItem } from "../types/domain";
 
-export const CURRENT_ORG_ID = "4fc2ef26-2fa6-43c1-9e7f-7362ac747a26";
-export const CURRENT_BRANCH_ID = "677f6f26-77d1-4a26-ab13-7c2f5a2994f9";
+// Helper domain interfaces for UI consumer pages
+export interface ServiceItemDomain extends CatalogItem {
+  category: string;
+  service_details: {
+    duration_minutes: number;
+  };
+}
 
-// ==========================================
-// SERVICE OPERATIONS
-// ==========================================
+export interface ProductItemDomain extends CatalogItem {
+  category: string;
+  product_details: {
+    selling_price: number;
+    stock_quantity: number;
+    minimum_stock: number;
+    unit: string;
+  };
+}
+
+// --- CORE IMPLEMENTATIONS ---
+
+export async function getCatalogItems(search?: string): Promise<CatalogItem[]> {
+  let query = supabase
+    .from("catalog_items")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (search && search.trim() !== "") {
+    query = query.ilike("name", `%${search.trim()}%`);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error("Error fetching catalog items from Supabase:", error);
+    throw error;
+  }
+
+  return (data as CatalogItem[]) || [];
+}
+
+export const fetchCatalogItems = getCatalogItems;
 
 export async function fetchServices(
-  searchQuery?: string,
+  search?: string,
 ): Promise<ServiceItemDomain[]> {
   let query = supabase
     .from("catalog_items")
-    .select(
-      `
-      *,
-      services!inner (
-        duration_minutes,
-        sales_commission_rate,
-        performance_commission_rate
-      )
-    `,
-    )
-    .eq("organization_id", CURRENT_ORG_ID)
-    .eq("branch_id", CURRENT_BRANCH_ID)
+    .select("*")
     .eq("item_type", "SERVICE")
     .order("created_at", { ascending: false });
 
-  if (searchQuery && searchQuery.trim() !== "") {
-    query = query.ilike("name", `%${searchQuery.trim()}%`);
+  if (search && search.trim() !== "") {
+    query = query.ilike("name", `%${search.trim()}%`);
   }
 
   const { data, error } = await query;
-  if (error) throw new Error(`Lỗi tải danh sách dịch vụ: ${error.message}`);
 
-  return (data || []).map((item: any) => ({
-    id: item.id,
-    organization_id: item.organization_id,
-    branch_id: item.branch_id,
-    item_type: "SERVICE",
-    name: item.name,
-    category: item.category,
-    description: item.description,
-    price: item.price,
-    status: item.status,
-    created_at: item.created_at,
-    updated_at: item.updated_at,
+  if (error) {
+    console.error("Error fetching services from Supabase:", error);
+    throw error;
+  }
+
+  const items = (data as any[]) || [];
+  return items.map((item) => ({
+    ...item,
+    category: item.category || item.description || "Dịch vụ",
     service_details: {
-      duration_minutes: item.services[0]?.duration_minutes ?? 0,
-      sales_commission_rate: item.services[0]?.sales_commission_rate ?? 0,
-      performance_commission_rate:
-        item.services[0]?.performance_commission_rate ?? 0,
+      duration_minutes:
+        item.duration_minutes || item.service_details?.duration_minutes || 60,
     },
   }));
 }
 
-export async function createService(
-  input: CreateServiceInput,
-): Promise<ServiceItemDomain> {
-  const { data: catalogItem, error: catalogError } = await supabase
-    .from("catalog_items")
-    .insert({
-      organization_id: CURRENT_ORG_ID,
-      branch_id: CURRENT_BRANCH_ID,
-      item_type: "SERVICE",
-      name: input.name,
-      category: input.category,
-      description: input.description || null,
-      price: input.price,
-      status: input.status || "active",
-    })
-    .select()
-    .single();
-
-  if (catalogError || !catalogItem) {
-    throw new Error(`Lỗi tạo catalog item dịch vụ: ${catalogError?.message}`);
-  }
-
-  const { error: serviceError } = await supabase.from("services").insert({
-    catalog_item_id: catalogItem.id,
-    duration_minutes: input.duration_minutes,
-    sales_commission_rate: input.sales_commission_rate || 0,
-    performance_commission_rate: input.performance_commission_rate || 0,
-  });
-
-  if (serviceError) {
-    await supabase.from("catalog_items").delete().eq("id", catalogItem.id);
-    throw new Error(`Lỗi tạo chi tiết dịch vụ: ${serviceError.message}`);
-  }
-
-  return {
-    ...catalogItem,
-    item_type: "SERVICE",
-    service_details: {
-      duration_minutes: input.duration_minutes,
-      sales_commission_rate: input.sales_commission_rate || 0,
-      performance_commission_rate: input.performance_commission_rate || 0,
-    },
-  };
-}
-
-export async function updateService(
-  catalogItemId: string,
-  input: UpdateServiceInput,
-): Promise<void> {
-  const catalogUpdates: Record<string, any> = {};
-  if (input.name !== undefined) catalogUpdates.name = input.name;
-  if (input.category !== undefined) catalogUpdates.category = input.category;
-  if (input.description !== undefined)
-    catalogUpdates.description = input.description;
-  if (input.price !== undefined) catalogUpdates.price = input.price;
-  if (input.status !== undefined) catalogUpdates.status = input.status;
-
-  if (Object.keys(catalogUpdates).length > 0) {
-    const { error: catalogError } = await supabase
-      .from("catalog_items")
-      .update(catalogUpdates)
-      .eq("id", catalogItemId)
-      .eq("organization_id", CURRENT_ORG_ID)
-      .eq("branch_id", CURRENT_BRANCH_ID);
-
-    if (catalogError)
-      throw new Error(
-        `Lỗi cập nhật catalog item dịch vụ: ${catalogError.message}`,
-      );
-  }
-
-  const serviceUpdates: Record<string, any> = {};
-  if (input.duration_minutes !== undefined)
-    serviceUpdates.duration_minutes = input.duration_minutes;
-  if (input.sales_commission_rate !== undefined)
-    serviceUpdates.sales_commission_rate = input.sales_commission_rate;
-  if (input.performance_commission_rate !== undefined)
-    serviceUpdates.performance_commission_rate =
-      input.performance_commission_rate;
-
-  if (Object.keys(serviceUpdates).length > 0) {
-    const { error: serviceError } = await supabase
-      .from("services")
-      .update(serviceUpdates)
-      .eq("catalog_item_id", catalogItemId);
-
-    if (serviceError)
-      throw new Error(`Lỗi cập nhật chi tiết dịch vụ: ${serviceError.message}`);
-  }
-}
-
-// ==========================================
-// PRODUCT OPERATIONS
-// ==========================================
-
 export async function fetchProducts(
-  searchQuery?: string,
+  search?: string,
 ): Promise<ProductItemDomain[]> {
   let query = supabase
     .from("catalog_items")
-    .select(
-      `
-      *,
-      products!inner (
-        selling_price,
-        stock_quantity,
-        minimum_stock,
-        unit
-      )
-    `,
-    )
-    .eq("organization_id", CURRENT_ORG_ID)
-    .eq("branch_id", CURRENT_BRANCH_ID)
+    .select("*")
     .eq("item_type", "PRODUCT")
     .order("created_at", { ascending: false });
 
-  if (searchQuery && searchQuery.trim() !== "") {
-    query = query.ilike("name", `%${searchQuery.trim()}%`);
+  if (search && search.trim() !== "") {
+    query = query.ilike("name", `%${search.trim()}%`);
   }
 
   const { data, error } = await query;
-  if (error) throw new Error(`Lỗi tải danh sách sản phẩm: ${error.message}`);
 
-  return (data || []).map((item: any) => ({
-    id: item.id,
-    organization_id: item.organization_id,
-    branch_id: item.branch_id,
-    item_type: "PRODUCT",
-    name: item.name,
-    category: item.category,
-    description: item.description,
-    price: item.price,
-    status: item.status,
-    created_at: item.created_at,
-    updated_at: item.updated_at,
+  if (error) {
+    console.error("Error fetching products from Supabase:", error);
+    throw error;
+  }
+
+  const items = (data as any[]) || [];
+  return items.map((item) => ({
+    ...item,
+    category: item.category || item.description || "Sản phẩm",
     product_details: {
-      selling_price: item.products[0]?.selling_price ?? item.price,
-      stock_quantity: item.products[0]?.stock_quantity ?? 0,
-      minimum_stock: item.products[0]?.minimum_stock ?? 0,
-      unit: item.products[0]?.unit ?? "cái",
+      selling_price: item.price || item.product_details?.selling_price || 0,
+      stock_quantity:
+        item.stock_quantity ?? item.product_details?.stock_quantity ?? 0,
+      minimum_stock:
+        item.minimum_stock ?? item.product_details?.minimum_stock ?? 0,
+      unit: item.unit || item.product_details?.unit || "Chai",
     },
   }));
 }
 
-export async function createProduct(
-  input: CreateProductInput,
-): Promise<ProductItemDomain> {
-  const { data: catalogItem, error: catalogError } = await supabase
+export async function toggleCatalogItemStatus(
+  id: string,
+  newStatus: "active" | "inactive",
+): Promise<CatalogItem> {
+  const { data, error } = await supabase
     .from("catalog_items")
-    .insert({
-      organization_id: CURRENT_ORG_ID,
-      branch_id: CURRENT_BRANCH_ID,
-      item_type: "PRODUCT",
-      name: input.name,
-      category: input.category,
-      description: input.description || null,
-      price: input.selling_price,
-      status: input.status || "active",
+    .update({
+      status: newStatus,
+      updated_at: new Date().toISOString(),
     })
+    .eq("id", id)
     .select()
     .single();
 
-  if (catalogError || !catalogItem) {
-    throw new Error(`Lỗi tạo catalog item sản phẩm: ${catalogError?.message}`);
+  if (error) {
+    console.error(`Error updating catalog item ${id} status:`, error);
+    throw error;
   }
 
-  const { error: productError } = await supabase.from("products").insert({
-    catalog_item_id: catalogItem.id,
-    selling_price: input.selling_price,
-    stock_quantity: input.stock_quantity,
-    minimum_stock: input.minimum_stock,
-    unit: input.unit,
-  });
+  return data as CatalogItem;
+}
 
-  if (productError) {
-    await supabase.from("catalog_items").delete().eq("id", catalogItem.id);
-    throw new Error(`Lỗi tạo chi tiết sản phẩm: ${productError.message}`);
-  }
-
-  return {
-    ...catalogItem,
-    item_type: "PRODUCT",
-    product_details: {
-      selling_price: input.selling_price,
-      stock_quantity: input.stock_quantity,
-      minimum_stock: input.minimum_stock,
-      unit: input.unit,
-    },
+export async function createCatalogItem(
+  payload: Partial<CatalogItem>,
+): Promise<CatalogItem> {
+  const insertData = {
+    ...payload,
+    updated_at: new Date().toISOString(),
   };
-}
 
-export async function updateProduct(
-  catalogItemId: string,
-  input: UpdateProductInput,
-): Promise<void> {
-  const catalogUpdates: Record<string, any> = {};
-  if (input.name !== undefined) catalogUpdates.name = input.name;
-  if (input.category !== undefined) catalogUpdates.category = input.category;
-  if (input.description !== undefined)
-    catalogUpdates.description = input.description;
-  if (input.selling_price !== undefined)
-    catalogUpdates.price = input.selling_price;
-  if (input.status !== undefined) catalogUpdates.status = input.status;
-
-  if (Object.keys(catalogUpdates).length > 0) {
-    const { error: catalogError } = await supabase
-      .from("catalog_items")
-      .update(catalogUpdates)
-      .eq("id", catalogItemId)
-      .eq("organization_id", CURRENT_ORG_ID)
-      .eq("branch_id", CURRENT_BRANCH_ID);
-
-    if (catalogError)
-      throw new Error(
-        `Lỗi cập nhật catalog item sản phẩm: ${catalogError.message}`,
-      );
-  }
-
-  const productUpdates: Record<string, any> = {};
-  if (input.selling_price !== undefined)
-    productUpdates.selling_price = input.selling_price;
-  if (input.stock_quantity !== undefined)
-    productUpdates.stock_quantity = input.stock_quantity;
-  if (input.minimum_stock !== undefined)
-    productUpdates.minimum_stock = input.minimum_stock;
-  if (input.unit !== undefined) productUpdates.unit = input.unit;
-
-  if (Object.keys(productUpdates).length > 0) {
-    const { error: productError } = await supabase
-      .from("products")
-      .update(productUpdates)
-      .eq("catalog_item_id", catalogItemId);
-
-    if (productError)
-      throw new Error(
-        `Lỗi cập nhật chi tiết sản phẩm: ${productError.message}`,
-      );
-  }
-}
-
-export async function toggleCatalogItemStatus(
-  catalogItemId: string,
-  newStatus: "active" | "inactive",
-): Promise<void> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("catalog_items")
-    .update({ status: newStatus })
-    .eq("id", catalogItemId)
-    .eq("organization_id", CURRENT_ORG_ID)
-    .eq("branch_id", CURRENT_BRANCH_ID);
+    .insert([insertData])
+    .select()
+    .single();
 
-  if (error) throw new Error(`Lỗi thay đổi trạng thái: ${error.message}`);
+  if (error) {
+    console.error("Error creating catalog item:", error);
+    throw error;
+  }
+
+  return data as CatalogItem;
 }
+
+export async function updateCatalogItem(
+  id: string,
+  payload: Partial<CatalogItem>,
+): Promise<CatalogItem> {
+  const updateData = {
+    ...payload,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabase
+    .from("catalog_items")
+    .update(updateData)
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) {
+    console.error(`Error updating catalog item ${id}:`, error);
+    throw error;
+  }
+
+  return data as CatalogItem;
+}
+
+export async function deleteCatalogItem(id: string): Promise<boolean> {
+  const { error } = await supabase.from("catalog_items").delete().eq("id", id);
+
+  if (error) {
+    console.error(`Error deleting catalog item ${id}:`, error);
+    throw error;
+  }
+
+  return true;
+}
+
+export const createService = (payload: Partial<CatalogItem>) =>
+  createCatalogItem({ ...payload, item_type: "SERVICE" });
+
+export const updateService = updateCatalogItem;
+
+export const createProduct = (payload: Partial<CatalogItem>) =>
+  createCatalogItem({ ...payload, item_type: "PRODUCT" });
+
+export const updateProduct = updateCatalogItem;
+
+// --- OBJECT & DEFAULT EXPORTS ---
+
+export const catalogService = {
+  getCatalogItems,
+  fetchCatalogItems,
+  fetchServices,
+  fetchProducts,
+  toggleCatalogItemStatus,
+  createCatalogItem,
+  updateCatalogItem,
+  deleteCatalogItem,
+  createService,
+  updateService,
+  createProduct,
+  updateProduct,
+};
+
+export default catalogService;

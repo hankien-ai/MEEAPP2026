@@ -1,46 +1,365 @@
-import { useMemo, useState } from 'react';
-import { Download, Edit3, Eye, Filter, Plus, Search, SlidersHorizontal, Sparkles, UsersRound } from 'lucide-react';
-import { Link, useParams } from 'wouter';
-import { demoCustomers, formatDate, formatVnd, initials } from '@/data/demo';
-import type { Customer } from '@/types/domain';
-import { Badge, EmptyState, Modal, PageHeader, Panel, PanelHeader, Toast } from '@/components/primitives';
+import React, { useState, useEffect } from "react";
+import {
+  Button,
+  Card,
+  Panel,
+  PanelHeader,
+  PanelContent,
+  PageHeader,
+  Input,
+  Modal,
+  Table,
+  Spinner,
+  EmptyState,
+} from "../components/primitives";
+import { Customer } from "../types/domain";
+import {
+  fetchCustomers,
+  createCustomer,
+  fetchCustomerById,
+} from "../services/customer.service";
 
-function CustomerForm({ initial, onSave, onClose }: { initial?: Customer; onSave: (customer: Customer) => void; onClose: () => void }) {
-  const [name, setName] = useState(initial?.fullName ?? '');
-  const [phone, setPhone] = useState(initial?.phone ?? '');
-  const [gender, setGender] = useState(initial?.gender ?? 'Nữ');
-  const submit = (event: React.FormEvent) => { event.preventDefault(); onSave({ id: initial?.id ?? `cus-${Date.now()}`, fullName: name || 'Khách chưa đặt tên', phone, gender: gender as Customer['gender'], joinedAt: initial?.joinedAt ?? new Date().toISOString(), visitCount: initial?.visitCount ?? 0, totalSpend: initial?.totalSpend ?? 0, loyaltyPoints: initial?.loyaltyPoints ?? 0, tags: initial?.tags ?? ['Mới'] }); };
-  return <Modal title={initial ? 'Chỉnh sửa khách hàng' : 'Thêm khách hàng'} description="Thông tin demo được lưu trong phiên làm việc này." onClose={onClose}><form onSubmit={submit} className="space-y-4 p-5"><div><label className="label" htmlFor="customer-name">Họ và tên</label><input id="customer-name" required className="input" value={name} onChange={(event) => setName(event.target.value)} data-testid="input-customer-name" placeholder="Ví dụ: Nguyễn Minh Anh" /></div><div><label className="label" htmlFor="customer-phone">Số điện thoại</label><input id="customer-phone" required className="input" value={phone} onChange={(event) => setPhone(event.target.value)} data-testid="input-customer-phone" placeholder="090 000 0000" /></div><div><label className="label" htmlFor="customer-gender">Giới tính</label><select id="customer-gender" className="input" value={gender} onChange={(event) => setGender(event.target.value as Customer['gender'])} data-testid="select-customer-gender"><option>Nữ</option><option>Nam</option><option>Khác</option></select></div><div className="flex justify-end gap-2 pt-2"><button type="button" className="btn btn-soft" onClick={onClose} data-testid="button-cancel-customer">Huỷ</button><button type="submit" className="btn btn-primary" data-testid="button-save-customer"><Plus size={15} /> Lưu khách hàng</button></div></form></Modal>;
+// --- CUSTOMER PROFILE PAGE COMPONENT ---
+export interface CustomerProfilePageProps {
+  customerId?: string;
+  onBack?: () => void;
 }
 
+export function CustomerProfilePage({
+  customerId,
+  onBack,
+}: CustomerProfilePageProps) {
+  const [customer, setCustomer] = useState<Customer | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!customerId) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    fetchCustomerById(customerId)
+      .then((data) => setCustomer(data))
+      .catch((err) => {
+        console.error("Lỗi tải thông tin khách hàng:", err);
+        setError(err instanceof Error ? err.message : "Lỗi không xác định");
+      })
+      .finally(() => setLoading(false));
+  }, [customerId]);
+
+  if (loading) {
+    return <Spinner className="py-12" />;
+  }
+
+  if (error || !customer) {
+    return (
+      <EmptyState
+        title="Không tìm thấy khách hàng"
+        description={
+          error || "Thông tin khách hàng không tồn tại hoặc đã bị xóa."
+        }
+        action={onBack ? <Button onClick={onBack}>Quay lại</Button> : undefined}
+      />
+    );
+  }
+
+  const displayName = customer.full_name || "Khách hàng";
+  const displayCode = customer.id ? customer.id.substring(0, 8) : "—";
+  const totalSpend = customer.total_spend ?? 0;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between border-b pb-4">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">{displayName}</h2>
+          <p className="text-sm text-gray-500">
+            {customer.phone} • {customer.email || "Chưa có email"}
+          </p>
+        </div>
+        {onBack && (
+          <Button variant="outline" onClick={onBack}>
+            Quay lại danh sách
+          </Button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card title="Thông tin cá nhân">
+          <div className="space-y-3 text-sm">
+            <div>
+              <span className="font-semibold text-gray-600">Mã KH:</span>{" "}
+              {displayCode}
+            </div>
+            <div>
+              <span className="font-semibold text-gray-600">
+                Số điện thoại:
+              </span>{" "}
+              {customer.phone}
+            </div>
+            <div>
+              <span className="font-semibold text-gray-600">Email:</span>{" "}
+              {customer.email || "N/A"}
+            </div>
+            <div>
+              <span className="font-semibold text-gray-600">Địa chỉ:</span>{" "}
+              {customer.address || "N/A"}
+            </div>
+            <div>
+              <span className="font-semibold text-gray-600">Ghi chú:</span>{" "}
+              {customer.notes || "Không có"}
+            </div>
+          </div>
+        </Card>
+
+        <Card title="Thống kê mua hàng" className="md:col-span-2">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="p-4 bg-blue-50 rounded-lg">
+              <p className="text-xs text-blue-600 font-medium">Tổng chi tiêu</p>
+              <p className="text-xl font-bold text-blue-900">
+                {totalSpend.toLocaleString("vi-VN")} đ
+              </p>
+            </div>
+            <div className="p-4 bg-green-50 rounded-lg">
+              <p className="text-xs text-green-600 font-medium">
+                Lần ghé gần nhất
+              </p>
+              <p className="text-xl font-bold text-green-900">
+                {customer.last_visit
+                  ? new Date(customer.last_visit).toLocaleDateString("vi-VN")
+                  : "Chưa có"}
+              </p>
+            </div>
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+// --- MAIN CUSTOMERS PAGE COMPONENT ---
 export function CustomersPage() {
-  const [customers, setCustomers] = useState(demoCustomers);
-  const [query, setQuery] = useState('');
-  const [editing, setEditing] = useState<Customer | undefined>();
-  const [formOpen, setFormOpen] = useState(false);
-  const [toast, setToast] = useState('');
-  const filtered = useMemo(() => customers.filter((customer) => `${customer.fullName} ${customer.phone}`.toLowerCase().includes(query.toLowerCase())), [customers, query]);
-  const saveCustomer = (customer: Customer) => { setCustomers((current) => current.some((item) => item.id === customer.id) ? current.map((item) => item.id === customer.id ? customer : item) : [customer, ...current]); setFormOpen(false); setEditing(undefined); setToast('Đã lưu khách hàng trong dữ liệu demo.'); };
-  return <div className="page-wrap">
-    <PageHeader kicker="Quan hệ khách hàng" title="Khách hàng" subtitle={`${customers.length} hồ sơ tại MEE Quận 1`} actions={<><button className="btn btn-soft hide-mobile" onClick={() => setToast('Bản xuất dữ liệu demo đã sẵn sàng.')} data-testid="button-export-customers"><Download size={15} /> Xuất danh sách</button><button className="btn btn-primary" onClick={() => { setEditing(undefined); setFormOpen(true); }} data-testid="button-add-customer"><Plus size={15} /> Thêm khách</button></>} />
-    <Panel testId="panel-customers"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4"><div className="relative min-w-[230px] flex-1"><Search size={16} className="absolute left-3 top-3 text-muted-foreground" /><input className="input pl-9" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm theo tên hoặc số điện thoại..." aria-label="Tìm khách hàng" data-testid="input-search-customers" /></div><div className="flex gap-2"><button className="btn btn-soft" onClick={() => setToast('Bộ lọc nâng cao sẽ kết nối với Supabase sau.')} data-testid="button-filter-customers"><Filter size={15} /> <span className="hide-mobile">Bộ lọc</span></button><button className="btn btn-soft" onClick={() => setToast('Đã mở tuỳ chỉnh cột demo.')} data-testid="button-customize-customers"><SlidersHorizontal size={15} /></button></div></div>
-      {filtered.length === 0 ? <EmptyState icon={UsersRound} title="Chưa tìm thấy khách hàng" description="Thử một tên khác hoặc tạo hồ sơ mới cho vị khách đầu tiên." action={<button className="btn btn-primary" onClick={() => setFormOpen(true)} data-testid="button-empty-add-customer"><Plus size={15} /> Thêm khách hàng</button>} /> : <div className="table-wrap"><table className="data-table"><thead><tr><th>Khách hàng</th><th>Liên hệ</th><th>Lần ghé gần nhất</th><th>Điểm</th><th>Chi tiêu</th><th className="text-right">Thao tác</th></tr></thead><tbody>{filtered.map((customer) => <tr key={customer.id} data-testid={`row-customer-${customer.id}`}><td><Link href={`/customers/${customer.id}`} className="flex items-center gap-3" data-testid={`link-customer-${customer.id}`}><div className="avatar">{initials(customer.fullName)}</div><div><div className="font-bold">{customer.fullName}</div><div className="mt-1 flex gap-1">{customer.tags.slice(0, 2).map((tag) => <Badge key={tag} tone={tag === 'VIP' ? 'coral' : 'default'}>{tag}</Badge>)}</div></div></Link></td><td><div className="font-mono-app text-xs">{customer.phone}</div><div className="mt-1 text-[10px] text-muted-foreground">{customer.email ?? 'Chưa cập nhật email'}</div></td><td>{customer.lastVisit ? formatDate(customer.lastVisit) : 'Chưa ghé'}</td><td><span className="font-mono-app text-xs text-primary">{customer.loyaltyPoints.toLocaleString('vi-VN')}</span></td><td className="font-mono-app text-xs">{formatVnd(customer.totalSpend)}</td><td><div className="flex justify-end gap-1"><Link href={`/customers/${customer.id}`} className="btn btn-ghost !p-2" aria-label={`Xem ${customer.fullName}`} data-testid={`button-view-customer-${customer.id}`}><Eye size={15} /></Link><button className="btn btn-ghost !p-2" onClick={() => { setEditing(customer); setFormOpen(true); }} aria-label={`Sửa ${customer.fullName}`} data-testid={`button-edit-customer-${customer.id}`}><Edit3 size={15} /></button></div></td></tr>)}</tbody></table></div>}
-    </Panel>
-    <div className="mt-3 flex items-center justify-between text-[11px] text-muted-foreground"><span>Hiển thị {filtered.length} trên {customers.length} khách hàng</span><span className="font-mono-app">DEMO DATA · LOCAL SESSION</span></div>
-    {formOpen && <CustomerForm initial={editing} onSave={saveCustomer} onClose={() => { setFormOpen(false); setEditing(undefined); }} />}
-    {toast && <Toast message={toast} onClose={() => setToast('')} />}
-  </div>;
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [pageError, setPageError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(
+    null,
+  );
+
+  // Modal State cho Create
+  const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
+  const [modalError, setModalError] = useState<string | null>(null);
+  const [formData, setFormData] = useState({
+    name: "",
+    phone: "",
+  });
+  const [submitting, setSubmitting] = useState<boolean>(false);
+
+  const loadData = async () => {
+    setLoading(true);
+    setPageError(null);
+    try {
+      const data = await fetchCustomers();
+      setCustomers(data || []);
+    } catch (err) {
+      console.error("Lỗi lấy danh sách khách hàng:", err);
+      setPageError(
+        err instanceof Error ? err.message : "Lỗi khi tải danh sách khách hàng",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const handleCreateCustomer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.name.trim() || !formData.phone.trim()) return;
+
+    setSubmitting(true);
+    setModalError(null);
+    try {
+      await createCustomer({
+        full_name: formData.name.trim(),
+        phone: formData.phone.trim(),
+      });
+      setIsAddModalOpen(false);
+      setFormData({ name: "", phone: "" });
+      await loadData();
+    } catch (err) {
+      console.error("Lỗi tạo khách hàng:", err);
+      setModalError(
+        err instanceof Error
+          ? err.message
+          : "Tạo khách hàng thất bại. Vui lòng thử lại.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const filteredCustomers = customers.filter((c) => {
+    const q = searchQuery.toLowerCase();
+    const nameStr = (c.full_name || "").toLowerCase();
+    const phoneStr = (c.phone || "").toLowerCase();
+    return nameStr.includes(q) || phoneStr.includes(q);
+  });
+
+  if (selectedCustomerId) {
+    return (
+      <CustomerProfilePage
+        customerId={selectedCustomerId}
+        onBack={() => setSelectedCustomerId(null)}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Quản lý Khách hàng"
+        description="Danh sách hồ sơ khách hàng và lịch sử sử dụng dịch vụ"
+        action={
+          <Button
+            onClick={() => {
+              setModalError(null);
+              setFormData({ name: "", phone: "" });
+              setIsAddModalOpen(true);
+            }}
+          >
+            + Thêm khách hàng
+          </Button>
+        }
+      />
+
+      {pageError && (
+        <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-md text-sm">
+          {pageError}
+        </div>
+      )}
+
+      <Panel>
+        <PanelHeader
+          title="Danh sách hồ sơ"
+          action={
+            <div className="w-64">
+              <Input
+                placeholder="Tìm theo tên hoặc SĐT..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+          }
+        />
+        <PanelContent>
+          {loading ? (
+            <Spinner className="py-8" />
+          ) : filteredCustomers.length === 0 ? (
+            <EmptyState
+              title="Không tìm thấy khách hàng"
+              description="Thử tìm kiếm với từ khóa khác hoặc thêm khách hàng mới."
+            />
+          ) : (
+            <Table
+              headers={[
+                "Mã KH",
+                "Họ & Tên",
+                "Số điện thoại",
+                "Địa chỉ",
+                "Tổng chi tiêu",
+                "Thao tác",
+              ]}
+              data={filteredCustomers}
+              renderRow={(item: Customer) => {
+                const nameDisplay = item.full_name || "Khách hàng";
+                const codeDisplay = item.id ? item.id.substring(0, 8) : "—";
+                const spendDisplay = item.total_spend ?? 0;
+
+                return (
+                  <tr
+                    key={item.id}
+                    className="hover:bg-gray-50 transition-colors"
+                  >
+                    <td className="p-3 text-xs font-mono text-gray-500">
+                      {codeDisplay}
+                    </td>
+                    <td className="p-3 font-medium text-gray-900">
+                      {nameDisplay}
+                    </td>
+                    <td className="p-3 text-gray-600">{item.phone}</td>
+                    <td className="p-3 text-gray-500 text-xs">
+                      {item.address || "—"}
+                    </td>
+                    <td className="p-3 font-semibold text-blue-600">
+                      {spendDisplay.toLocaleString("vi-VN")} đ
+                    </td>
+                    <td className="p-3">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setSelectedCustomerId(item.id)}
+                      >
+                        Xem chi tiết
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              }}
+            />
+          )}
+        </PanelContent>
+      </Panel>
+
+      {/* MODAL THÊM KHÁCH HÀNG TỐI GIẢN */}
+      <Modal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        title="Thêm Khách Hàng Mới"
+      >
+        <form onSubmit={handleCreateCustomer} className="space-y-4">
+          {modalError && (
+            <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded text-xs font-medium">
+              {modalError}
+            </div>
+          )}
+
+          <Input
+            label="Họ và Tên *"
+            required
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            placeholder="Nguyễn Văn A"
+          />
+          <Input
+            label="Số Điện Thoại *"
+            required
+            value={formData.phone}
+            onChange={(e) =>
+              setFormData({ ...formData, phone: e.target.value })
+            }
+            placeholder="0901234567"
+          />
+          <div className="flex justify-end gap-2 pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsAddModalOpen(false)}
+            >
+              Hủy
+            </Button>
+            <Button type="submit" isLoading={submitting}>
+              Lưu khách hàng
+            </Button>
+          </div>
+        </form>
+      </Modal>
+    </div>
+  );
 }
 
-export function CustomerProfilePage() {
-  const { id } = useParams<{ id: string }>();
-  const customer = demoCustomers.find((item) => item.id === id) ?? demoCustomers[0];
-  const [toast, setToast] = useState('');
-  return <div className="page-wrap">
-    <div className="mb-6 flex items-center gap-2 text-xs text-muted-foreground"><Link href="/customers" className="font-bold text-primary" data-testid="link-back-customers">Khách hàng</Link><span>/</span><span>Hồ sơ khách hàng</span></div>
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-4"><div className="flex items-center gap-4"><div className="avatar h-16 w-16 text-lg">{initials(customer.fullName)}</div><div><div className="page-kicker">Hồ sơ khách hàng</div><h1 className="page-title">{customer.fullName}</h1><div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground"><span>{customer.phone}</span><span>·</span><Badge tone="coral">{customer.tags[0]}</Badge></div></div></div><div className="flex gap-2"><button className="btn btn-soft" onClick={() => setToast('Chế độ chỉnh sửa hồ sơ đã sẵn sàng cho Supabase.')} data-testid="button-edit-profile"><Edit3 size={15} /> Chỉnh sửa</button><Link href="/booking" className="btn btn-primary" data-testid="link-book-profile"><Plus size={15} /> Tạo lịch hẹn</Link></div></div>
-    <div className="section-grid three-col mb-5"><div className="panel metric-card"><div className="metric-label">Tổng chi tiêu</div><div className="metric-value text-xl">{formatVnd(customer.totalSpend)}</div><div className="metric-note">Hạng {customer.tags.includes('VIP') ? 'MEE Signature' : 'MEE Member'}</div></div><div className="panel metric-card"><div className="metric-label">Số lần ghé</div><div className="metric-value">{customer.visitCount}</div><div className="metric-note">Lần gần nhất {customer.lastVisit ? formatDate(customer.lastVisit) : '—'}</div></div><div className="panel metric-card"><div className="metric-label">Điểm loyalty</div><div className="metric-value">{customer.loyaltyPoints.toLocaleString('vi-VN')}</div><div className="metric-note">POINT balance</div></div></div>
-    <div className="section-grid two-col"><Panel testId="panel-profile-history"><PanelHeader title="Lịch sử gần đây" caption="Các chạm dịch vụ đã ghi nhận" /><div className="timeline-item"><div className="timeline-dot" /><div><div className="text-xs font-bold">Chăm sóc da chuyên sâu</div><div className="mt-1 text-[11px] text-muted-foreground">28.06.2024 · Thảo Vy · {formatVnd(680000)}</div></div><Badge tone="green">Đã thanh toán</Badge></div><div className="timeline-item"><div className="timeline-dot" /><div><div className="text-xs font-bold">Tinh chất phục hồi MEE</div><div className="mt-1 text-[11px] text-muted-foreground">18.06.2024 · Lễ tân · {formatVnd(790000)}</div></div><Badge>Đã thanh toán</Badge></div><div className="timeline-item"><div className="timeline-dot" /><div><div className="text-xs font-bold">Massage trị liệu cổ vai gáy</div><div className="mt-1 text-[11px] text-muted-foreground">04.06.2024 · Thảo Vy · {formatVnd(520000)}</div></div><Badge tone="green">Đã thanh toán</Badge></div></Panel><div className="space-y-[18px]"><Panel testId="panel-profile-info"><PanelHeader title="Thông tin nhanh" /><div className="space-y-3 p-5 text-xs"><div className="flex justify-between gap-4"><span className="text-muted-foreground">Ngày tham gia</span><strong>{formatDate(customer.joinedAt)}</strong></div><div className="flex justify-between gap-4"><span className="text-muted-foreground">Sinh nhật</span><strong>{customer.birthday ? formatDate(customer.birthday) : 'Chưa cập nhật'}</strong></div><div className="flex justify-between gap-4"><span className="text-muted-foreground">Giới tính</span><strong>{customer.gender}</strong></div></div></Panel><div className="notice"><Sparkles size={16} /><div><strong className="text-xs">Gợi ý chăm sóc</strong><p className="mt-1 text-[11px] opacity-80">Khách có thể được nhắc lịch phục hồi da trong 12 ngày tới.</p></div></div></div></div>
-    {toast && <Toast message={toast} onClose={() => setToast('')} />}
-  </div>;
-}
+export default CustomersPage;

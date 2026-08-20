@@ -1,3 +1,343 @@
+============================================================
+SOURCE EXPORT - CATALOG SERVICE AUDIT
+============================================================
+
+============================================================
+FILE: src/services/catalog-service.ts
+============================================================
+import { supabase } from "./supabase";
+import { Customer } from "../types/domain";
+
+export type CustomerInput = Omit<
+  Partial<Customer>,
+  "id" | "created_at" | "updated_at"
+> & {
+  full_name?: string;
+  name?: string;
+  phone: string;
+};
+
+// --- CORE IMPLEMENTATIONS ---
+
+export async function fetchCustomers(): Promise<Customer[]> {
+  const { data, error } = await supabase
+    .from("customers")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Error fetching customers from Supabase:", error);
+    throw error;
+  }
+
+  return (data as Customer[]) || [];
+}
+
+export async function fetchCustomerById(id: string): Promise<Customer | null> {
+  if (!id) return null;
+
+  const { data, error } = await supabase
+    .from("customers")
+    .select("*")
+    .eq("id", id)
+    .single();
+
+  if (error) {
+    console.error(`Error fetching customer with id ${id}:`, error);
+    throw error;
+  }
+
+  return data as Customer;
+}
+
+export async function createCustomer(
+  payload: CustomerInput,
+): Promise<Customer> {
+  const nameToUse = payload.full_name || payload.name || "Khách hàng mới";
+
+  const insertData = {
+    ...payload,
+    full_name: nameToUse,
+    name: nameToUse,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabase
+    .from("customers")
+    .insert([insertData])
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Error creating customer in Supabase:", error);
+    throw error;
+  }
+
+  return data as Customer;
+}
+
+export async function updateCustomer(
+  id: string,
+  payload: Partial<CustomerInput>,
+): Promise<Customer> {
+  const updateData = {
+    ...payload,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (payload.full_name && !payload.name) {
+    updateData.name = payload.full_name;
+  } else if (payload.name && !payload.full_name) {
+    updateData.full_name = payload.name;
+  }
+
+  const { data, error } = await supabase
+    .from("customers")
+    .update(updateData)
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) {
+    console.error(`Error updating customer ${id}:`, error);
+    throw error;
+  }
+
+  return data as Customer;
+}
+
+export async function deleteCustomer(id: string): Promise<boolean> {
+  const { error } = await supabase.from("customers").delete().eq("id", id);
+
+  if (error) {
+    console.error(`Error deleting customer ${id}:`, error);
+    throw error;
+  }
+
+  return true;
+}
+
+// Alias helper for alternate naming conventions
+export const getCustomers = fetchCustomers;
+export const getCustomerById = fetchCustomerById;
+
+// --- OBJECT & DEFAULT EXPORTS FOR COMPATIBILITY ---
+
+export const customerService = {
+  getAll: fetchCustomers,
+  getById: fetchCustomerById,
+  create: createCustomer,
+  update: updateCustomer,
+  delete: deleteCustomer,
+  fetchCustomers,
+  fetchCustomerById,
+  createCustomer,
+  updateCustomer,
+  deleteCustomer,
+};
+
+export default customerService;
+
+============================================================
+FILE: src/pages/catalog.tsx
+============================================================
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  fetchServices,
+  fetchProducts,
+  toggleCatalogItemStatus,
+} from "../services/catalog-service";
+import { ServiceItemDomain, ProductItemDomain } from "../types/domain";
+
+export const CatalogPage: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<"SERVICES" | "PRODUCTS">(
+    "SERVICES",
+  );
+  const [services, setServices] = useState<ServiceItemDomain[]>([]);
+  const [products, setProducts] = useState<ProductItemDomain[]>([]);
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setErrorMessage(null);
+    try {
+      if (activeTab === "SERVICES") {
+        const data = await fetchServices(search);
+        setServices(data);
+      } else {
+        const data = await fetchProducts(search);
+        setProducts(data);
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || "Lỗi khi tải dữ liệu từ Supabase");
+    } finally {
+      setLoading(false);
+    }
+  }, [activeTab, search]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const handleToggleStatus = async (
+    id: string,
+    currentStatus: "active" | "inactive",
+  ) => {
+    try {
+      const nextStatus = currentStatus === "active" ? "inactive" : "active";
+      await toggleCatalogItemStatus(id, nextStatus);
+      await loadData();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  return (
+    <div className="p-6">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">Catalog Management</h1>
+        <div className="flex gap-2">
+          <button
+            className={`px-4 py-2 rounded ${activeTab === "SERVICES" ? "bg-blue-600 text-white" : "bg-gray-100"}`}
+            onClick={() => setActiveTab("SERVICES")}
+          >
+            Services
+          </button>
+          <button
+            className={`px-4 py-2 rounded ${activeTab === "PRODUCTS" ? "bg-blue-600 text-white" : "bg-gray-100"}`}
+            onClick={() => setActiveTab("PRODUCTS")}
+          >
+            Products
+          </button>
+        </div>
+      </div>
+
+      <div className="mb-4">
+        <input
+          type="text"
+          placeholder={`Tìm kiếm ${activeTab === "SERVICES" ? "dịch vụ" : "sản phẩm"}...`}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full max-w-md px-3 py-2 border rounded"
+        />
+      </div>
+
+      {errorMessage && (
+        <div className="p-4 mb-4 text-red-700 bg-red-100 rounded border border-red-300">
+          {errorMessage}
+        </div>
+      )}
+
+      {loading ? (
+        <p>Đang tải dữ liệu từ Supabase...</p>
+      ) : activeTab === "SERVICES" ? (
+        <table className="w-full border-collapse border">
+          <thead>
+            <tr className="bg-gray-50 border-b">
+              <th className="p-2 text-left border">Tên dịch vụ</th>
+              <th className="p-2 text-left border">Danh mục</th>
+              <th className="p-2 text-right border">Giá (VNĐ)</th>
+              <th className="p-2 text-right border">Thời lượng (phút)</th>
+              <th className="p-2 text-center border">Trạng thái</th>
+              <th className="p-2 text-center border">Thao tác</th>
+            </tr>
+          </thead>
+          <tbody>
+            {services.map((item) => (
+              <tr key={item.id} className="border-b hover:bg-gray-50">
+                <td className="p-2 border">{item.name}</td>
+                <td className="p-2 border">{item.category}</td>
+                <td className="p-2 border text-right">
+                  {item.price.toLocaleString()}
+                </td>
+                <td className="p-2 border text-right">
+                  {item.service_details.duration_minutes}
+                </td>
+                <td className="p-2 border text-center">
+                  <span
+                    className={`px-2 py-1 rounded text-xs ${item.status === "active" ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}`}
+                  >
+                    {item.status}
+                  </span>
+                </td>
+                <td className="p-2 border text-center">
+                  <button
+                    onClick={() => handleToggleStatus(item.id, item.status)}
+                    className="text-sm text-blue-600 underline"
+                  >
+                    Đổi trạng thái
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <table className="w-full border-collapse border">
+          <thead>
+            <tr className="bg-gray-50 border-b">
+              <th className="p-2 text-left border">Tên sản phẩm</th>
+              <th className="p-2 text-left border">Danh mục</th>
+              <th className="p-2 text-right border">Giá bán (VNĐ)</th>
+              <th className="p-2 text-right border">Tồn kho</th>
+              <th className="p-2 text-right border">Tồn tối thiểu</th>
+              <th className="p-2 text-left border">Đơn vị</th>
+              <th className="p-2 text-center border">Trạng thái</th>
+              <th className="p-2 text-center border">Thao tác</th>
+            </tr>
+          </thead>
+          <tbody>
+            {products.map((item) => (
+              <tr key={item.id} className="border-b hover:bg-gray-50">
+                <td className="p-2 border">{item.name}</td>
+                <td className="p-2 border">{item.category}</td>
+                <td className="p-2 border text-right">
+                  {item.product_details.selling_price.toLocaleString()}
+                </td>
+                <td className="p-2 border text-right font-medium">
+                  {item.product_details.stock_quantity}
+                </td>
+                <td className="p-2 border text-right">
+                  {item.product_details.minimum_stock}
+                </td>
+                <td className="p-2 border">{item.product_details.unit}</td>
+                <td className="p-2 border text-center">
+                  <span
+                    className={`px-2 py-1 rounded text-xs ${item.status === "active" ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}`}
+                  >
+                    {item.status}
+                  </span>
+                </td>
+                <td className="p-2 border text-center">
+                  <button
+                    onClick={() => handleToggleStatus(item.id, item.status)}
+                    className="text-sm text-blue-600 underline"
+                  >
+                    Đổi trạng thái
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+};
+
+// Thêm export default để sửa lỗi Vite runtime error
+
+export const ServicesPage = CatalogPage;
+export const ProductsPage = CatalogPage;
+export const CombosPage = CatalogPage;
+export const PricingPage = CatalogPage;
+export default CatalogPage;
+
+============================================================
+FILE: src/pages/operations.tsx
+============================================================
 import React, { useEffect, useState, useCallback } from "react";
 import {
   packageService,
@@ -945,3 +1285,158 @@ export const SettingsPage = OperationsPage;
 export const StaffPage = OperationsPage;
 
 export default OperationsPage;
+
+============================================================
+FILE: src/types/domain.ts
+============================================================
+export type ItemType = "SERVICE" | "PRODUCT";
+export type ItemStatus = "active" | "inactive";
+export type PaymentMethod = "CASH" | "CARD" | "TRANSFER";
+export type PackageStatus = "ACTIVE" | "EXPIRED" | "DEPLETED" | "CANCELLED";
+export type StaffRole = "MANAGER" | "TECHNICIAN" | "RECEPTIONIST" | "ACCOUNTS";
+export type StaffStatus = "ACTIVE" | "INACTIVE" | "ON_LEAVE";
+export type AttendanceStatus = "PRESENT" | "ABSENT" | "LATE" | "HALF_DAY";
+export type BookingStatus =
+  | "SCHEDULED"
+  | "IN_PROGRESS"
+  | "COMPLETED"
+  | "CANCELLED"
+  | "NO_SHOW";
+
+export interface CatalogItem {
+  id: string;
+  name: string;
+  description: string | null;
+  item_type: ItemType;
+  price: number;
+  duration_minutes: number | null;
+  commission_rate: number | null;
+  status: ItemStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CatalogItemInsert {
+  name: string;
+  description?: string | null;
+  item_type: ItemType;
+  price: number;
+  duration_minutes?: number | null;
+  commission_rate?: number | null;
+  status?: ItemStatus;
+}
+
+export interface CatalogItemUpdate {
+  name?: string;
+  description?: string | null;
+  item_type?: ItemType;
+  price?: number;
+  duration_minutes?: number | null;
+  commission_rate?: number | null;
+  status?: ItemStatus;
+}
+
+export interface Customer {
+  id: string;
+  full_name: string;
+  phone: string;
+  email: string | null;
+  birth_date: string | null;
+  address: string | null;
+  notes: string | null;
+  total_spend: number;
+  last_visit: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CustomerInsert {
+  full_name: string;
+  phone: string;
+  email?: string | null;
+  birth_date?: string | null;
+  address?: string | null;
+  notes?: string | null;
+  total_spend?: number;
+  last_visit?: string | null;
+}
+
+export interface CustomerUpdate {
+  full_name?: string;
+  phone?: string;
+  email?: string | null;
+  birth_date?: string | null;
+  address?: string | null;
+  notes?: string | null;
+  total_spend?: number;
+  last_visit?: string | null;
+}
+
+export interface CustomerPackage {
+  id: string;
+  customer_id: string;
+  catalog_item_id: string;
+  total_sessions: number;
+  remaining_sessions: number;
+  price_paid: number;
+  purchased_at: string;
+  expires_at: string | null;
+  status: PackageStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Staff {
+  id: string;
+  full_name: string;
+  phone: string;
+  email: string | null;
+  role: StaffRole;
+  status: StaffStatus;
+  base_salary: number;
+  commission_rate: number;
+  started_on: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type StaffMemberDomain = Staff;
+
+export interface Attendance {
+  id: string;
+  staff_id: string;
+  work_date: string;
+  check_in: string | null;
+  check_out: string | null;
+  status: AttendanceStatus;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Booking {
+  id: string;
+  customer_id: string;
+  staff_id: string | null;
+  service_id: string;
+  booking_time: string;
+  status: BookingStatus;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Expense {
+  id: string;
+  category: string;
+  amount: number;
+  description: string | null;
+  expense_date: string;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+============================================================
+END SOURCE EXPORT
+============================================================
