@@ -53,7 +53,7 @@ export interface ProductDetail {
 
 // Composite types dùng cho UI
 export interface ServiceItem extends CatalogItem {
-  service_id?: string; // id trong bảng services
+  service_id?: string;
   duration_minutes?: number;
   sales_commission_rate?: number;
   performance_commission_rate?: number;
@@ -64,7 +64,7 @@ export interface ServiceItem extends CatalogItem {
 }
 
 export interface ProductItem extends CatalogItem {
-  product_id: string; // id trong bảng products
+  product_id: string;
   product_type: ProductType;
   cost_price: number;
   selling_price: number;
