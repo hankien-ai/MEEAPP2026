@@ -13,6 +13,9 @@ import {
   CheckCircle2,
   RefreshCw,
   Clock,
+  Percent,
+  Coins,
+  ChevronRight,
 } from "lucide-react";
 import {
   ServiceItem,
@@ -21,6 +24,7 @@ import {
   Package,
   CategoryType,
   CatalogStatus,
+  CommissionType,
 } from "../types/catalog";
 import {
   fetchServices,
@@ -141,6 +145,19 @@ export default function CatalogManagementPage() {
     }).format(amount || 0);
   };
 
+  const formatCommission = (
+    type?: CommissionType,
+    value?: number,
+    fallbackRate?: number,
+  ) => {
+    const commType = type || "PERCENT";
+    const commVal = value ?? fallbackRate ?? 0;
+    if (commType === "FIXED") {
+      return formatVND(commVal);
+    }
+    return `${commVal}%`;
+  };
+
   const filteredServices = useMemo(() => {
     return services.filter((s) => {
       const matchSearch =
@@ -166,9 +183,10 @@ export default function CatalogManagementPage() {
   const handleToggleStatus = async (
     id: string,
     currentStatus: CatalogStatus,
+    type: "service" | "product" = "service",
   ) => {
     try {
-      const newStatus = await toggleCatalogItemStatus(id, currentStatus);
+      const newStatus = await toggleCatalogItemStatus(id, currentStatus, type);
       showToast("success", `Đã cập nhật trạng thái thành ${newStatus}`);
       loadData();
     } catch (err: any) {
@@ -216,30 +234,31 @@ export default function CatalogManagementPage() {
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6 bg-slate-50 min-h-screen">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="p-3 sm:p-6 max-w-7xl mx-auto space-y-4 sm:space-y-6 bg-slate-50 min-h-screen">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900">
             Quản lý Danh mục (Catalog)
           </h1>
-          <p className="text-sm text-slate-500">
-            Quản lý tập trung Dịch vụ, Sản phẩm, Danh mục và Gói liệu trình Mee
-            Beauty Spa
+          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
+            Dịch vụ, Sản phẩm, Danh mục & Gói liệu trình Mee Beauty Spa
           </p>
         </div>
         <button
           onClick={loadData}
           disabled={loading}
-          className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-50 shadow-sm"
+          className="flex items-center justify-center gap-2 px-3 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg text-xs sm:text-sm text-slate-700 transition-colors w-full sm:w-auto font-medium"
         >
           <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           Làm mới
         </button>
       </div>
 
+      {/* Toast Notification */}
       {notification && (
         <div
-          className={`flex items-center justify-between p-4 rounded-lg border ${
+          className={`flex items-center justify-between p-3 sm:p-4 rounded-xl border text-sm ${
             notification.type === "success"
               ? "bg-emerald-50 border-emerald-200 text-emerald-800"
               : "bg-rose-50 border-rose-200 text-rose-800"
@@ -247,22 +266,23 @@ export default function CatalogManagementPage() {
         >
           <div className="flex items-center gap-2">
             {notification.type === "success" ? (
-              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
             ) : (
-              <AlertCircle className="w-5 h-5 text-rose-600" />
+              <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
             )}
-            <span className="text-sm font-medium">{notification.message}</span>
+            <span className="font-medium">{notification.message}</span>
           </div>
-          <button onClick={() => setNotification(null)}>
+          <button onClick={() => setNotification(null)} className="p-1">
             <X className="w-4 h-4" />
           </button>
         </div>
       )}
 
-      <div className="flex border-b border-slate-200 bg-white rounded-t-lg px-4 pt-2">
+      {/* Navigation Tabs - Horizontal Scroll on Mobile */}
+      <div className="flex overflow-x-auto no-scrollbar border-b border-slate-200 bg-white rounded-xl px-2 pt-2 shadow-sm">
         <button
           onClick={() => setActiveTab("services")}
-          className={`flex items-center gap-2 px-4 py-3 font-medium text-sm border-b-2 transition-colors ${
+          className={`flex items-center gap-2 px-4 py-3 font-semibold text-xs sm:text-sm border-b-2 whitespace-nowrap transition-colors ${
             activeTab === "services"
               ? "border-pink-600 text-pink-600"
               : "border-transparent text-slate-500 hover:text-slate-700"
@@ -273,7 +293,7 @@ export default function CatalogManagementPage() {
         </button>
         <button
           onClick={() => setActiveTab("products")}
-          className={`flex items-center gap-2 px-4 py-3 font-medium text-sm border-b-2 transition-colors ${
+          className={`flex items-center gap-2 px-4 py-3 font-semibold text-xs sm:text-sm border-b-2 whitespace-nowrap transition-colors ${
             activeTab === "products"
               ? "border-pink-600 text-pink-600"
               : "border-transparent text-slate-500 hover:text-slate-700"
@@ -284,7 +304,7 @@ export default function CatalogManagementPage() {
         </button>
         <button
           onClick={() => setActiveTab("categories")}
-          className={`flex items-center gap-2 px-4 py-3 font-medium text-sm border-b-2 transition-colors ${
+          className={`flex items-center gap-2 px-4 py-3 font-semibold text-xs sm:text-sm border-b-2 whitespace-nowrap transition-colors ${
             activeTab === "categories"
               ? "border-pink-600 text-pink-600"
               : "border-transparent text-slate-500 hover:text-slate-700"
@@ -295,7 +315,7 @@ export default function CatalogManagementPage() {
         </button>
         <button
           onClick={() => setActiveTab("packages")}
-          className={`flex items-center gap-2 px-4 py-3 font-medium text-sm border-b-2 transition-colors ${
+          className={`flex items-center gap-2 px-4 py-3 font-semibold text-xs sm:text-sm border-b-2 whitespace-nowrap transition-colors ${
             activeTab === "packages"
               ? "border-pink-600 text-pink-600"
               : "border-transparent text-slate-500 hover:text-slate-700"
@@ -306,24 +326,25 @@ export default function CatalogManagementPage() {
         </button>
       </div>
 
+      {/* TAB 1: DỊCH VỤ */}
       {activeTab === "services" && (
         <div className="space-y-4">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
-            <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-              <div className="relative flex-1 md:w-64">
+          <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full md:w-auto">
+              <div className="relative">
                 <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Tìm theo tên hoặc mã..."
+                  placeholder="Tìm theo tên/mã..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-pink-500"
+                  className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-pink-500"
                 />
               </div>
               <select
                 value={categoryFilter}
                 onChange={(e) => setCategoryFilter(e.target.value)}
-                className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                className="px-3 py-2 border border-slate-300 rounded-lg text-xs sm:text-sm bg-white"
               >
                 <option value="">-- Tất cả danh mục --</option>
                 {categories.map((c) => (
@@ -335,11 +356,11 @@ export default function CatalogManagementPage() {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as any)}
-                className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                className="px-3 py-2 border border-slate-300 rounded-lg text-xs sm:text-sm bg-white"
               >
                 <option value="ALL">Tất cả trạng thái</option>
-                <option value="ACTIVE">Đang hoạt động</option>
-                <option value="INACTIVE">Ngưng hoạt động</option>
+                <option value="ACTIVE">Hoạt động</option>
+                <option value="INACTIVE">Ngưng</option>
               </select>
             </div>
             <button
@@ -347,14 +368,15 @@ export default function CatalogManagementPage() {
                 setEditingService(null);
                 setIsServiceModalOpen(true);
               }}
-              className="flex items-center gap-2 px-4 py-2 bg-pink-600 text-white rounded-lg text-sm font-medium hover:bg-pink-700 shadow-sm w-full md:w-auto justify-center"
+              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-pink-600 text-white rounded-lg text-xs sm:text-sm font-semibold hover:bg-pink-700 shadow-sm active:scale-[0.98] transition-transform"
             >
               <Plus className="w-4 h-4" />
               Thêm Dịch vụ
             </button>
           </div>
 
-          <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+          {/* Desktop Table View */}
+          <div className="hidden md:block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-600 uppercase">
@@ -362,7 +384,8 @@ export default function CatalogManagementPage() {
                   <th className="p-3">Tên dịch vụ</th>
                   <th className="p-3">Danh mục</th>
                   <th className="p-3">Giá bán</th>
-                  <th className="p-3">Thời lượng</th>
+                  <th className="p-3">Sale Comm</th>
+                  <th className="p-3">KTV Comm</th>
                   <th className="p-3">Trạng thái</th>
                   <th className="p-3 text-right">Thao tác</th>
                 </tr>
@@ -370,7 +393,7 @@ export default function CatalogManagementPage() {
               <tbody className="divide-y divide-slate-200 text-sm">
                 {filteredServices.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-6 text-center text-slate-500">
+                    <td colSpan={8} className="p-6 text-center text-slate-500">
                       Chưa có dịch vụ nào phù hợp
                     </td>
                   </tr>
@@ -380,12 +403,17 @@ export default function CatalogManagementPage() {
                       <td className="p-3 font-mono text-xs font-bold text-slate-700">
                         {item.code}
                       </td>
-                      <td className="p-3 font-medium text-slate-900">
+                      <td className="p-3 font-semibold text-slate-900">
                         {item.name}
+                        {item.duration_minutes ? (
+                          <span className="block text-xs text-slate-400 font-normal">
+                            {item.duration_minutes} phút
+                          </span>
+                        ) : null}
                       </td>
                       <td className="p-3 text-slate-600">
                         {item.category ? (
-                          <span className="px-2 py-1 bg-slate-100 rounded text-xs">
+                          <span className="px-2 py-0.5 bg-slate-100 rounded text-xs">
                             {item.category}
                           </span>
                         ) : (
@@ -395,18 +423,26 @@ export default function CatalogManagementPage() {
                       <td className="p-3 font-semibold text-slate-900">
                         {formatVND(item.price)}
                       </td>
-                      <td className="p-3 text-slate-600">
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3.5 h-3.5 text-slate-400" />
-                          {item.duration_minutes || 0} phút
-                        </span>
+                      <td className="p-3 font-medium text-emerald-700">
+                        {formatCommission(
+                          item.sales_commission_type,
+                          item.sales_commission_value,
+                          item.sales_commission_rate,
+                        )}
+                      </td>
+                      <td className="p-3 font-medium text-blue-700">
+                        {formatCommission(
+                          item.performance_commission_type,
+                          item.performance_commission_value,
+                          item.performance_commission_rate,
+                        )}
                       </td>
                       <td className="p-3">
                         <button
                           onClick={() =>
-                            handleToggleStatus(item.id, item.status)
+                            handleToggleStatus(item.id, item.status, "service")
                           }
-                          className={`px-2 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors ${
+                          className={`px-2.5 py-1 rounded-full text-xs font-semibold cursor-pointer transition-colors ${
                             item.status === "ACTIVE"
                               ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
                               : "bg-slate-100 text-slate-600 hover:bg-slate-200"
@@ -421,7 +457,7 @@ export default function CatalogManagementPage() {
                             setEditingService(item);
                             setIsServiceModalOpen(true);
                           }}
-                          className="p-1 text-slate-500 hover:text-pink-600"
+                          className="p-1.5 text-slate-500 hover:text-pink-600"
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
@@ -433,7 +469,7 @@ export default function CatalogManagementPage() {
                               title: item.name,
                             })
                           }
-                          className="p-1 text-slate-500 hover:text-rose-600"
+                          className="p-1.5 text-slate-500 hover:text-rose-600"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -444,27 +480,136 @@ export default function CatalogManagementPage() {
               </tbody>
             </table>
           </div>
+
+          {/* Mobile Card List View */}
+          <div className="md:hidden space-y-3">
+            {filteredServices.length === 0 ? (
+              <div className="bg-white p-6 rounded-xl border border-slate-200 text-center text-slate-500 text-sm">
+                Chưa có dịch vụ nào phù hợp
+              </div>
+            ) : (
+              filteredServices.map((item) => (
+                <div
+                  key={item.id}
+                  className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <span className="font-mono text-xs font-bold text-pink-600 bg-pink-50 px-2 py-0.5 rounded">
+                        {item.code}
+                      </span>
+                      <h3 className="font-bold text-slate-900 text-base mt-1">
+                        {item.name}
+                      </h3>
+                    </div>
+                    <button
+                      onClick={() =>
+                        handleToggleStatus(item.id, item.status, "service")
+                      }
+                      className={`px-2.5 py-1 rounded-full text-xs font-semibold shrink-0 ${
+                        item.status === "ACTIVE"
+                          ? "bg-emerald-100 text-emerald-800"
+                          : "bg-slate-100 text-slate-600"
+                      }`}
+                    >
+                      {item.status === "ACTIVE" ? "Hoạt động" : "Ngưng"}
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                    <div>
+                      <span className="text-slate-500 block">Giá dịch vụ</span>
+                      <span className="font-bold text-slate-900 text-sm">
+                        {formatVND(item.price)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block">Thời lượng</span>
+                      <span className="font-medium text-slate-700">
+                        {item.duration_minutes || 0} phút
+                      </span>
+                    </div>
+                    <div className="border-t pt-1.5 mt-1 border-slate-200">
+                      <span className="text-slate-500 block">
+                        Hoa hồng Sale
+                      </span>
+                      <span className="font-bold text-emerald-700">
+                        {formatCommission(
+                          item.sales_commission_type,
+                          item.sales_commission_value,
+                          item.sales_commission_rate,
+                        )}
+                      </span>
+                    </div>
+                    <div className="border-t pt-1.5 mt-1 border-slate-200">
+                      <span className="text-slate-500 block">Hoa hồng KTV</span>
+                      <span className="font-bold text-blue-700">
+                        {formatCommission(
+                          item.performance_commission_type,
+                          item.performance_commission_value,
+                          item.performance_commission_rate,
+                        )}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-xs text-slate-500">
+                      {item.category
+                        ? `DM: ${item.category}`
+                        : "Chưa phân loại"}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          setEditingService(item);
+                          setIsServiceModalOpen(true);
+                        }}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold"
+                      >
+                        <Edit2 className="w-3.5 h-3.5 text-pink-600" />
+                        Sửa
+                      </button>
+                      <button
+                        onClick={() =>
+                          setConfirmDelete({
+                            type: "services",
+                            id: item.id,
+                            title: item.name,
+                          })
+                        }
+                        className="p-1.5 bg-rose-50 text-rose-600 rounded-lg"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       )}
 
+      {/* TAB 2: SẢN PHẨM */}
       {activeTab === "products" && (
         <div className="space-y-4">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
-            <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-              <div className="relative flex-1 md:w-64">
+          <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full md:w-auto">
+              <div className="relative">
                 <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Tìm SKU hoặc tên..."
+                  placeholder="Tìm SKU/tên sản phẩm..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-pink-500"
+                  className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-pink-500"
                 />
               </div>
               <select
                 value={categoryFilter}
                 onChange={(e) => setCategoryFilter(e.target.value)}
-                className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                className="px-3 py-2 border border-slate-300 rounded-lg text-xs sm:text-sm bg-white"
               >
                 <option value="">-- Tất cả danh mục --</option>
                 {categories.map((c) => (
@@ -476,11 +621,11 @@ export default function CatalogManagementPage() {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as any)}
-                className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                className="px-3 py-2 border border-slate-300 rounded-lg text-xs sm:text-sm bg-white"
               >
                 <option value="ALL">Tất cả trạng thái</option>
-                <option value="ACTIVE">Đang hoạt động</option>
-                <option value="INACTIVE">Ngưng hoạt động</option>
+                <option value="ACTIVE">Hoạt động</option>
+                <option value="INACTIVE">Ngưng</option>
               </select>
             </div>
             <button
@@ -488,24 +633,24 @@ export default function CatalogManagementPage() {
                 setEditingProduct(null);
                 setIsProductModalOpen(true);
               }}
-              className="flex items-center gap-2 px-4 py-2 bg-pink-600 text-white rounded-lg text-sm font-medium hover:bg-pink-700 shadow-sm w-full md:w-auto justify-center"
+              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-pink-600 text-white rounded-lg text-xs sm:text-sm font-semibold hover:bg-pink-700 shadow-sm active:scale-[0.98] transition-transform"
             >
               <Plus className="w-4 h-4" />
               Thêm Sản phẩm
             </button>
           </div>
 
-          <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+          {/* Desktop Table View */}
+          <div className="hidden md:block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-600 uppercase">
                   <th className="p-3">SKU</th>
                   <th className="p-3">Tên sản phẩm</th>
                   <th className="p-3">Danh mục</th>
-                  <th className="p-3">Giá vốn</th>
                   <th className="p-3">Giá bán</th>
+                  <th className="p-3">Hoa hồng Sale</th>
                   <th className="p-3">Tồn kho</th>
-                  <th className="p-3">Đơn vị</th>
                   <th className="p-3">Trạng thái</th>
                   <th className="p-3 text-right">Thao tác</th>
                 </tr>
@@ -513,7 +658,7 @@ export default function CatalogManagementPage() {
               <tbody className="divide-y divide-slate-200 text-sm">
                 {filteredProducts.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="p-6 text-center text-slate-500">
+                    <td colSpan={8} className="p-6 text-center text-slate-500">
                       Chưa có sản phẩm nào phù hợp
                     </td>
                   </tr>
@@ -523,23 +668,26 @@ export default function CatalogManagementPage() {
                       <td className="p-3 font-mono text-xs font-bold text-slate-700">
                         {item.code}
                       </td>
-                      <td className="p-3 font-medium text-slate-900">
+                      <td className="p-3 font-semibold text-slate-900">
                         {item.name}
                       </td>
                       <td className="p-3 text-slate-600">
                         {item.category ? (
-                          <span className="px-2 py-1 bg-slate-100 rounded text-xs">
+                          <span className="px-2 py-0.5 bg-slate-100 rounded text-xs">
                             {item.category}
                           </span>
                         ) : (
                           "-"
                         )}
                       </td>
-                      <td className="p-3 text-slate-500">
-                        {formatVND(item.cost_price || 0)}
-                      </td>
                       <td className="p-3 font-semibold text-slate-900">
-                        {formatVND(item.selling_price || item.price)}
+                        {formatVND(item.selling_price || item.price || 0)}
+                      </td>
+                      <td className="p-3 font-medium text-emerald-700">
+                        {formatCommission(
+                          item.sales_commission_type,
+                          item.sales_commission_value,
+                        )}
                       </td>
                       <td className="p-3">
                         <span
@@ -550,18 +698,15 @@ export default function CatalogManagementPage() {
                               : "text-slate-800"
                           }`}
                         >
-                          {item.stock_quantity || 0}
+                          {item.stock_quantity || 0} {item.unit || "Chai"}
                         </span>
-                      </td>
-                      <td className="p-3 text-slate-600">
-                        {item.unit || "cái"}
                       </td>
                       <td className="p-3">
                         <button
                           onClick={() =>
-                            handleToggleStatus(item.id, item.status)
+                            handleToggleStatus(item.id, item.status, "product")
                           }
-                          className={`px-2 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors ${
+                          className={`px-2.5 py-1 rounded-full text-xs font-semibold cursor-pointer transition-colors ${
                             item.status === "ACTIVE"
                               ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
                               : "bg-slate-100 text-slate-600 hover:bg-slate-200"
@@ -576,7 +721,7 @@ export default function CatalogManagementPage() {
                             setEditingProduct(item);
                             setIsProductModalOpen(true);
                           }}
-                          className="p-1 text-slate-500 hover:text-pink-600"
+                          className="p-1.5 text-slate-500 hover:text-pink-600"
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
@@ -588,7 +733,7 @@ export default function CatalogManagementPage() {
                               title: item.name,
                             })
                           }
-                          className="p-1 text-slate-500 hover:text-rose-600"
+                          className="p-1.5 text-slate-500 hover:text-rose-600"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -599,28 +744,124 @@ export default function CatalogManagementPage() {
               </tbody>
             </table>
           </div>
+
+          {/* Mobile Card List View */}
+          <div className="md:hidden space-y-3">
+            {filteredProducts.length === 0 ? (
+              <div className="bg-white p-6 rounded-xl border border-slate-200 text-center text-slate-500 text-sm">
+                Chưa có sản phẩm nào phù hợp
+              </div>
+            ) : (
+              filteredProducts.map((item) => (
+                <div
+                  key={item.id}
+                  className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <span className="font-mono text-xs font-bold text-pink-600 bg-pink-50 px-2 py-0.5 rounded">
+                        {item.code}
+                      </span>
+                      <h3 className="font-bold text-slate-900 text-base mt-1">
+                        {item.name}
+                      </h3>
+                    </div>
+                    <button
+                      onClick={() =>
+                        handleToggleStatus(item.id, item.status, "product")
+                      }
+                      className={`px-2.5 py-1 rounded-full text-xs font-semibold shrink-0 ${
+                        item.status === "ACTIVE"
+                          ? "bg-emerald-100 text-emerald-800"
+                          : "bg-slate-100 text-slate-600"
+                      }`}
+                    >
+                      {item.status === "ACTIVE" ? "Hoạt động" : "Ngưng"}
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                    <div>
+                      <span className="text-slate-500 block">Giá bán</span>
+                      <span className="font-bold text-slate-900 text-sm">
+                        {formatVND(item.selling_price || item.price || 0)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block">Tồn kho</span>
+                      <span className="font-semibold text-slate-800">
+                        {item.stock_quantity || 0} {item.unit || "Chai"}
+                      </span>
+                    </div>
+                    <div className="col-span-2 border-t pt-1.5 mt-1 border-slate-200 flex justify-between items-center">
+                      <span className="text-slate-500">Hoa hồng Sale:</span>
+                      <span className="font-bold text-emerald-700 text-sm">
+                        {formatCommission(
+                          item.sales_commission_type,
+                          item.sales_commission_value,
+                        )}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-xs text-slate-500">
+                      {item.category
+                        ? `DM: ${item.category}`
+                        : "Chưa phân loại"}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          setEditingProduct(item);
+                          setIsProductModalOpen(true);
+                        }}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold"
+                      >
+                        <Edit2 className="w-3.5 h-3.5 text-pink-600" />
+                        Sửa
+                      </button>
+                      <button
+                        onClick={() =>
+                          setConfirmDelete({
+                            type: "products",
+                            id: item.id,
+                            title: item.name,
+                          })
+                        }
+                        className="p-1.5 bg-rose-50 text-rose-600 rounded-lg"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       )}
 
+      {/* TAB 3: DANH MỤC */}
       {activeTab === "categories" && (
-        <div className="space-y-6">
+        <div className="space-y-4">
           <div className="flex justify-end">
             <button
               onClick={() => {
                 setEditingCategory(null);
                 setIsCategoryModalOpen(true);
               }}
-              className="flex items-center gap-2 px-4 py-2 bg-pink-600 text-white rounded-lg text-sm font-medium hover:bg-pink-700 shadow-sm"
+              className="flex items-center gap-2 px-4 py-2.5 bg-pink-600 text-white rounded-lg text-xs sm:text-sm font-semibold hover:bg-pink-700 shadow-sm"
             >
               <Plus className="w-4 h-4" />
               Thêm Danh mục
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
               <div className="flex items-center justify-between border-b pb-2">
-                <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm sm:text-base">
                   <Scissors className="w-4 h-4 text-pink-600" />
                   Danh mục Dịch vụ
                 </h3>
@@ -629,63 +870,48 @@ export default function CatalogManagementPage() {
                 </span>
               </div>
               <div className="divide-y divide-slate-100">
-                {categories.filter((c) => c.type === "service").length === 0 ? (
-                  <p className="text-sm text-slate-500 py-3 text-center">
-                    Chưa có danh mục dịch vụ
-                  </p>
-                ) : (
-                  categories
-                    .filter((c) => c.type === "service")
-                    .map((cat) => (
-                      <div
-                        key={cat.id}
-                        className="flex items-center justify-between py-2 hover:bg-slate-50 px-2 rounded"
-                      >
-                        <span className="text-sm font-medium text-slate-800">
-                          {cat.name}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`text-xs px-2 py-0.5 rounded ${
-                              cat.status === "active"
-                                ? "bg-emerald-100 text-emerald-800"
-                                : "bg-slate-100 text-slate-600"
-                            }`}
-                          >
-                            {cat.status === "active" ? "Hoạt động" : "Ẩn"}
-                          </span>
-                          <button
-                            onClick={() => {
-                              setEditingCategory(cat);
-                              setIsCategoryModalOpen(true);
-                            }}
-                            className="p-1 text-slate-400 hover:text-pink-600"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() =>
-                              setConfirmDelete({
-                                type: "categories",
-                                id: cat.id,
-                                extraData: cat.name,
-                                title: cat.name,
-                              })
-                            }
-                            className="p-1 text-slate-400 hover:text-rose-600"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                {categories
+                  .filter((c) => c.type === "service")
+                  .map((cat) => (
+                    <div
+                      key={cat.id}
+                      className="flex items-center justify-between py-2 hover:bg-slate-50 px-1 rounded text-xs sm:text-sm"
+                    >
+                      <span className="font-medium text-slate-800">
+                        {cat.name}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            setEditingCategory(cat);
+                            setIsCategoryModalOpen(true);
+                          }}
+                          className="p-1 text-slate-400 hover:text-pink-600"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() =>
+                            setConfirmDelete({
+                              type: "categories",
+                              id: cat.id,
+                              extraData: cat.name,
+                              title: cat.name,
+                            })
+                          }
+                          className="p-1 text-slate-400 hover:text-rose-600"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
-                    ))
-                )}
+                    </div>
+                  ))}
               </div>
             </div>
 
-            <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm space-y-3">
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
               <div className="flex items-center justify-between border-b pb-2">
-                <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm sm:text-base">
                   <ShoppingBag className="w-4 h-4 text-pink-600" />
                   Danh mục Sản phẩm
                 </h3>
@@ -694,172 +920,125 @@ export default function CatalogManagementPage() {
                 </span>
               </div>
               <div className="divide-y divide-slate-100">
-                {categories.filter((c) => c.type === "product").length === 0 ? (
-                  <p className="text-sm text-slate-500 py-3 text-center">
-                    Chưa có danh mục sản phẩm
-                  </p>
-                ) : (
-                  categories
-                    .filter((c) => c.type === "product")
-                    .map((cat) => (
-                      <div
-                        key={cat.id}
-                        className="flex items-center justify-between py-2 hover:bg-slate-50 px-2 rounded"
-                      >
-                        <span className="text-sm font-medium text-slate-800">
-                          {cat.name}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`text-xs px-2 py-0.5 rounded ${
-                              cat.status === "active"
-                                ? "bg-emerald-100 text-emerald-800"
-                                : "bg-slate-100 text-slate-600"
-                            }`}
-                          >
-                            {cat.status === "active" ? "Hoạt động" : "Ẩn"}
-                          </span>
-                          <button
-                            onClick={() => {
-                              setEditingCategory(cat);
-                              setIsCategoryModalOpen(true);
-                            }}
-                            className="p-1 text-slate-400 hover:text-pink-600"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() =>
-                              setConfirmDelete({
-                                type: "categories",
-                                id: cat.id,
-                                extraData: cat.name,
-                                title: cat.name,
-                              })
-                            }
-                            className="p-1 text-slate-400 hover:text-rose-600"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {activeTab === "packages" && (
-        <div className="space-y-4">
-          <div className="flex justify-between items-center bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
-            <h3 className="font-semibold text-slate-800">
-              Danh sách Gói Dịch vụ / Liệu trình
-            </h3>
-            <button
-              onClick={() => {
-                setEditingPackage(null);
-                setIsPackageModalOpen(true);
-              }}
-              className="flex items-center gap-2 px-4 py-2 bg-pink-600 text-white rounded-lg text-sm font-medium hover:bg-pink-700 shadow-sm"
-            >
-              <Plus className="w-4 h-4" />
-              Tạo Gói Dịch vụ
-            </button>
-          </div>
-
-          <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-600 uppercase">
-                  <th className="p-3">Mã gói</th>
-                  <th className="p-3">Tên gói</th>
-                  <th className="p-3">Giá gói</th>
-                  <th className="p-3">Hạn dùng (Ngày)</th>
-                  <th className="p-3">Số dịch vụ</th>
-                  <th className="p-3">Trạng thái</th>
-                  <th className="p-3 text-right">Thao tác</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200 text-sm">
-                {packages.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="p-6 text-center text-slate-500">
-                      Chưa có gói dịch vụ nào
-                    </td>
-                  </tr>
-                ) : (
-                  packages.map((pkg) => (
-                    <tr key={pkg.id} className="hover:bg-slate-50">
-                      <td className="p-3 font-mono text-xs font-bold text-slate-700">
-                        {pkg.code}
-                      </td>
-                      <td className="p-3">
-                        <div className="font-medium text-slate-900">
-                          {pkg.name}
-                        </div>
-                        {pkg.description && (
-                          <div className="text-xs text-slate-500 truncate max-w-xs">
-                            {pkg.description}
-                          </div>
-                        )}
-                      </td>
-                      <td className="p-3 font-semibold text-pink-600">
-                        {formatVND(pkg.price)}
-                      </td>
-                      <td className="p-3 text-slate-600">
-                        {pkg.validity_days || 0} ngày
-                      </td>
-                      <td className="p-3 text-slate-600 font-medium">
-                        {pkg.package_items?.length || 0} mục
-                      </td>
-                      <td className="p-3">
-                        <button
-                          onClick={() =>
-                            handleTogglePkgStatus(pkg.id, pkg.is_active)
-                          }
-                          className={`px-2 py-1 rounded-full text-xs font-medium transition-colors ${
-                            pkg.is_active
-                              ? "bg-emerald-100 text-emerald-800"
-                              : "bg-slate-100 text-slate-600"
-                          }`}
-                        >
-                          {pkg.is_active ? "Kích hoạt" : "Tắt"}
-                        </button>
-                      </td>
-                      <td className="p-3 text-right space-x-2">
+                {categories
+                  .filter((c) => c.type === "product")
+                  .map((cat) => (
+                    <div
+                      key={cat.id}
+                      className="flex items-center justify-between py-2 hover:bg-slate-50 px-1 rounded text-xs sm:text-sm"
+                    >
+                      <span className="font-medium text-slate-800">
+                        {cat.name}
+                      </span>
+                      <div className="flex items-center gap-2">
                         <button
                           onClick={() => {
-                            setEditingPackage(pkg);
-                            setIsPackageModalOpen(true);
+                            setEditingCategory(cat);
+                            setIsCategoryModalOpen(true);
                           }}
-                          className="p-1 text-slate-500 hover:text-pink-600"
+                          className="p-1 text-slate-400 hover:text-pink-600"
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() =>
                             setConfirmDelete({
-                              type: "packages",
-                              id: pkg.id,
-                              title: pkg.name,
+                              type: "categories",
+                              id: cat.id,
+                              extraData: cat.name,
+                              title: cat.name,
                             })
                           }
-                          className="p-1 text-slate-500 hover:text-rose-600"
+                          className="p-1 text-slate-400 hover:text-rose-600"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 4: GÓI DỊCH VỤ */}
+      {activeTab === "packages" && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <h3 className="font-bold text-slate-800 text-sm sm:text-base">
+              Gói Dịch vụ / Liệu trình
+            </h3>
+            <button
+              onClick={() => {
+                setEditingPackage(null);
+                setIsPackageModalOpen(true);
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 bg-pink-600 text-white rounded-lg text-xs sm:text-sm font-semibold hover:bg-pink-700 shadow-sm"
+            >
+              <Plus className="w-4 h-4" />
+              Tạo Gói Dịch vụ
+            </button>
+          </div>
+
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-600 uppercase">
+                  <th className="p-3">Mã gói</th>
+                  <th className="p-3">Tên gói</th>
+                  <th className="p-3">Giá gói</th>
+                  <th className="p-3">Hạn dùng</th>
+                  <th className="p-3 text-right">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200 text-sm">
+                {packages.map((pkg) => (
+                  <tr key={pkg.id} className="hover:bg-slate-50">
+                    <td className="p-3 font-mono text-xs font-bold text-slate-700">
+                      {pkg.code}
+                    </td>
+                    <td className="p-3 font-semibold text-slate-900">
+                      {pkg.name}
+                    </td>
+                    <td className="p-3 font-semibold text-pink-600">
+                      {formatVND(pkg.price)}
+                    </td>
+                    <td className="p-3 text-slate-600 text-xs">
+                      {pkg.validity_days || 0} ngày
+                    </td>
+                    <td className="p-3 text-right space-x-2">
+                      <button
+                        onClick={() => {
+                          setEditingPackage(pkg);
+                          setIsPackageModalOpen(true);
+                        }}
+                        className="p-1.5 text-slate-500 hover:text-pink-600"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() =>
+                          setConfirmDelete({
+                            type: "packages",
+                            id: pkg.id,
+                            title: pkg.name,
+                          })
+                        }
+                        className="p-1.5 text-slate-500 hover:text-rose-600"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         </div>
       )}
 
+      {/* MODAL 1: SERVICE FORM */}
       {isServiceModalOpen && (
         <ServiceFormModal
           isOpen={isServiceModalOpen}
@@ -870,10 +1049,10 @@ export default function CatalogManagementPage() {
             try {
               if (editingService) {
                 await updateService(editingService.id, formData);
-                showToast("success", "Đã cập nhật dịch vụ");
+                showToast("success", "Đã cập nhật dịch vụ thành công");
               } else {
                 await createService(formData);
-                showToast("success", "Đã thêm dịch vụ thành công");
+                showToast("success", "Đã thêm dịch vụ mới thành công");
               }
               setIsServiceModalOpen(false);
               loadData();
@@ -884,6 +1063,7 @@ export default function CatalogManagementPage() {
         />
       )}
 
+      {/* MODAL 2: PRODUCT FORM */}
       {isProductModalOpen && (
         <ProductFormModal
           isOpen={isProductModalOpen}
@@ -894,10 +1074,10 @@ export default function CatalogManagementPage() {
             try {
               if (editingProduct) {
                 await updateProduct(editingProduct.id, formData);
-                showToast("success", "Đã cập nhật sản phẩm");
+                showToast("success", "Đã cập nhật sản phẩm thành công");
               } else {
                 await createProduct(formData);
-                showToast("success", "Đã thêm sản phẩm mới");
+                showToast("success", "Đã thêm sản phẩm mới thành công");
               }
               setIsProductModalOpen(false);
               loadData();
@@ -908,6 +1088,7 @@ export default function CatalogManagementPage() {
         />
       )}
 
+      {/* MODAL 3: CATEGORY FORM */}
       {isCategoryModalOpen && (
         <CategoryFormModal
           isOpen={isCategoryModalOpen}
@@ -931,6 +1112,7 @@ export default function CatalogManagementPage() {
         />
       )}
 
+      {/* MODAL 4: PACKAGE FORM */}
       {isPackageModalOpen && (
         <PackageFormModal
           isOpen={isPackageModalOpen}
@@ -955,9 +1137,10 @@ export default function CatalogManagementPage() {
         />
       )}
 
+      {/* DELETE CONFIRMATION DIALOG */}
       {confirmDelete && (
-        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg p-6 max-w-sm w-full space-y-4 shadow-xl">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl p-5 max-w-sm w-full space-y-4 shadow-xl">
             <h3 className="font-bold text-lg text-slate-900">Xác nhận xóa</h3>
             <p className="text-sm text-slate-600">
               Bạn có chắc chắn muốn xóa "<strong>{confirmDelete.title}</strong>
@@ -966,13 +1149,13 @@ export default function CatalogManagementPage() {
             <div className="flex justify-end gap-3 pt-2">
               <button
                 onClick={() => setConfirmDelete(null)}
-                className="px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="flex-1 sm:flex-none px-4 py-2.5 border border-slate-300 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50"
               >
                 Hủy
               </button>
               <button
                 onClick={handleDeleteConfirm}
-                className="px-4 py-2 bg-rose-600 text-white rounded-lg text-sm font-medium hover:bg-rose-700"
+                className="flex-1 sm:flex-none px-4 py-2.5 bg-rose-600 text-white rounded-xl text-sm font-semibold hover:bg-rose-700"
               >
                 Xóa ngay
               </button>
@@ -983,6 +1166,10 @@ export default function CatalogManagementPage() {
     </div>
   );
 }
+
+// ==========================================
+// FORM MODAL COMPONENTS (MOBILE-FIRST)
+// ==========================================
 
 function ServiceFormModal({
   onClose,
@@ -1003,27 +1190,81 @@ function ServiceFormModal({
     description: editingService?.description || "",
     price: editingService?.price || 0,
     duration_minutes: editingService?.duration_minutes || 60,
-    sales_commission_rate: editingService?.sales_commission_rate || 0,
-    performance_commission_rate:
-      editingService?.performance_commission_rate || 0,
+    sales_commission_type:
+      editingService?.sales_commission_type || ("PERCENT" as CommissionType),
+    sales_commission_value:
+      editingService?.sales_commission_value ??
+      editingService?.sales_commission_rate ??
+      0,
+    performance_commission_type:
+      editingService?.performance_commission_type ||
+      ("PERCENT" as CommissionType),
+    performance_commission_value:
+      editingService?.performance_commission_value ??
+      editingService?.performance_commission_rate ??
+      0,
   });
 
+  const [validationError, setValidationError] = useState<string | null>(null);
+
+  const handleSubmit = () => {
+    // Validate Percent Range
+    if (
+      formData.sales_commission_type === "PERCENT" &&
+      (formData.sales_commission_value < 0 ||
+        formData.sales_commission_value > 100)
+    ) {
+      setValidationError("Hoa hồng Sale (%) phải từ 0% đến 100%");
+      return;
+    }
+    if (
+      formData.performance_commission_type === "PERCENT" &&
+      (formData.performance_commission_value < 0 ||
+        formData.performance_commission_value > 100)
+    ) {
+      setValidationError("Hoa hồng KTV (%) phải từ 0% đến 100%");
+      return;
+    }
+    if (
+      formData.sales_commission_value < 0 ||
+      formData.performance_commission_value < 0
+    ) {
+      setValidationError("Giá trị hoa hồng không được là số âm");
+      return;
+    }
+
+    setValidationError(null);
+    onSave(formData);
+  };
+
   return (
-    <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl p-6 max-w-lg w-full space-y-4 shadow-xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between border-b pb-3">
-          <h3 className="text-lg font-bold text-slate-900">
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl max-w-lg w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+        {/* Modal Header */}
+        <div className="flex items-center justify-between p-4 border-b border-slate-200 bg-slate-50 shrink-0">
+          <h3 className="text-base sm:text-lg font-bold text-slate-900">
             {editingService ? "Sửa Dịch vụ" : "Thêm Dịch vụ Mới"}
           </h3>
-          <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded">
-            <X className="w-5 h-5 text-slate-500" />
+          <button
+            onClick={onClose}
+            className="p-1.5 hover:bg-slate-200 rounded-full text-slate-500 transition-colors"
+          >
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
+        {/* Modal Content - Scrollable */}
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-4 text-xs sm:text-sm">
+          {validationError && (
+            <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs font-semibold flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{validationError}</span>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block font-semibold text-slate-700 mb-1">
                 Mã dịch vụ *
               </label>
               <input
@@ -1032,12 +1273,12 @@ function ServiceFormModal({
                 onChange={(e) =>
                   setFormData({ ...formData, code: e.target.value })
                 }
-                className="w-full p-2 border border-slate-300 rounded text-sm"
+                className="w-full p-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-pink-500"
                 required
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block font-semibold text-slate-700 mb-1">
                 Danh mục
               </label>
               <select
@@ -1045,7 +1286,7 @@ function ServiceFormModal({
                 onChange={(e) =>
                   setFormData({ ...formData, category: e.target.value })
                 }
-                className="w-full p-2 border border-slate-300 rounded text-sm bg-white"
+                className="w-full p-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:ring-2 focus:ring-pink-500"
               >
                 <option value="">-- Chọn danh mục --</option>
                 {categories.map((c) => (
@@ -1058,7 +1299,7 @@ function ServiceFormModal({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
+            <label className="block font-semibold text-slate-700 mb-1">
               Tên dịch vụ *
             </label>
             <input
@@ -1067,14 +1308,15 @@ function ServiceFormModal({
               onChange={(e) =>
                 setFormData({ ...formData, name: e.target.value })
               }
-              className="w-full p-2 border border-slate-300 rounded text-sm"
+              className="w-full p-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-pink-500"
+              placeholder="VD: Chăm sóc da mụn Chuyên sâu"
               required
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block font-semibold text-slate-700 mb-1">
                 Giá bán (VND) *
               </label>
               <input
@@ -1083,11 +1325,11 @@ function ServiceFormModal({
                 onChange={(e) =>
                   setFormData({ ...formData, price: Number(e.target.value) })
                 }
-                className="w-full p-2 border border-slate-300 rounded text-sm"
+                className="w-full p-2.5 border border-slate-300 rounded-xl text-sm font-semibold text-pink-600 focus:ring-2 focus:ring-pink-500"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block font-semibold text-slate-700 mb-1">
                 Thời lượng (Phút)
               </label>
               <input
@@ -1099,48 +1341,149 @@ function ServiceFormModal({
                     duration_minutes: Number(e.target.value),
                   })
                 }
-                className="w-full p-2 border border-slate-300 rounded text-sm"
+                className="w-full p-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-pink-500"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Hoa hồng Sales (%)
+          {/* COMMISSION SECTIONS */}
+          <div className="border-t border-slate-200 pt-3 space-y-4">
+            <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider">
+              Cấu hình Hoa hồng
+            </h4>
+
+            {/* SALE COMMISSION */}
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+              <label className="block font-bold text-slate-800 text-xs">
+                Hoa hồng Sale
               </label>
-              <input
-                type="number"
-                value={formData.sales_commission_rate}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    sales_commission_rate: Number(e.target.value),
-                  })
-                }
-                className="w-full p-2 border border-slate-300 rounded text-sm"
-              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setFormData({
+                      ...formData,
+                      sales_commission_type: "PERCENT",
+                    })
+                  }
+                  className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 border transition-all ${
+                    formData.sales_commission_type === "PERCENT"
+                      ? "bg-pink-600 text-white border-pink-600 shadow-xs"
+                      : "bg-white text-slate-600 border-slate-300"
+                  }`}
+                >
+                  <Percent className="w-3.5 h-3.5" /> % Phần trăm
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setFormData({
+                      ...formData,
+                      sales_commission_type: "FIXED",
+                    })
+                  }
+                  className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 border transition-all ${
+                    formData.sales_commission_type === "FIXED"
+                      ? "bg-pink-600 text-white border-pink-600 shadow-xs"
+                      : "bg-white text-slate-600 border-slate-300"
+                  }`}
+                >
+                  <Coins className="w-3.5 h-3.5" /> Tiền cố định
+                </button>
+              </div>
+              <div className="pt-1">
+                <label className="block text-[11px] text-slate-500 mb-1">
+                  Giá trị (
+                  {formData.sales_commission_type === "PERCENT" ? "%" : "VNĐ"})
+                </label>
+                <input
+                  type="number"
+                  value={formData.sales_commission_value}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      sales_commission_value: Number(e.target.value),
+                    })
+                  }
+                  className="w-full p-2.5 border border-slate-300 rounded-xl text-sm font-semibold text-slate-900 bg-white"
+                  placeholder={
+                    formData.sales_commission_type === "PERCENT"
+                      ? "VD: 10"
+                      : "VD: 50000"
+                  }
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Hoa hồng KTV (%)
+
+            {/* KTV / PERFORMANCE COMMISSION */}
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+              <label className="block font-bold text-slate-800 text-xs">
+                Hoa hồng KTV (Kỹ thuật viên)
               </label>
-              <input
-                type="number"
-                value={formData.performance_commission_rate}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    performance_commission_rate: Number(e.target.value),
-                  })
-                }
-                className="w-full p-2 border border-slate-300 rounded text-sm"
-              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setFormData({
+                      ...formData,
+                      performance_commission_type: "PERCENT",
+                    })
+                  }
+                  className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 border transition-all ${
+                    formData.performance_commission_type === "PERCENT"
+                      ? "bg-pink-600 text-white border-pink-600 shadow-xs"
+                      : "bg-white text-slate-600 border-slate-300"
+                  }`}
+                >
+                  <Percent className="w-3.5 h-3.5" /> % Phần trăm
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setFormData({
+                      ...formData,
+                      performance_commission_type: "FIXED",
+                    })
+                  }
+                  className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 border transition-all ${
+                    formData.performance_commission_type === "FIXED"
+                      ? "bg-pink-600 text-white border-pink-600 shadow-xs"
+                      : "bg-white text-slate-600 border-slate-300"
+                  }`}
+                >
+                  <Coins className="w-3.5 h-3.5" /> Tiền cố định
+                </button>
+              </div>
+              <div className="pt-1">
+                <label className="block text-[11px] text-slate-500 mb-1">
+                  Giá trị (
+                  {formData.performance_commission_type === "PERCENT"
+                    ? "%"
+                    : "VNĐ"}
+                  )
+                </label>
+                <input
+                  type="number"
+                  value={formData.performance_commission_value}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      performance_commission_value: Number(e.target.value),
+                    })
+                  }
+                  className="w-full p-2.5 border border-slate-300 rounded-xl text-sm font-semibold text-slate-900 bg-white"
+                  placeholder={
+                    formData.performance_commission_type === "PERCENT"
+                      ? "VD: 15"
+                      : "VD: 50000"
+                  }
+                />
+              </div>
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
+            <label className="block font-semibold text-slate-700 mb-1">
               Mô tả dịch vụ
             </label>
             <textarea
@@ -1149,21 +1492,25 @@ function ServiceFormModal({
               onChange={(e) =>
                 setFormData({ ...formData, description: e.target.value })
               }
-              className="w-full p-2 border border-slate-300 rounded text-sm"
+              className="w-full p-2.5 border border-slate-300 rounded-xl text-sm"
+              placeholder="Ghi chú chi tiết về dịch vụ..."
             ></textarea>
           </div>
         </div>
 
-        <div className="flex justify-end gap-3 pt-3 border-t">
+        {/* Modal Footer */}
+        <div className="flex items-center justify-end gap-2 p-4 border-t border-slate-200 bg-slate-50 shrink-0">
           <button
+            type="button"
             onClick={onClose}
-            className="px-4 py-2 border border-slate-300 rounded text-sm font-medium text-slate-700"
+            className="flex-1 sm:flex-none px-4 py-2.5 border border-slate-300 rounded-xl font-semibold text-slate-700 hover:bg-slate-100"
           >
             Hủy
           </button>
           <button
-            onClick={() => onSave(formData)}
-            className="px-4 py-2 bg-pink-600 text-white rounded text-sm font-medium hover:bg-pink-700"
+            type="button"
+            onClick={handleSubmit}
+            className="flex-1 sm:flex-none px-5 py-2.5 bg-pink-600 text-white rounded-xl font-semibold hover:bg-pink-700 shadow-md active:scale-[0.98] transition-transform"
           >
             Lưu Dịch vụ
           </button>
@@ -1195,24 +1542,57 @@ function ProductFormModal({
     stock_quantity: editingProduct?.stock_quantity || 0,
     minimum_stock: editingProduct?.minimum_stock || 5,
     unit: editingProduct?.unit || "Chai",
+    sales_commission_type:
+      editingProduct?.sales_commission_type || ("PERCENT" as CommissionType),
+    sales_commission_value: editingProduct?.sales_commission_value ?? 0,
   });
 
+  const [validationError, setValidationError] = useState<string | null>(null);
+
+  const handleSubmit = () => {
+    if (
+      formData.sales_commission_type === "PERCENT" &&
+      (formData.sales_commission_value < 0 ||
+        formData.sales_commission_value > 100)
+    ) {
+      setValidationError("Hoa hồng Sale (%) phải từ 0% đến 100%");
+      return;
+    }
+    if (formData.sales_commission_value < 0) {
+      setValidationError("Giá trị hoa hồng không được là số âm");
+      return;
+    }
+
+    setValidationError(null);
+    onSave(formData);
+  };
+
   return (
-    <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl p-6 max-w-lg w-full space-y-4 shadow-xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between border-b pb-3">
-          <h3 className="text-lg font-bold text-slate-900">
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl max-w-lg w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+        <div className="flex items-center justify-between p-4 border-b border-slate-200 bg-slate-50 shrink-0">
+          <h3 className="text-base sm:text-lg font-bold text-slate-900">
             {editingProduct ? "Sửa Sản phẩm" : "Thêm Sản phẩm Mới"}
           </h3>
-          <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded">
-            <X className="w-5 h-5 text-slate-500" />
+          <button
+            onClick={onClose}
+            className="p-1.5 hover:bg-slate-200 rounded-full text-slate-500 transition-colors"
+          >
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-4 text-xs sm:text-sm">
+          {validationError && (
+            <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs font-semibold flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{validationError}</span>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block font-semibold text-slate-700 mb-1">
                 Mã SKU *
               </label>
               <input
@@ -1221,12 +1601,12 @@ function ProductFormModal({
                 onChange={(e) =>
                   setFormData({ ...formData, code: e.target.value })
                 }
-                className="w-full p-2 border border-slate-300 rounded text-sm"
+                className="w-full p-2.5 border border-slate-300 rounded-xl text-sm"
                 required
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block font-semibold text-slate-700 mb-1">
                 Danh mục
               </label>
               <select
@@ -1234,7 +1614,7 @@ function ProductFormModal({
                 onChange={(e) =>
                   setFormData({ ...formData, category: e.target.value })
                 }
-                className="w-full p-2 border border-slate-300 rounded text-sm bg-white"
+                className="w-full p-2.5 border border-slate-300 rounded-xl text-sm bg-white"
               >
                 <option value="">-- Chọn danh mục --</option>
                 {categories.map((c) => (
@@ -1247,7 +1627,7 @@ function ProductFormModal({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
+            <label className="block font-semibold text-slate-700 mb-1">
               Tên sản phẩm *
             </label>
             <input
@@ -1256,14 +1636,15 @@ function ProductFormModal({
               onChange={(e) =>
                 setFormData({ ...formData, name: e.target.value })
               }
-              className="w-full p-2 border border-slate-300 rounded text-sm"
+              className="w-full p-2.5 border border-slate-300 rounded-xl text-sm"
+              placeholder="VD: Tinh chất Serum Vitamin C"
               required
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block font-semibold text-slate-700 mb-1">
                 Giá vốn (VND)
               </label>
               <input
@@ -1275,11 +1656,11 @@ function ProductFormModal({
                     cost_price: Number(e.target.value),
                   })
                 }
-                className="w-full p-2 border border-slate-300 rounded text-sm"
+                className="w-full p-2.5 border border-slate-300 rounded-xl text-sm"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block font-semibold text-slate-700 mb-1">
                 Giá bán (VND) *
               </label>
               <input
@@ -1291,15 +1672,80 @@ function ProductFormModal({
                     selling_price: Number(e.target.value),
                   })
                 }
-                className="w-full p-2 border border-slate-300 rounded text-sm"
+                className="w-full p-2.5 border border-slate-300 rounded-xl text-sm font-semibold text-pink-600"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          {/* PRODUCT SALE COMMISSION ONLY */}
+          <div className="border-t border-slate-200 pt-3">
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+              <label className="block font-bold text-slate-800 text-xs">
+                Hoa hồng Sale (Sản phẩm)
+              </label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setFormData({
+                      ...formData,
+                      sales_commission_type: "PERCENT",
+                    })
+                  }
+                  className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 border transition-all ${
+                    formData.sales_commission_type === "PERCENT"
+                      ? "bg-pink-600 text-white border-pink-600 shadow-xs"
+                      : "bg-white text-slate-600 border-slate-300"
+                  }`}
+                >
+                  <Percent className="w-3.5 h-3.5" /> % Phần trăm
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setFormData({
+                      ...formData,
+                      sales_commission_type: "FIXED",
+                    })
+                  }
+                  className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 border transition-all ${
+                    formData.sales_commission_type === "FIXED"
+                      ? "bg-pink-600 text-white border-pink-600 shadow-xs"
+                      : "bg-white text-slate-600 border-slate-300"
+                  }`}
+                >
+                  <Coins className="w-3.5 h-3.5" /> Tiền cố định
+                </button>
+              </div>
+              <div className="pt-1">
+                <label className="block text-[11px] text-slate-500 mb-1">
+                  Giá trị (
+                  {formData.sales_commission_type === "PERCENT" ? "%" : "VNĐ"})
+                </label>
+                <input
+                  type="number"
+                  value={formData.sales_commission_value}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      sales_commission_value: Number(e.target.value),
+                    })
+                  }
+                  className="w-full p-2.5 border border-slate-300 rounded-xl text-sm font-semibold text-slate-900 bg-white"
+                  placeholder={
+                    formData.sales_commission_type === "PERCENT"
+                      ? "VD: 10"
+                      : "VD: 30000"
+                  }
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Số lượng kho
+              <label className="block font-semibold text-slate-700 mb-1">
+                Tồn kho
               </label>
               <input
                 type="number"
@@ -1310,12 +1756,12 @@ function ProductFormModal({
                     stock_quantity: Number(e.target.value),
                   })
                 }
-                className="w-full p-2 border border-slate-300 rounded text-sm"
+                className="w-full p-2.5 border border-slate-300 rounded-xl text-sm"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Cảnh báo tối thiểu
+              <label className="block font-semibold text-slate-700 mb-1">
+                Cảnh báo
               </label>
               <input
                 type="number"
@@ -1326,12 +1772,12 @@ function ProductFormModal({
                     minimum_stock: Number(e.target.value),
                   })
                 }
-                className="w-full p-2 border border-slate-300 rounded text-sm"
+                className="w-full p-2.5 border border-slate-300 rounded-xl text-sm"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Đơn vị tính
+              <label className="block font-semibold text-slate-700 mb-1">
+                Đơn vị
               </label>
               <input
                 type="text"
@@ -1339,36 +1785,24 @@ function ProductFormModal({
                 onChange={(e) =>
                   setFormData({ ...formData, unit: e.target.value })
                 }
-                className="w-full p-2 border border-slate-300 rounded text-sm"
+                className="w-full p-2.5 border border-slate-300 rounded-xl text-sm"
               />
             </div>
           </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Mô tả sản phẩm
-            </label>
-            <textarea
-              rows={2}
-              value={formData.description}
-              onChange={(e) =>
-                setFormData({ ...formData, description: e.target.value })
-              }
-              className="w-full p-2 border border-slate-300 rounded text-sm"
-            ></textarea>
-          </div>
         </div>
 
-        <div className="flex justify-end gap-3 pt-3 border-t">
+        <div className="flex items-center justify-end gap-2 p-4 border-t border-slate-200 bg-slate-50 shrink-0">
           <button
+            type="button"
             onClick={onClose}
-            className="px-4 py-2 border border-slate-300 rounded text-sm font-medium text-slate-700"
+            className="flex-1 sm:flex-none px-4 py-2.5 border border-slate-300 rounded-xl font-semibold text-slate-700 hover:bg-slate-100"
           >
             Hủy
           </button>
           <button
-            onClick={() => onSave(formData)}
-            className="px-4 py-2 bg-pink-600 text-white rounded text-sm font-medium hover:bg-pink-700"
+            type="button"
+            onClick={handleSubmit}
+            className="flex-1 sm:flex-none px-5 py-2.5 bg-pink-600 text-white rounded-xl font-semibold hover:bg-pink-700 shadow-md active:scale-[0.98] transition-transform"
           >
             Lưu Sản phẩm
           </button>
@@ -1395,10 +1829,10 @@ function CategoryFormModal({
   });
 
   return (
-    <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl p-6 max-w-md w-full space-y-4 shadow-xl">
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
         <div className="flex items-center justify-between border-b pb-3">
-          <h3 className="text-lg font-bold text-slate-900">
+          <h3 className="font-bold text-slate-900 text-base">
             {editingCategory ? "Sửa Danh mục" : "Thêm Danh mục Mới"}
           </h3>
           <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded">
@@ -1406,9 +1840,9 @@ function CategoryFormModal({
           </button>
         </div>
 
-        <div className="space-y-3">
+        <div className="space-y-3 text-xs sm:text-sm">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
+            <label className="block font-semibold text-slate-700 mb-1">
               Tên danh mục *
             </label>
             <input
@@ -1417,14 +1851,14 @@ function CategoryFormModal({
               onChange={(e) =>
                 setFormData({ ...formData, name: e.target.value })
               }
-              className="w-full p-2 border border-slate-300 rounded text-sm"
-              placeholder="VD: Chăm sóc da mặt, Mỹ phẩm..."
+              className="w-full p-2.5 border border-slate-300 rounded-xl"
+              placeholder="VD: Chăm sóc da mặt"
               required
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
+            <label className="block font-semibold text-slate-700 mb-1">
               Loại danh mục
             </label>
             <select
@@ -1435,42 +1869,26 @@ function CategoryFormModal({
                   type: e.target.value as CategoryType,
                 })
               }
-              className="w-full p-2 border border-slate-300 rounded text-sm bg-white"
+              className="w-full p-2.5 border border-slate-300 rounded-xl bg-white"
             >
               <option value="service">Dịch vụ</option>
               <option value="product">Sản phẩm</option>
             </select>
           </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Trạng thái
-            </label>
-            <select
-              value={formData.status}
-              onChange={(e) =>
-                setFormData({ ...formData, status: e.target.value as any })
-              }
-              className="w-full p-2 border border-slate-300 rounded text-sm bg-white"
-            >
-              <option value="active">Hoạt động</option>
-              <option value="inactive">Ẩn</option>
-            </select>
-          </div>
         </div>
 
-        <div className="flex justify-end gap-3 pt-3 border-t">
+        <div className="flex justify-end gap-2 pt-2 border-t">
           <button
             onClick={onClose}
-            className="px-4 py-2 border border-slate-300 rounded text-sm font-medium text-slate-700"
+            className="flex-1 sm:flex-none px-4 py-2 border border-slate-300 rounded-xl text-slate-700 font-semibold"
           >
             Hủy
           </button>
           <button
             onClick={() => onSave(formData)}
-            className="px-4 py-2 bg-pink-600 text-white rounded text-sm font-medium hover:bg-pink-700"
+            className="flex-1 sm:flex-none px-4 py-2 bg-pink-600 text-white rounded-xl font-semibold hover:bg-pink-700"
           >
-            Lưu Danh mục
+            Lưu
           </button>
         </div>
       </div>
@@ -1511,10 +1929,9 @@ function PackageFormModal({
 
   const addItemRow = () => {
     if (availableServices.length === 0) return;
-    const validService = availableServices.find((s) => s.service_id || s.id);
+    const validService = availableServices[0];
     if (validService) {
-      const targetId = validService.service_id || validService.id;
-      setItems([...items, { service_id: targetId, quantity: 1 }]);
+      setItems([...items, { service_id: validService.id, quantity: 1 }]);
     }
   };
 
@@ -1523,21 +1940,24 @@ function PackageFormModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl p-6 max-w-2xl w-full space-y-4 shadow-xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between border-b pb-3">
-          <h3 className="text-lg font-bold text-slate-900">
-            {editingPackage ? "Sửa Gói Dịch vụ" : "Thêm Gói Dịch vụ Mới"}
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl max-w-xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+        <div className="flex items-center justify-between p-4 border-b border-slate-200 bg-slate-50 shrink-0">
+          <h3 className="font-bold text-slate-900 text-base">
+            {editingPackage ? "Sửa Gói Dịch vụ" : "Tạo Gói Dịch vụ Mới"}
           </h3>
-          <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded">
+          <button
+            onClick={onClose}
+            className="p-1 hover:bg-slate-200 rounded-full"
+          >
             <X className="w-5 h-5 text-slate-500" />
           </button>
         </div>
 
-        <div className="space-y-4">
+        <div className="p-4 overflow-y-auto space-y-4 text-xs sm:text-sm">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block font-semibold text-slate-700 mb-1">
                 Mã gói *
               </label>
               <input
@@ -1546,13 +1966,13 @@ function PackageFormModal({
                 onChange={(e) =>
                   setPkgData({ ...pkgData, code: e.target.value })
                 }
-                className="w-full p-2 border border-slate-300 rounded text-sm"
+                className="w-full p-2.5 border border-slate-300 rounded-xl"
                 required
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Tên gói dịch vụ *
+              <label className="block font-semibold text-slate-700 mb-1">
+                Tên gói *
               </label>
               <input
                 type="text"
@@ -1560,7 +1980,7 @@ function PackageFormModal({
                 onChange={(e) =>
                   setPkgData({ ...pkgData, name: e.target.value })
                 }
-                className="w-full p-2 border border-slate-300 rounded text-sm"
+                className="w-full p-2.5 border border-slate-300 rounded-xl"
                 required
               />
             </div>
@@ -1568,7 +1988,7 @@ function PackageFormModal({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block font-semibold text-slate-700 mb-1">
                 Giá bán trọn gói (VND) *
               </label>
               <input
@@ -1577,12 +1997,12 @@ function PackageFormModal({
                 onChange={(e) =>
                   setPkgData({ ...pkgData, price: Number(e.target.value) })
                 }
-                className="w-full p-2 border border-slate-300 rounded text-sm font-semibold text-pink-600"
+                className="w-full p-2.5 border border-slate-300 rounded-xl font-semibold text-pink-600"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Hạn sử dụng (Số ngày)
+              <label className="block font-semibold text-slate-700 mb-1">
+                Hạn sử dụng (Ngày)
               </label>
               <input
                 type="number"
@@ -1593,107 +2013,83 @@ function PackageFormModal({
                     validity_days: Number(e.target.value),
                   })
                 }
-                className="w-full p-2 border border-slate-300 rounded text-sm"
+                className="w-full p-2.5 border border-slate-300 rounded-xl"
               />
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Mô tả gói
-            </label>
-            <textarea
-              rows={2}
-              value={pkgData.description}
-              onChange={(e) =>
-                setPkgData({ ...pkgData, description: e.target.value })
-              }
-              className="w-full p-2 border border-slate-300 rounded text-sm"
-            ></textarea>
-          </div>
-
           <div className="border-t pt-3 space-y-2">
             <div className="flex items-center justify-between">
-              <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                Thành phần dịch vụ trong gói
+              <h4 className="font-bold text-slate-800 text-xs uppercase">
+                Dịch vụ trong gói
               </h4>
               <button
                 type="button"
                 onClick={addItemRow}
-                className="flex items-center gap-1 text-xs font-semibold text-pink-600 hover:text-pink-700"
+                className="flex items-center gap-1 text-xs font-semibold text-pink-600"
               >
                 <Plus className="w-3.5 h-3.5" />
-                Thêm dịch vụ
+                Thêm mục
               </button>
             </div>
 
-            {items.length === 0 ? (
-              <p className="text-xs text-slate-500 italic py-2">
-                Chưa thêm dịch vụ nào vào gói này
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {items.map((it, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center gap-2 bg-slate-50 p-2 rounded border"
-                  >
-                    <select
-                      value={it.service_id}
-                      onChange={(e) => {
-                        const next = [...items];
-                        next[idx].service_id = e.target.value;
-                        setItems(next);
-                      }}
-                      className="flex-1 p-1.5 border border-slate-300 rounded text-xs bg-white"
-                    >
-                      {availableServices.map((s) => {
-                        const targetId = s.service_id || s.id;
-                        return (
-                          <option key={targetId} value={targetId}>
-                            {s.name} ({s.code})
-                          </option>
-                        );
-                      })}
-                    </select>
-                    <input
-                      type="number"
-                      placeholder="Số buổi"
-                      min={1}
-                      value={it.quantity}
-                      onChange={(e) => {
-                        const next = [...items];
-                        next[idx].quantity = Number(e.target.value);
-                        setItems(next);
-                      }}
-                      className="w-20 p-1.5 border border-slate-300 rounded text-xs text-center"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeItemRow(idx)}
-                      className="p-1 text-slate-400 hover:text-rose-600"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
+            {items.map((it, idx) => (
+              <div
+                key={idx}
+                className="flex items-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200"
+              >
+                <select
+                  value={it.service_id}
+                  onChange={(e) => {
+                    const next = [...items];
+                    next[idx].service_id = e.target.value;
+                    setItems(next);
+                  }}
+                  className="flex-1 p-2 border border-slate-300 rounded-lg text-xs bg-white"
+                >
+                  {availableServices.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.code})
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  min={1}
+                  value={it.quantity}
+                  onChange={(e) => {
+                    const next = [...items];
+                    next[idx].quantity = Number(e.target.value);
+                    setItems(next);
+                  }}
+                  className="w-16 p-2 border border-slate-300 rounded-lg text-xs text-center"
+                />
+                <button
+                  type="button"
+                  onClick={() => removeItemRow(idx)}
+                  className="p-1 text-slate-400 hover:text-rose-600"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
-            )}
+            ))}
           </div>
         </div>
 
-        <div className="flex justify-end gap-3 pt-3 border-t">
+        <div className="flex items-center justify-end gap-2 p-4 border-t border-slate-200 bg-slate-50 shrink-0">
           <button
+            type="button"
             onClick={onClose}
-            className="px-4 py-2 border border-slate-300 rounded text-sm font-medium text-slate-700"
+            className="flex-1 sm:flex-none px-4 py-2 border border-slate-300 rounded-xl font-semibold text-slate-700"
           >
             Hủy
           </button>
           <button
+            type="button"
             onClick={() => onSave(pkgData, items)}
-            className="px-4 py-2 bg-pink-600 text-white rounded text-sm font-medium hover:bg-pink-700"
+            className="flex-1 sm:flex-none px-5 py-2.5 bg-pink-600 text-white rounded-xl font-semibold hover:bg-pink-700"
           >
-            Lưu Gói Dịch vụ
+            Lưu Gói
           </button>
         </div>
       </div>

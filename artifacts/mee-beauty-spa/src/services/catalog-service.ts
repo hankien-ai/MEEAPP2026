@@ -8,6 +8,7 @@ import {
   CategoryType,
   CatalogStatus,
   CategoryStatus,
+  CommissionType,
 } from "../types/catalog";
 
 // ==================== CATEGORIES ====================
@@ -121,12 +122,30 @@ export async function fetchServices(): Promise<ServiceItem[]> {
 
   return items.map((item) => {
     const sDetail = detailMap.get(item.id);
+    const salesType: CommissionType =
+      sDetail?.sales_commission_type || "PERCENT";
+    const salesVal = Number(
+      sDetail?.sales_commission_value ?? sDetail?.sales_commission_rate ?? 0,
+    );
+
+    const perfType: CommissionType =
+      sDetail?.performance_commission_type || "PERCENT";
+    const perfVal = Number(
+      sDetail?.performance_commission_value ??
+        sDetail?.performance_commission_rate ??
+        0,
+    );
+
     return {
       ...item,
       service_id: sDetail?.id,
       duration_minutes: sDetail?.duration_minutes ?? 0,
-      sales_commission_rate: sDetail?.sales_commission_rate ?? 0,
-      performance_commission_rate: sDetail?.performance_commission_rate ?? 0,
+      sales_commission_type: salesType,
+      sales_commission_value: salesVal,
+      sales_commission_rate: salesType === "PERCENT" ? salesVal : 0,
+      performance_commission_type: perfType,
+      performance_commission_value: perfVal,
+      performance_commission_rate: perfType === "PERCENT" ? perfVal : 0,
     };
   });
 }
@@ -138,9 +157,19 @@ export async function createService(payload: {
   description?: string;
   price: number;
   duration_minutes: number;
-  sales_commission_rate?: number;
-  performance_commission_rate?: number;
+  sales_commission_type?: CommissionType;
+  sales_commission_value?: number;
+  performance_commission_type?: CommissionType;
+  performance_commission_value?: number;
 }): Promise<ServiceItem> {
+  const salesType = payload.sales_commission_type || "PERCENT";
+  const salesVal = Math.max(0, payload.sales_commission_value || 0);
+  const legacySalesRate = salesType === "PERCENT" ? salesVal : 0;
+
+  const perfType = payload.performance_commission_type || "PERCENT";
+  const perfVal = Math.max(0, payload.performance_commission_value || 0);
+  const legacyPerfRate = perfType === "PERCENT" ? perfVal : 0;
+
   const { data: catItem, error: itemErr } = await supabase
     .from("catalog_items")
     .insert({
@@ -164,8 +193,12 @@ export async function createService(payload: {
     .insert({
       catalog_item_id: catItem.id,
       duration_minutes: payload.duration_minutes || 0,
-      sales_commission_rate: payload.sales_commission_rate || 0,
-      performance_commission_rate: payload.performance_commission_rate || 0,
+      sales_commission_type: salesType,
+      sales_commission_value: salesVal,
+      sales_commission_rate: legacySalesRate,
+      performance_commission_type: perfType,
+      performance_commission_value: perfVal,
+      performance_commission_rate: legacyPerfRate,
     })
     .select()
     .single();
@@ -176,8 +209,12 @@ export async function createService(payload: {
     ...catItem,
     service_id: sDetail.id,
     duration_minutes: sDetail.duration_minutes,
-    sales_commission_rate: sDetail.sales_commission_rate,
-    performance_commission_rate: sDetail.performance_commission_rate,
+    sales_commission_type: sDetail.sales_commission_type,
+    sales_commission_value: Number(sDetail.sales_commission_value),
+    sales_commission_rate: Number(sDetail.sales_commission_rate),
+    performance_commission_type: sDetail.performance_commission_type,
+    performance_commission_value: Number(sDetail.performance_commission_value),
+    performance_commission_rate: Number(sDetail.performance_commission_rate),
   };
 }
 
@@ -190,10 +227,20 @@ export async function updateService(
     description?: string;
     price: number;
     duration_minutes: number;
-    sales_commission_rate?: number;
-    performance_commission_rate?: number;
+    sales_commission_type?: CommissionType;
+    sales_commission_value?: number;
+    performance_commission_type?: CommissionType;
+    performance_commission_value?: number;
   },
 ): Promise<void> {
+  const salesType = payload.sales_commission_type || "PERCENT";
+  const salesVal = Math.max(0, payload.sales_commission_value || 0);
+  const legacySalesRate = salesType === "PERCENT" ? salesVal : 0;
+
+  const perfType = payload.performance_commission_type || "PERCENT";
+  const perfVal = Math.max(0, payload.performance_commission_value || 0);
+  const legacyPerfRate = perfType === "PERCENT" ? perfVal : 0;
+
   const { error: itemErr } = await supabase
     .from("catalog_items")
     .update({
@@ -212,8 +259,12 @@ export async function updateService(
     .from("services")
     .update({
       duration_minutes: payload.duration_minutes || 0,
-      sales_commission_rate: payload.sales_commission_rate || 0,
-      performance_commission_rate: payload.performance_commission_rate || 0,
+      sales_commission_type: salesType,
+      sales_commission_value: salesVal,
+      sales_commission_rate: legacySalesRate,
+      performance_commission_type: perfType,
+      performance_commission_value: perfVal,
+      performance_commission_rate: legacyPerfRate,
     })
     .eq("catalog_item_id", catalogItemId);
 
@@ -282,6 +333,10 @@ export async function fetchProducts(): Promise<ProductItem[]> {
 
   return items.map((item) => {
     const pDetail = detailMap.get(item.id);
+    const salesType: CommissionType =
+      pDetail?.sales_commission_type || "PERCENT";
+    const salesVal = Number(pDetail?.sales_commission_value ?? 0);
+
     return {
       ...item,
       product_id: pDetail?.id,
@@ -290,6 +345,8 @@ export async function fetchProducts(): Promise<ProductItem[]> {
       stock_quantity: pDetail?.stock_quantity ?? 0,
       minimum_stock: pDetail?.minimum_stock ?? 0,
       unit: pDetail?.unit ?? "cái",
+      sales_commission_type: salesType,
+      sales_commission_value: salesVal,
     };
   });
 }
@@ -304,7 +361,12 @@ export async function createProduct(payload: {
   stock_quantity: number;
   minimum_stock: number;
   unit: string;
+  sales_commission_type?: CommissionType;
+  sales_commission_value?: number;
 }): Promise<ProductItem> {
+  const salesType = payload.sales_commission_type || "PERCENT";
+  const salesVal = Math.max(0, payload.sales_commission_value || 0);
+
   const { data: catItem, error: itemErr } = await supabase
     .from("catalog_items")
     .insert({
@@ -332,6 +394,8 @@ export async function createProduct(payload: {
       stock_quantity: payload.stock_quantity || 0,
       minimum_stock: payload.minimum_stock || 0,
       unit: payload.unit || "cái",
+      sales_commission_type: salesType,
+      sales_commission_value: salesVal,
     })
     .select()
     .single();
@@ -346,6 +410,8 @@ export async function createProduct(payload: {
     stock_quantity: pDetail.stock_quantity,
     minimum_stock: pDetail.minimum_stock,
     unit: pDetail.unit,
+    sales_commission_type: pDetail.sales_commission_type,
+    sales_commission_value: Number(pDetail.sales_commission_value),
   };
 }
 
@@ -361,8 +427,13 @@ export async function updateProduct(
     stock_quantity: number;
     minimum_stock: number;
     unit: string;
+    sales_commission_type?: CommissionType;
+    sales_commission_value?: number;
   },
 ): Promise<void> {
+  const salesType = payload.sales_commission_type || "PERCENT";
+  const salesVal = Math.max(0, payload.sales_commission_value || 0);
+
   const { error: itemErr } = await supabase
     .from("catalog_items")
     .update({
@@ -385,6 +456,8 @@ export async function updateProduct(
       stock_quantity: payload.stock_quantity || 0,
       minimum_stock: payload.minimum_stock || 0,
       unit: payload.unit || "cái",
+      sales_commission_type: salesType,
+      sales_commission_value: salesVal,
     })
     .eq("catalog_item_id", catalogItemId);
 

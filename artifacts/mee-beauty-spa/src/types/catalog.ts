@@ -42,6 +42,8 @@ export interface ProductDetail {
   stock_quantity: number;
   minimum_stock: number;
   unit: string;
+  sales_commission_type: CommissionType;
+  sales_commission_value: number;
 }
 
 // Composite types dùng cho UI
@@ -63,6 +65,8 @@ export interface ProductItem extends CatalogItem {
   stock_quantity?: number;
   minimum_stock?: number;
   unit?: string;
+  sales_commission_type?: CommissionType;
+  sales_commission_value?: number;
 }
 
 // Bảng categories
