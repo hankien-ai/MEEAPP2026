@@ -6,6 +6,10 @@ export type CategoryStatus = "active" | "inactive";
 // Kiểu hoa hồng: % hoặc Tiền cố định
 export type CommissionType = "PERCENT" | "FIXED";
 
+// Loại sản phẩm và loại giao dịch tồn kho
+export type ProductType = "CONSUMABLE" | "RETAIL";
+export type InventoryTransactionType = "IN" | "OUT" | "ADJUSTMENT";
+
 // Catalog Item cơ sở trong DB
 export interface CatalogItem {
   id: string;
@@ -37,6 +41,7 @@ export interface ServiceDetail {
 export interface ProductDetail {
   id: string;
   catalog_item_id: string;
+  product_type: ProductType;
   cost_price: number;
   selling_price: number;
   stock_quantity: number;
@@ -59,14 +64,28 @@ export interface ServiceItem extends CatalogItem {
 }
 
 export interface ProductItem extends CatalogItem {
-  product_id?: string; // id trong bảng products
-  cost_price?: number;
-  selling_price?: number;
-  stock_quantity?: number;
-  minimum_stock?: number;
-  unit?: string;
+  product_id: string; // id trong bảng products
+  product_type: ProductType;
+  cost_price: number;
+  selling_price: number;
+  stock_quantity: number;
+  minimum_stock: number;
+  unit: string;
   sales_commission_type?: CommissionType;
   sales_commission_value?: number;
+}
+
+// Lịch sử biến động tồn kho
+export interface InventoryTransaction {
+  id: string;
+  product_id: string;
+  transaction_type: InventoryTransactionType;
+  quantity: number;
+  stock_before: number;
+  stock_after: number;
+  note?: string;
+  created_at: string;
+  created_by?: string;
 }
 
 // Bảng categories

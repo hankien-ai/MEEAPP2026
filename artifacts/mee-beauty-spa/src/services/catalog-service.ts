@@ -9,6 +9,9 @@ import {
   CatalogStatus,
   CategoryStatus,
   CommissionType,
+  ProductType,
+  InventoryTransactionType,
+  InventoryTransaction,
 } from "../types/catalog";
 
 // ==================== CATEGORIES ====================
@@ -308,7 +311,7 @@ export async function deleteService(catalogItemId: string): Promise<void> {
   if (catDelErr) throw catDelErr;
 }
 
-// ==================== PRODUCTS ====================
+// ==================== PRODUCTS & INVENTORY ====================
 
 export async function fetchProducts(): Promise<ProductItem[]> {
   const { data: items, error: itemErr } = await supabase
@@ -339,7 +342,8 @@ export async function fetchProducts(): Promise<ProductItem[]> {
 
     return {
       ...item,
-      product_id: pDetail?.id,
+      product_id: pDetail?.id || "",
+      product_type: (pDetail?.product_type as ProductType) || "RETAIL",
       cost_price: pDetail?.cost_price ?? 0,
       selling_price: pDetail?.selling_price ?? item.price,
       stock_quantity: pDetail?.stock_quantity ?? 0,
@@ -356,6 +360,7 @@ export async function createProduct(payload: {
   name: string;
   category?: string;
   description?: string;
+  product_type?: ProductType;
   cost_price: number;
   selling_price: number;
   stock_quantity: number;
@@ -366,6 +371,7 @@ export async function createProduct(payload: {
 }): Promise<ProductItem> {
   const salesType = payload.sales_commission_type || "PERCENT";
   const salesVal = Math.max(0, payload.sales_commission_value || 0);
+  const pType: ProductType = payload.product_type || "RETAIL";
 
   const { data: catItem, error: itemErr } = await supabase
     .from("catalog_items")
@@ -389,6 +395,7 @@ export async function createProduct(payload: {
     .from("products")
     .insert({
       catalog_item_id: catItem.id,
+      product_type: pType,
       cost_price: payload.cost_price || 0,
       selling_price: payload.selling_price || 0,
       stock_quantity: payload.stock_quantity || 0,
@@ -405,6 +412,7 @@ export async function createProduct(payload: {
   return {
     ...catItem,
     product_id: pDetail.id,
+    product_type: pDetail.product_type,
     cost_price: pDetail.cost_price,
     selling_price: pDetail.selling_price,
     stock_quantity: pDetail.stock_quantity,
@@ -422,6 +430,7 @@ export async function updateProduct(
     name: string;
     category?: string;
     description?: string;
+    product_type?: ProductType;
     cost_price: number;
     selling_price: number;
     stock_quantity: number;
@@ -448,17 +457,23 @@ export async function updateProduct(
 
   if (itemErr) throw itemErr;
 
+  const updateData: Record<string, any> = {
+    cost_price: payload.cost_price || 0,
+    selling_price: payload.selling_price || 0,
+    stock_quantity: payload.stock_quantity || 0,
+    minimum_stock: payload.minimum_stock || 0,
+    unit: payload.unit || "cái",
+    sales_commission_type: salesType,
+    sales_commission_value: salesVal,
+  };
+
+  if (payload.product_type) {
+    updateData.product_type = payload.product_type;
+  }
+
   const { error: pErr } = await supabase
     .from("products")
-    .update({
-      cost_price: payload.cost_price || 0,
-      selling_price: payload.selling_price || 0,
-      stock_quantity: payload.stock_quantity || 0,
-      minimum_stock: payload.minimum_stock || 0,
-      unit: payload.unit || "cái",
-      sales_commission_type: salesType,
-      sales_commission_value: salesVal,
-    })
+    .update(updateData)
     .eq("catalog_item_id", catalogItemId);
 
   if (pErr) throw pErr;
@@ -481,11 +496,49 @@ export async function deleteProduct(catalogItemId: string): Promise<void> {
   if (itemErr) throw itemErr;
 }
 
+// Gọi RPC thực hiện Nhập / Xuất / Điều chỉnh tồn kho
+export async function processInventoryTransaction(input: {
+  product_id: string;
+  type: InventoryTransactionType;
+  quantity: number;
+  note?: string;
+}): Promise<void> {
+  if (input.quantity <= 0) {
+    throw new Error("Số lượng giao dịch phải lớn hơn 0");
+  }
+
+  const { error } = await supabase.rpc("process_inventory_transaction", {
+    p_product_id: input.product_id,
+    p_transaction_type: input.type,
+    p_quantity: input.quantity,
+    p_note: input.note?.trim() || null,
+  });
+
+  if (error) {
+    throw new Error(error.message || "Lỗi xử lý giao dịch kho");
+  }
+}
+
+// Tải lịch sử biến động kho (mới nhất lên đầu)
+export async function fetchInventoryHistory(
+  productId: string,
+): Promise<InventoryTransaction[]> {
+  const { data, error } = await supabase
+    .from("inventory_transactions")
+    .select("*")
+    .eq("product_id", productId)
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(`Lỗi tải lịch sử tồn kho: ${error.message}`);
+  return data || [];
+}
+
 // ==================== SHARED CATALOG ITEM ACTIONS ====================
 
 export async function toggleCatalogItemStatus(
   id: string,
   currentStatus: CatalogStatus,
+  _type?: "service" | "product",
 ): Promise<CatalogStatus> {
   const newStatus: CatalogStatus =
     currentStatus === "ACTIVE" ? "INACTIVE" : "ACTIVE";
@@ -702,6 +755,8 @@ export const catalogService = {
   createProduct,
   updateProduct,
   deleteProduct,
+  processInventoryTransaction,
+  fetchInventoryHistory,
   toggleCatalogItemStatus,
   fetchPackages,
   createPackage,

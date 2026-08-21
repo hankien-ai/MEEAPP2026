@@ -993,45 +993,53 @@ export default function CatalogManagementPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 text-sm">
-                {packages.map((pkg) => (
-                  <tr key={pkg.id} className="hover:bg-slate-50">
-                    <td className="p-3 font-mono text-xs font-bold text-slate-700">
-                      {pkg.code}
-                    </td>
-                    <td className="p-3 font-semibold text-slate-900">
-                      {pkg.name}
-                    </td>
-                    <td className="p-3 font-semibold text-pink-600">
-                      {formatVND(pkg.price)}
-                    </td>
-                    <td className="p-3 text-slate-600 text-xs">
-                      {pkg.validity_days || 0} ngày
-                    </td>
-                    <td className="p-3 text-right space-x-2">
-                      <button
-                        onClick={() => {
-                          setEditingPackage(pkg);
-                          setIsPackageModalOpen(true);
-                        }}
-                        className="p-1.5 text-slate-500 hover:text-pink-600"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() =>
-                          setConfirmDelete({
-                            type: "packages",
-                            id: pkg.id,
-                            title: pkg.name,
-                          })
-                        }
-                        className="p-1.5 text-slate-500 hover:text-rose-600"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                {packages.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="p-6 text-center text-slate-500">
+                      Chưa có gói dịch vụ nào
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  packages.map((pkg) => (
+                    <tr key={pkg.id} className="hover:bg-slate-50">
+                      <td className="p-3 font-mono text-xs font-bold text-slate-700">
+                        {pkg.code}
+                      </td>
+                      <td className="p-3 font-semibold text-slate-900">
+                        {pkg.name}
+                      </td>
+                      <td className="p-3 font-semibold text-pink-600">
+                        {formatVND(pkg.price)}
+                      </td>
+                      <td className="p-3 text-slate-600 text-xs">
+                        {pkg.validity_days || 0} ngày
+                      </td>
+                      <td className="p-3 text-right space-x-2">
+                        <button
+                          onClick={() => {
+                            setEditingPackage(pkg);
+                            setIsPackageModalOpen(true);
+                          }}
+                          className="p-1.5 text-slate-500 hover:text-pink-600"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() =>
+                            setConfirmDelete({
+                              type: "packages",
+                              id: pkg.id,
+                              title: pkg.name,
+                            })
+                          }
+                          className="p-1.5 text-slate-500 hover:text-rose-600"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -1041,6 +1049,7 @@ export default function CatalogManagementPage() {
       {/* MODAL 1: SERVICE FORM */}
       {isServiceModalOpen && (
         <ServiceFormModal
+          key={editingService?.id || "new-service"}
           isOpen={isServiceModalOpen}
           onClose={() => setIsServiceModalOpen(false)}
           editingService={editingService}
@@ -1066,6 +1075,7 @@ export default function CatalogManagementPage() {
       {/* MODAL 2: PRODUCT FORM */}
       {isProductModalOpen && (
         <ProductFormModal
+          key={editingProduct?.id || "new-product"}
           isOpen={isProductModalOpen}
           onClose={() => setIsProductModalOpen(false)}
           editingProduct={editingProduct}
@@ -1091,6 +1101,7 @@ export default function CatalogManagementPage() {
       {/* MODAL 3: CATEGORY FORM */}
       {isCategoryModalOpen && (
         <CategoryFormModal
+          key={editingCategory?.id || "new-category"}
           isOpen={isCategoryModalOpen}
           onClose={() => setIsCategoryModalOpen(false)}
           editingCategory={editingCategory}
@@ -1115,6 +1126,7 @@ export default function CatalogManagementPage() {
       {/* MODAL 4: PACKAGE FORM */}
       {isPackageModalOpen && (
         <PackageFormModal
+          key={editingPackage?.id || "new-package"}
           isOpen={isPackageModalOpen}
           onClose={() => setIsPackageModalOpen(false)}
           editingPackage={editingPackage}
@@ -1931,7 +1943,13 @@ function PackageFormModal({
     if (availableServices.length === 0) return;
     const validService = availableServices[0];
     if (validService) {
-      setItems([...items, { service_id: validService.id, quantity: 1 }]);
+      setItems([
+        ...items,
+        {
+          service_id: validService.service_id || validService.id,
+          quantity: 1,
+        },
+      ]);
     }
   };
 
@@ -2048,7 +2066,7 @@ function PackageFormModal({
                   className="flex-1 p-2 border border-slate-300 rounded-lg text-xs bg-white"
                 >
                   {availableServices.map((s) => (
-                    <option key={s.id} value={s.id}>
+                    <option key={s.id} value={s.service_id || s.id}>
                       {s.name} ({s.code})
                     </option>
                   ))}
