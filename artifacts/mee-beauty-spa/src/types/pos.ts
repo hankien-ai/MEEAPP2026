@@ -1,8 +1,8 @@
-export type PaymentMethod = 'CASH' | 'BANK_TRANSFER' | 'QR' | 'DEBT';
-export type InvoiceStatus = 'DRAFT' | 'PARTIALLY_PAID' | 'PAID' | 'VOID';
-export type CatalogItemType = 'SERVICE' | 'PRODUCT';
-export type ProductType = 'CONSUMABLE' | 'RETAIL';
-export type CommissionType = 'PERCENT' | 'FIXED';
+export type PaymentMethod = "CASH" | "BANK_TRANSFER" | "QR" | "DEBT";
+export type InvoiceStatus = "DRAFT" | "PARTIALLY_PAID" | "PAID" | "VOID";
+export type CatalogItemType = "SERVICE" | "PRODUCT";
+export type ProductType = "CONSUMABLE" | "RETAIL";
+export type CommissionType = "PERCENT" | "FIXED";
 
 export interface Customer {
   id: string;
@@ -68,7 +68,7 @@ export interface CatalogPackageItem {
   items: PackageItemDetail[];
 }
 
-export type POSCartItemType = 'SERVICE' | 'PRODUCT' | 'PACKAGE';
+export type POSCartItemType = "SERVICE" | "PRODUCT" | "PACKAGE";
 
 export interface CartItem {
   cart_item_id: string;
@@ -88,11 +88,15 @@ export interface CartItem {
   unit?: string;
   product_type?: ProductType;
   package_items?: PackageItemDetail[];
+  sales_commission_type?: CommissionType;
+  sales_commission_value?: number;
+  performance_commission_type?: CommissionType;
+  performance_commission_value?: number;
 }
 
 export interface CreateInvoicePayload {
-  organization_id: string;
-  branch_id: string;
+  organization_id?: string;
+  branch_id?: string;
   customer_id?: string | null;
   seller_staff_id?: string | null;
   status: InvoiceStatus;
@@ -113,6 +117,11 @@ export interface CreateInvoicePayload {
     discount_amount: number;
     total_amount: number;
   }[];
+}
+
+export interface CheckoutPayload extends CreateInvoicePayload {
+  cash_given?: number;
+  change_due?: number;
 }
 
 export interface CheckoutResult {
