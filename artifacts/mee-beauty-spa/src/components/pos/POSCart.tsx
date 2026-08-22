@@ -24,7 +24,7 @@ export const POSCart: React.FC<Props> = ({
 
   if (items.length === 0) {
     return (
-      <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-400 flex flex-col items-center justify-center min-h-[300px]">
+      <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-400 flex flex-col items-center justify-center min-h-[200px]">
         <svg className="w-12 h-12 text-slate-300 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
         </svg>
@@ -37,7 +37,7 @@ export const POSCart: React.FC<Props> = ({
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
       <div className="p-3 bg-slate-50 border-b border-slate-200 font-semibold text-xs text-slate-700 flex justify-between items-center">
-        <span>DANH SÁCH MÓN ({items.length})</span>
+        <span>🛒 GIỎ HÀNG ({items.length})</span>
         <span className="text-[11px] text-slate-500 font-normal">Điều chỉnh NV Sale / KTV trên từng món</span>
       </div>
 
@@ -45,12 +45,13 @@ export const POSCart: React.FC<Props> = ({
         {items.map((item) => {
           const isService = item.item_type === 'SERVICE';
           const isPackage = item.item_type === 'PACKAGE';
+          const isGift = item.is_gift || false;
 
           return (
             <div key={item.cart_item_id} className="p-3 hover:bg-slate-50/80 transition-all space-y-2">
               <div className="flex justify-between items-start gap-2">
                 <div className="flex-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span
                       className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
                         isService
@@ -62,10 +63,15 @@ export const POSCart: React.FC<Props> = ({
                     >
                       {isService ? 'DỊCH VỤ' : isPackage ? 'GÓI' : 'SẢN PHẨM'}
                     </span>
+                    {isGift && (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
+                        🎁 QUÀ TẶNG
+                      </span>
+                    )}
                     <span className="font-semibold text-sm text-slate-800">{item.name}</span>
                   </div>
 
-                  <div className="flex items-center gap-3 mt-2 text-xs">
+                  <div className="flex items-center gap-3 mt-2 text-xs flex-wrap">
                     <div className="flex items-center border border-slate-300 rounded-lg overflow-hidden bg-white">
                       <button
                         onClick={() => onUpdateQuantity(item.cart_item_id, item.quantity - 1)}

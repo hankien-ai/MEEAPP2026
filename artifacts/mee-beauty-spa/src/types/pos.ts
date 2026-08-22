@@ -1,4 +1,4 @@
-export type PaymentMethod = "CASH" | "BANK_TRANSFER" | "QR" | "DEBT";
+export type PaymentMethod = "CASH" | "BANK_TRANSFER" | "GIFT" | "DEBT";
 export type InvoiceStatus = "DRAFT" | "PARTIALLY_PAID" | "PAID" | "VOID";
 export type CatalogItemType = "SERVICE" | "PRODUCT";
 export type ProductType = "CONSUMABLE" | "RETAIL";
@@ -92,6 +92,8 @@ export interface CartItem {
   sales_commission_value?: number;
   performance_commission_type?: CommissionType;
   performance_commission_value?: number;
+  /** Đánh dấu item là quà tặng (GIFT) */
+  is_gift?: boolean;
 }
 
 export interface CreateInvoicePayload {
@@ -105,6 +107,8 @@ export interface CreateInvoicePayload {
   total_amount: number;
   payment_method: PaymentMethod;
   notes?: string;
+  /** Nếu là GIFT thì gắn thêm thông tin */
+  is_gift?: boolean;
   items: {
     catalog_item_id?: string | null;
     package_id?: string | null;
@@ -116,6 +120,7 @@ export interface CreateInvoicePayload {
     unit_price: number;
     discount_amount: number;
     total_amount: number;
+    is_gift?: boolean;
   }[];
 }
 

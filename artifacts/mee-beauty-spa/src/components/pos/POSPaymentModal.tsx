@@ -158,38 +158,75 @@ export const POSPaymentModal: React.FC<Props> = ({
           </div>
         </div>
 
+        {/* PAYMENT METHOD SELECTION - NEW LAYOUT */}
         <div className="space-y-3 pt-1">
           <label className="text-xs font-bold text-slate-800 block">
             Phương thức thanh toán:
           </label>
-          <div className="grid grid-cols-4 gap-2">
-            {(["CASH", "BANK_TRANSFER", "QR", "DEBT"] as PaymentMethod[]).map(
-              (m) => {
-                const labels: Record<PaymentMethod, string> = {
-                  CASH: "💵 Tiền mặt",
-                  BANK_TRANSFER: "🏦 Chuyển khoản",
-                  QR: "📲 Mã QR",
-                  DEBT: "📝 Ghi nợ",
-                };
-                return (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => {
-                      setMethod(m);
-                      setErrorMessage("");
-                    }}
-                    className={`py-2 px-1 text-xs font-bold rounded-xl border transition-all ${
-                      method === m
-                        ? "border-emerald-600 bg-emerald-50 text-emerald-800 shadow-sm"
-                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                    }`}
-                  >
-                    {labels[m]}
-                  </button>
-                );
-              },
-            )}
+          <div className="grid grid-cols-2 gap-3">
+            {/* CASH - lớn */}
+            <button
+              type="button"
+              onClick={() => {
+                setMethod("CASH");
+                setErrorMessage("");
+              }}
+              className={`py-3 px-4 text-sm font-bold rounded-xl border-2 transition-all ${
+                method === "CASH"
+                  ? "border-emerald-600 bg-emerald-50 text-emerald-800 shadow-md"
+                  : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+              }`}
+            >
+              💵 Tiền mặt
+            </button>
+
+            {/* BANK_TRANSFER - lớn */}
+            <button
+              type="button"
+              onClick={() => {
+                setMethod("BANK_TRANSFER");
+                setErrorMessage("");
+              }}
+              className={`py-3 px-4 text-sm font-bold rounded-xl border-2 transition-all ${
+                method === "BANK_TRANSFER"
+                  ? "border-emerald-600 bg-emerald-50 text-emerald-800 shadow-md"
+                  : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+              }`}
+            >
+              🏦 Chuyển khoản
+            </button>
+
+            {/* GIFT - nhỏ */}
+            <button
+              type="button"
+              onClick={() => {
+                setMethod("GIFT");
+                setErrorMessage("");
+              }}
+              className={`py-2 text-xs font-semibold rounded-xl border-2 transition-all ${
+                method === "GIFT"
+                  ? "border-purple-600 bg-purple-50 text-purple-800"
+                  : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
+              }`}
+            >
+              🎁 Quà tặng
+            </button>
+
+            {/* DEBT - nhỏ */}
+            <button
+              type="button"
+              onClick={() => {
+                setMethod("DEBT");
+                setErrorMessage("");
+              }}
+              className={`py-2 text-xs font-semibold rounded-xl border-2 transition-all ${
+                method === "DEBT"
+                  ? "border-amber-600 bg-amber-50 text-amber-800"
+                  : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
+              }`}
+            >
+              📝 Nợ
+            </button>
           </div>
 
           {method === "CASH" && (
@@ -228,10 +265,41 @@ export const POSPaymentModal: React.FC<Props> = ({
             </div>
           )}
 
+          {method === "BANK_TRANSFER" && (
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-800">
+              <p>
+                💳 Chuyển khoản qua ngân hàng. Vui lòng kiểm tra số tài khoản.
+              </p>
+              <p className="mt-1 text-[11px]">
+                Số tiền cần chuyển: <strong>{formatVND(totalAmount)}</strong>
+              </p>
+            </div>
+          )}
+
+          {method === "GIFT" && (
+            <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-800">
+              <p>
+                🎁 Tặng gói dịch vụ cho khách hàng{" "}
+                <strong>{customer?.full_name || "chưa chọn"}</strong>.
+              </p>
+              <p className="mt-1 text-[11px]">
+                Khách sẽ nhận được gói quà tặng theo cấu hình.
+              </p>
+            </div>
+          )}
+
           {method === "DEBT" && (
             <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
-              ⚠️ Đơn hàng sẽ được ghi nhận công nợ (status = PARTIALLY_PAID) cho
-              khách hàng {customer?.full_name || ""}.
+              <p>
+                📝 Ghi nợ cho khách{" "}
+                <strong>{customer?.full_name || "chưa chọn"}</strong>.
+              </p>
+              <p className="mt-1 text-[11px]">
+                Số tiền còn nợ: <strong>{formatVND(totalAmount)}</strong>
+              </p>
+              <p className="mt-0.5 text-[11px]">
+                Vui lòng theo dõi công nợ qua trang Khách hàng.
+              </p>
             </div>
           )}
 
