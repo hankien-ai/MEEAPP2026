@@ -8,11 +8,11 @@ interface AppShellProps {
 
 export const AppShell: React.FC<AppShellProps> = ({ children, userRole }) => {
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
-      {/* Main Content Area: Padding bottom pb-20 (80px) để không bị Bottom Toolbar che */}
-      <main className="flex-1 pb-20 md:pb-0">{children}</main>
+    <div className="min-h-screen bg-slate-50 flex flex-col antialiased">
+      {/* Main Content Area: Padding bottom pb-24 để không bị Bottom Toolbar che nội dung trên mobile */}
+      <main className="flex-1 pb-24 overflow-x-hidden">{children}</main>
 
-      {/* Bottom Toolbar dành riêng cho Mobile */}
+      {/* Bottom Toolbar dùng chung cố định phía dưới */}
       <BottomToolbar userRole={userRole} />
     </div>
   );
