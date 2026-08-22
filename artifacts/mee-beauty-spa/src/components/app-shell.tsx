@@ -3,29 +3,27 @@ import { BottomToolbar } from "@/components/bottom-toolbar";
 
 interface AppShellProps {
   children: React.ReactNode;
-  activeTab: string;
-  onSelectTab: (tab: string) => void;
   userRole?: string;
+  activeRoute?: string;
+  onNavigate?: (route: string) => void;
 }
 
 export const AppShell: React.FC<AppShellProps> = ({
   children,
-  activeTab,
-  onSelectTab,
   userRole,
+  activeRoute,
+  onNavigate,
 }) => {
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col antialiased">
-      {/* Vùng nội dung chính: Khoảng padding pb-24/pb-28 dành riêng để không bị Bottom Toolbar che */}
-      <main className="flex-1 pb-24 sm:pb-28 overflow-x-hidden">
-        {children}
-      </main>
+    <div className="min-h-screen bg-slate-50 flex flex-col relative">
+      {/* Nội dung chính: Đảm bảo pb-24 trên Mobile để Bottom Toolbar không che button/nội dung */}
+      <main className="flex-1 w-full pb-24 md:pb-0">{children}</main>
 
-      {/* Bottom Toolbar hiển thị cố định ở phía dưới */}
+      {/* Bottom Toolbar cố định phía dưới cho Mobile */}
       <BottomToolbar
-        activeTab={activeTab}
-        onSelectTab={onSelectTab}
         userRole={userRole}
+        activeRoute={activeRoute}
+        onNavigate={onNavigate}
       />
     </div>
   );
