@@ -55,13 +55,8 @@ export const POSPaymentModal: React.FC<Props> = ({
       return;
     }
 
-    if (method === "DEBT" && !customer) {
-      setErrorMessage("Thanh toán Ghi nợ bắt buộc phải có thông tin Khách hàng!");
-      return;
-    }
-
-    if (method === "GIFT" && !customer) {
-      setErrorMessage("Tặng quà bắt buộc phải có thông tin Khách hàng!");
+    if ((method === "DEBT" || method === "GIFT") && !customer) {
+      setErrorMessage(`Thanh toán ${method === "DEBT" ? "Nợ" : "Quà tặng"} bắt buộc phải có thông tin Khách hàng!`);
       return;
     }
 
@@ -73,7 +68,7 @@ export const POSPaymentModal: React.FC<Props> = ({
       <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-100 p-6 space-y-5">
         <div className="flex justify-between items-center border-b border-slate-100 pb-3">
           <div>
-            <h2 className="text-lg font-extrabold text-slate-800">Xác Nhận Thanh Toán POS</h2>
+            <h2 className="text-lg font-extrabold text-slate-800">Xác Nhận Thanh Toán</h2>
             <p className="text-xs text-slate-500">Kiểm tra thông tin trước khi xuất hóa đơn</p>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-lg font-bold">
@@ -123,7 +118,9 @@ export const POSPaymentModal: React.FC<Props> = ({
                   <td className="p-2 text-[11px] text-slate-500">
                     <div>Sale: {getStaffName(it.seller_staff_id)}</div>
                     {it.item_type === "SERVICE" && (
-                      <div className="text-blue-600">KTV: {getStaffName(it.performing_staff_id)}</div>
+                      <div className="text-blue-600">
+                        KTV: {getStaffName(it.performing_staff_id)}
+                      </div>
                     )}
                   </td>
                 </tr>
@@ -144,6 +141,7 @@ export const POSPaymentModal: React.FC<Props> = ({
           </div>
         </div>
 
+        {/* PAYMENT METHOD SELECTION */}
         <div className="space-y-3 pt-1">
           <label className="text-xs font-bold text-slate-800 block">Phương thức thanh toán:</label>
           <div className="grid grid-cols-2 gap-3">
@@ -236,6 +234,7 @@ export const POSPaymentModal: React.FC<Props> = ({
             <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-800">
               <p>🎁 Tặng gói dịch vụ cho khách hàng <strong>{customer?.full_name || "chưa chọn"}</strong>.</p>
               <p className="mt-1 text-[11px]">Khách sẽ nhận được gói quà tặng theo cấu hình.</p>
+              <p className="mt-1 text-[11px] font-bold text-purple-700">Số tiền phải trả: 0đ</p>
             </div>
           )}
 

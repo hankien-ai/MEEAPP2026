@@ -29,7 +29,7 @@ export const POSCart: React.FC<Props> = ({
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
         </svg>
         <p className="text-sm font-medium">Giỏ hàng đang trống</p>
-        <p className="text-xs text-slate-400 mt-1">Vui lòng chọn Dịch vụ, Sản phẩm hoặc Gói từ danh mục bên cạnh</p>
+        <p className="text-xs text-slate-400 mt-1">Vui lòng chọn Dịch vụ, Sản phẩm hoặc Gói từ danh mục</p>
       </div>
     );
   }
@@ -38,7 +38,7 @@ export const POSCart: React.FC<Props> = ({
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
       <div className="p-3 bg-slate-50 border-b border-slate-200 font-semibold text-xs text-slate-700 flex justify-between items-center">
         <span>🛒 GIỎ HÀNG ({items.length})</span>
-        <span className="text-[11px] text-slate-500 font-normal">Điều chỉnh NV Sale / KTV trên từng món</span>
+        <span className="text-[11px] text-slate-500 font-normal">NV Sale / KTV</span>
       </div>
 
       <div className="divide-y divide-slate-100 max-h-[400px] overflow-y-auto">
@@ -46,6 +46,7 @@ export const POSCart: React.FC<Props> = ({
           const isService = item.item_type === 'SERVICE';
           const isPackage = item.item_type === 'PACKAGE';
           const isGift = item.is_gift || false;
+          const isPackageUsage = item.use_package || false;
 
           return (
             <div key={item.cart_item_id} className="p-3 hover:bg-slate-50/80 transition-all space-y-2">
@@ -66,6 +67,11 @@ export const POSCart: React.FC<Props> = ({
                     {isGift && (
                       <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
                         🎁 QUÀ TẶNG
+                      </span>
+                    )}
+                    {isPackageUsage && (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-teal-100 text-teal-700">
+                        📦 DÙNG GÓI
                       </span>
                     )}
                     <span className="font-semibold text-sm text-slate-800">{item.name}</span>
@@ -91,11 +97,19 @@ export const POSCart: React.FC<Props> = ({
                     <div className="text-slate-500">
                       Đơn giá: <span className="font-medium text-slate-700">{formatVND(item.unit_price)}</span>
                     </div>
+
+                    {isPackageUsage && (
+                      <div className="text-[10px] text-teal-600 font-semibold bg-teal-50 px-1.5 py-0.5 rounded">
+                        Không thu tiền
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 <div className="text-right">
-                  <div className="font-bold text-sm text-slate-900">{formatVND(item.total_amount)}</div>
+                  <div className="font-bold text-sm text-slate-900">
+                    {isPackageUsage ? '0đ' : formatVND(item.total_amount)}
+                  </div>
                   <button
                     onClick={() => onRemoveItem(item.cart_item_id)}
                     className="text-xs text-red-500 hover:text-red-700 font-medium mt-1 hover:underline"
@@ -137,6 +151,13 @@ export const POSCart: React.FC<Props> = ({
                         </option>
                       ))}
                     </select>
+                    {item.ktv_splits && item.ktv_splits.length > 0 && (
+                      <div className="mt-1 text-[10px] text-slate-500">
+                        {item.ktv_splits.map((s) => (
+                          <div key={s.staff_id}>{s.staff_name || 'KTV'}: {s.share_percent}%</div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="text-[11px] text-slate-400 flex items-center italic">

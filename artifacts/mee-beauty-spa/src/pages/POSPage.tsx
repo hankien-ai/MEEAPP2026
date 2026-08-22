@@ -7,9 +7,14 @@ import {
   CatalogPackageItem,
   CartItem,
   PaymentMethod,
+  KTVSplit,
 } from "@/types/pos";
 import { POSService } from "@/services/pos-service";
+import { customerService } from "@/services/customer.service";
 import { POSCustomerSelect } from "@/components/pos/POSCustomerSelect";
+import { POSCustomerBenefits } from "@/components/pos/POSCustomerBenefits";
+import { POSPackageUsageModal } from "@/components/pos/POSPackageUsageModal";
+import { POSMultiKTVSelector } from "@/components/pos/POSMultiKTVSelector";
 import { POSCatalogPicker } from "@/components/pos/POSCatalogPicker";
 import { POSCart } from "@/components/pos/POSCart";
 import { POSPaymentModal } from "@/components/pos/POSPaymentModal";
@@ -24,6 +29,13 @@ export const POSPage: React.FC = () => {
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [overallDiscount, setOverallDiscount] = useState<number>(0);
+
+  // Package usage states
+  const [packageUsageModal, setPackageUsageModal] = useState<{
+    isOpen: boolean;
+    customerPackageId: string;
+    items: { package_item_id: string; service_id: string; service_name: string; remaining_quantity: number; total_quantity: number }[];
+  } | null>(null);
 
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -61,10 +73,13 @@ export const POSPage: React.FC = () => {
   };
 
   const hasPackageInCart = cartItems.some((it) => it.item_type === "PACKAGE");
-
   const getDefaultSellerId = () => loggedStaff?.id || undefined;
 
+  // ===================== HANDLERS =====================
+
   const handleAddService = (service: CatalogServiceItem) => {
+    // Kiểm tra khách có package phù hợp không
+    // (phần này sẽ được xử lý thông qua POSCustomerBenefits)
     setCartItems((prev) => {
       const existing = prev.find(
         (it) => it.item_type === "SERVICE" && it.catalog_item_id === service.catalog_item_id,
@@ -98,6 +113,7 @@ export const POSPage: React.FC = () => {
         sales_commission_value: service.sales_commission_value,
         performance_commission_type: service.performance_commission_type,
         performance_commission_value: service.performance_commission_value,
+        ktv_splits: [],
       };
       return [...prev, newItem];
     });
@@ -186,6 +202,7 @@ export const POSPage: React.FC = () => {
         seller_staff_id: getDefaultSellerId(),
         sales_commission_type: pkg.sales_commission_type,
         sales_commission_value: pkg.sales_commission_value,
+        use_package: false,
       };
       return [...prev, newItem];
     });
@@ -255,6 +272,16 @@ export const POSPage: React.FC = () => {
     );
   };
 
+  const handleUpdateKTYSplits = (cartItemId: string, splits: KTVSplit[]) => {
+    setCartItems((prev) =>
+      prev.map((it) =>
+        it.cart_item_id === cartItemId
+          ? { ...it, ktv_splits: splits }
+          : it,
+      ),
+    );
+  };
+
   const handleRemoveItem = (cartItemId: string) => {
     setCartItems((prev) => prev.filter((it) => it.cart_item_id !== cartItemId));
   };
@@ -264,6 +291,67 @@ export const POSPage: React.FC = () => {
     discount_amount: totalDiscount,
     total_amount: finalTotal,
   } = POSService.calculateTotals(cartItems, overallDiscount);
+
+  // ===================== PACKAGE USAGE =====================
+
+  const handleUsePackage = async (customerPackageId: string, packageItemId: string, serviceId: string, serviceName: string) => {
+    // Tìm thông tin package để hiển thị trong modal
+    try {
+      const items = await customerService.fetchCustomerPackageItems(customerPackageId);
+      const packageItems = items.map((item) => ({
+        package_item_id: item.package_item_id,
+        service_id: item.package_item?.service_id || "",
+        service_name: item.package_item?.services?.name || "Dịch vụ",
+        remaining_quantity: item.remaining_quantity,
+        total_quantity: item.total_quantity,
+      }));
+      setPackageUsageModal({
+        isOpen: true,
+        customerPackageId,
+        items: packageItems,
+      });
+    } catch (err) {
+      showAlert("error", "Không thể tải thông tin package");
+    }
+  };
+
+  const handleConfirmPackageUsage = async (packageItemId: string, serviceId: string) => {
+    if (!packageUsageModal) return;
+    setIsSubmitting(true);
+    try {
+      const result = await customerService.usePackageSessionV2(
+        packageUsageModal.customerPackageId,
+        packageItemId,
+        serviceId,
+        loggedStaff?.id,
+        "Sử dụng package qua POS",
+      );
+      if (result.success) {
+        showAlert("success", `Sử dụng package thành công. Còn ${result.remaining_quantity} buổi`);
+        setPackageUsageModal(null);
+        // Refresh benefits
+        await loadData();
+      } else {
+        showAlert("error", result.message);
+      }
+    } catch (err: any) {
+      showAlert("error", err.message || "Lỗi sử dụng package");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSelectGift = async (customerPackageId: string) => {
+    // Tương tự như use package, nhưng xác nhận là gift
+    handleUsePackage(customerPackageId, "", "", "");
+  };
+
+  const handlePayDebt = () => {
+    // Mở payment modal với DEBT option
+    setIsPaymentModalOpen(true);
+  };
+
+  // ===================== CHECKOUT =====================
 
   const handleSaveDraft = async () => {
     if (cartItems.length === 0) {
@@ -325,6 +413,17 @@ export const POSPage: React.FC = () => {
       return;
     }
 
+    // Kiểm tra KTV splits
+    for (const item of cartItems) {
+      if (item.item_type === "SERVICE" && item.ktv_splits && item.ktv_splits.length > 0) {
+        const totalShare = item.ktv_splits.reduce((sum, s) => sum + s.share_percent, 0);
+        if (Math.abs(totalShare - 100) > 0.01) {
+          showAlert("error", `Tổng tỷ lệ chia KTV cho "${item.name}" phải bằng 100% (hiện tại ${totalShare}%)`);
+          return;
+        }
+      }
+    }
+
     setIsPaymentModalOpen(true);
   };
 
@@ -349,6 +448,7 @@ export const POSPage: React.FC = () => {
       cash_given: cashGiven,
       notes: notes || undefined,
       is_gift: isGift,
+      paid_amount: method === "DEBT" ? 0 : finalTotalAmount,
       items: cartItems.map((it) => ({
         catalog_item_id: it.catalog_item_id || null,
         package_id: it.package_id || null,
@@ -361,6 +461,10 @@ export const POSPage: React.FC = () => {
         discount_amount: it.discount_amount,
         total_amount: isGift ? 0 : it.total_amount,
         is_gift: isGift,
+        use_package: it.use_package || false,
+        customer_package_id: it.customer_package_id,
+        package_item_id: it.package_item_id,
+        ktv_splits: it.ktv_splits,
       })),
     };
 
@@ -386,6 +490,8 @@ export const POSPage: React.FC = () => {
   };
 
   const formatVND = (val: number) => new Intl.NumberFormat("vi-VN").format(val) + " đ";
+
+  // ===================== RENDER =====================
 
   return (
     <div className="min-h-screen bg-slate-100 p-3 sm:p-4 font-sans text-slate-800">
@@ -432,12 +538,22 @@ export const POSPage: React.FC = () => {
         </div>
       ) : (
         <div className="flex flex-col gap-3 lg:grid lg:grid-cols-12 lg:gap-4">
+          {/* LEFT COLUMN: Customer + Benefits + Catalog */}
           <div className="lg:col-span-7 space-y-3 order-1">
             <POSCustomerSelect
               selectedCustomer={customer}
               onSelectCustomer={setCustomer}
               hasPackageInCart={hasPackageInCart}
             />
+
+            {customer && (
+              <POSCustomerBenefits
+                customer={customer}
+                onUsePackage={handleUsePackage}
+                onSelectGift={handleSelectGift}
+                onPayDebt={handlePayDebt}
+              />
+            )}
 
             <POSCatalogPicker
               services={services}
@@ -449,6 +565,7 @@ export const POSPage: React.FC = () => {
             />
           </div>
 
+          {/* RIGHT COLUMN: Cart + KTV + Payment */}
           <div className="lg:col-span-5 space-y-3 order-2 lg:order-2">
             <POSCart
               items={cartItems}
@@ -459,6 +576,31 @@ export const POSPage: React.FC = () => {
               onUpdatePerformingStaff={handleUpdatePerformingStaff}
               onRemoveItem={handleRemoveItem}
             />
+
+            {/* Multi KTV selector cho service đầu tiên chưa có KTV */}
+            {cartItems.some((item) => item.item_type === "SERVICE" && (!item.ktv_splits || item.ktv_splits.length === 0)) && (
+              <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                <div className="text-xs font-bold text-slate-700 mb-2">Phân công KTV</div>
+                {cartItems
+                  .filter((item) => item.item_type === "SERVICE" && (!item.ktv_splits || item.ktv_splits.length === 0))
+                  .map((item) => {
+                    const totalComm = item.performance_commission_type === "PERCENT"
+                      ? Math.round((item.total_amount * Math.min(100, Math.max(0, Number(item.performance_commission_value || 0)))) / 100)
+                      : Math.max(0, Number(item.performance_commission_value || 0)) * item.quantity;
+                    return (
+                      <div key={item.cart_item_id} className="mb-2 p-2 bg-slate-50 rounded-lg border border-slate-200">
+                        <div className="text-xs font-medium text-slate-700 mb-1">{item.name}</div>
+                        <POSMultiKTVSelector
+                          staffList={staffList}
+                          selectedSplits={item.ktv_splits || []}
+                          onSplitsChange={(splits) => handleUpdateKTYSplits(item.cart_item_id, splits)}
+                          totalCommission={totalComm}
+                        />
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
 
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2 text-xs">
               <div className="flex justify-between text-slate-600">
@@ -510,6 +652,19 @@ export const POSPage: React.FC = () => {
         </div>
       )}
 
+      {/* Package Usage Modal */}
+      {packageUsageModal && (
+        <POSPackageUsageModal
+          isOpen={packageUsageModal.isOpen}
+          onClose={() => setPackageUsageModal(null)}
+          customerPackageId={packageUsageModal.customerPackageId}
+          packageItems={packageUsageModal.items}
+          onConfirm={handleConfirmPackageUsage}
+          isSubmitting={isSubmitting}
+        />
+      )}
+
+      {/* Payment Modal */}
       <POSPaymentModal
         isOpen={isPaymentModalOpen}
         onClose={() => setIsPaymentModalOpen(false)}
