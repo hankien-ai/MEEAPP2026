@@ -61,22 +61,20 @@ export async function createCustomer(
 ): Promise<Customer> {
   const nameToUse = payload.full_name || payload.name || "Khách hàng mới";
 
-  const insertData = {
+  // Chỉ insert các cột chắc chắn tồn tại
+  const insertData: any = {
     organization_id: DEFAULT_ORG_ID,
     branch_id: DEFAULT_BRANCH_ID,
     full_name: nameToUse,
     name: nameToUse,
     phone: payload.phone,
-    email: payload.email || null,
-    birth_date: payload.birth_date || null,
-    gender: payload.gender || null,
-    address: payload.address || null,
-    notes: payload.notes || null,
-    total_spend: payload.total_spend || 0,
-    total_spent: payload.total_spent || 0,
-    total_visits: 0,
     updated_at: new Date().toISOString(),
   };
+
+  // Thêm các trường khác nếu có (có thể không tồn tại, nhưng tạm thời bỏ qua)
+  if (payload.email) insertData.email = payload.email;
+  if (payload.notes) insertData.notes = payload.notes;
+  // Các trường birth_date, gender, address, total_spend, total_spent, total_visits, last_visit sẽ dùng default
 
   const { data, error } = await supabase
     .from("customers")
@@ -100,6 +98,28 @@ export async function updateCustomer(
     ...payload,
     updated_at: new Date().toISOString(),
   };
+
+  // Loại bỏ các trường có thể không tồn tại hoặc null
+  // Chỉ cập nhật các trường cơ bản
+  const allowedFields = [
+    "full_name",
+    "name",
+    "phone",
+    "email",
+    "notes",
+    "birth_date",
+    "gender",
+    "address",
+    "total_spend",
+    "total_spent",
+    "total_visits",
+    "last_visit",
+  ];
+  for (const key of Object.keys(updateData)) {
+    if (!allowedFields.includes(key) && key !== "updated_at") {
+      delete updateData[key];
+    }
+  }
 
   if (payload.full_name && !payload.name) {
     updateData.name = payload.full_name;
@@ -407,6 +427,9 @@ export async function fetchCustomerInvoices(
   return (data as Invoice[]) || [];
 }
 
+// Export alias usePackageSession để tương thích code cũ
+export const usePackageSession = usePackageSessionV2;
+
 // Compatibility Helper Aliases
 export const getCustomers = fetchCustomers;
 export const getCustomerById = fetchCustomerById;
@@ -433,9 +456,7 @@ export const customerService = {
   fetchCustomerInvoices,
   usePackageSessionV2,
   createGiftPackage,
+  usePackageSession, // alias
 };
-
-// Export alias usePackageSession để tương thích code cũ
-export const usePackageSession = usePackageSessionV2;
 
 export default customerService;
