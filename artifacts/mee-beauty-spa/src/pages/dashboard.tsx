@@ -128,7 +128,7 @@ export const DashboardPage: React.FC = () => {
       const { data: invWithCust, error: errWithCust } = await supabase
         .from("invoices")
         .select(
-          "id, created_at, customer_id, status, subtotal, discount_amount, total_amount, payment_method, customers(full_name, phone)"
+          "id, created_at, customer_id, status, subtotal, discount_amount, total_amount, payment_method, customers(full_name, phone)",
         )
         .gte("created_at", todayIso)
         .order("created_at", { ascending: false });
@@ -137,7 +137,7 @@ export const DashboardPage: React.FC = () => {
         const { data: invPlain, error: errPlain } = await supabase
           .from("invoices")
           .select(
-            "id, created_at, customer_id, status, subtotal, discount_amount, total_amount, payment_method"
+            "id, created_at, customer_id, status, subtotal, discount_amount, total_amount, payment_method",
           )
           .gte("created_at", todayIso)
           .order("created_at", { ascending: false });
@@ -150,7 +150,7 @@ export const DashboardPage: React.FC = () => {
         }));
 
         const cIds = Array.from(
-          new Set(todayInvoices.map((i) => i.customer_id).filter(Boolean))
+          new Set(todayInvoices.map((i) => i.customer_id).filter(Boolean)),
         ) as string[];
 
         if (cIds.length > 0) {
@@ -174,18 +174,18 @@ export const DashboardPage: React.FC = () => {
       }
 
       const paidInvoices = todayInvoices.filter(
-        (i) => i.status === "PAID" || i.status === "PARTIALLY_PAID"
+        (i) => i.status === "PAID" || i.status === "PARTIALLY_PAID",
       );
       const todayRevenue = paidInvoices.reduce(
         (sum, i) => sum + Number(i.total_amount || 0),
-        0
+        0,
       );
       const todayOrders = todayInvoices.length;
 
       const validCustomerIds = new Set(
         todayInvoices
           .filter((i) => i.status !== "VOID" && i.customer_id)
-          .map((i) => i.customer_id as string)
+          .map((i) => i.customer_id as string),
       );
       const todayCustomers = validCustomerIds.size;
 
@@ -202,7 +202,7 @@ export const DashboardPage: React.FC = () => {
         const { data: itemsData, error: itemsErr } = await supabase
           .from("invoice_items")
           .select(
-            "id, invoice_id, catalog_item_id, package_id, actual_service_id, quantity"
+            "id, invoice_id, catalog_item_id, package_id, actual_service_id, quantity",
           )
           .in("invoice_id", activeTodayInvoiceIds);
 
@@ -235,7 +235,7 @@ export const DashboardPage: React.FC = () => {
       const { data: recentWithCust, error: recentCustErr } = await supabase
         .from("invoices")
         .select(
-          "id, created_at, customer_id, status, subtotal, discount_amount, total_amount, payment_method, customers(full_name, phone)"
+          "id, created_at, customer_id, status, subtotal, discount_amount, total_amount, payment_method, customers(full_name, phone)",
         )
         .order("created_at", { ascending: false })
         .limit(10);
@@ -244,7 +244,7 @@ export const DashboardPage: React.FC = () => {
         const { data: recentPlain, error: recentPlainErr } = await supabase
           .from("invoices")
           .select(
-            "id, created_at, customer_id, status, subtotal, discount_amount, total_amount, payment_method"
+            "id, created_at, customer_id, status, subtotal, discount_amount, total_amount, payment_method",
           )
           .order("created_at", { ascending: false })
           .limit(10);
@@ -256,7 +256,7 @@ export const DashboardPage: React.FC = () => {
           customers: null,
         }));
         const rCustomerIds = Array.from(
-          new Set(recentList.map((i) => i.customer_id).filter(Boolean))
+          new Set(recentList.map((i) => i.customer_id).filter(Boolean)),
         ) as string[];
 
         if (rCustomerIds.length > 0) {
@@ -313,6 +313,7 @@ export const DashboardPage: React.FC = () => {
             {new Date().toLocaleDateString("vi-VN")}
           </span>
           <button
+            type="button"
             onClick={loadDashboardData}
             disabled={loading}
             className="px-3 py-1.5 border border-slate-200 hover:bg-slate-50 active:bg-slate-100 text-slate-700 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 disabled:opacity-50 shrink-0"
@@ -343,6 +344,7 @@ export const DashboardPage: React.FC = () => {
             <span className="truncate">{errorMsg}</span>
           </div>
           <button
+            type="button"
             onClick={loadDashboardData}
             className="px-3 py-1 bg-rose-600 text-white rounded-lg text-[11px] font-bold hover:bg-rose-700 transition-all shrink-0"
           >
@@ -536,9 +538,13 @@ export const DashboardPage: React.FC = () => {
                       <th className="py-2.5 px-3 sm:px-4">Mã Đơn</th>
                       <th className="py-2.5 px-3 sm:px-4">Thời Gian</th>
                       <th className="py-2.5 px-3 sm:px-4">Khách Hàng</th>
-                      <th className="py-2.5 px-3 sm:px-4 text-right">Tổng Tiền</th>
+                      <th className="py-2.5 px-3 sm:px-4 text-right">
+                        Tổng Tiền
+                      </th>
                       <th className="py-2.5 px-3 sm:px-4">Thanh Toán</th>
-                      <th className="py-2.5 px-3 sm:px-4 text-center">Trạng Thái</th>
+                      <th className="py-2.5 px-3 sm:px-4 text-center">
+                        Trạng Thái
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
