@@ -533,3 +533,5 @@ export const POSPage: React.FC = () => {
     </div>
   );
 };
+
+export default POSPage;

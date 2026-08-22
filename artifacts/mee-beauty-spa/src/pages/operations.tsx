@@ -102,18 +102,15 @@ export const OperationsPage: React.FC = () => {
   const loadOverview = useCallback(async () => {
     try {
       setOverviewLoading(true);
-      const [customers, catalog, expList] = await Promise.all([
+      const [customers, services, products, expList] = await Promise.all([
         customerService.getCustomers(),
-        catalogService.getCatalogItems(),
+        catalogService.fetchServices(),
+        catalogService.fetchProducts(),
         expenseService.getExpenses(),
       ]);
 
-      const servicesCount = catalog.filter(
-        (item) => item.item_type === "SERVICE",
-      ).length;
-      const productsCount = catalog.filter(
-        (item) => item.item_type === "PRODUCT",
-      ).length;
+      const servicesCount = services.length;
+      const productsCount = products.length;
       const sumExpense = expList.reduce(
         (acc, curr) => acc + (curr.amount || 0),
         0,

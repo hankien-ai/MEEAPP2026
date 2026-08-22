@@ -5,6 +5,7 @@ import CatalogPage from "./pages/catalog";
 import OperationsPage from "./pages/operations";
 import StaffPage from "./pages/staff";
 import NotFoundPage from "./pages/not-found";
+import POSPage from "./pages/POSPage";
 import { AppShell } from "./components/app-shell";
 
 export function App() {
@@ -24,19 +25,7 @@ export function App() {
       case "staff":
         return <StaffPage />;
       case "pos":
-        // Trang POS hiện tại
-        return (
-          <div className="p-6 bg-white rounded-2xl border border-slate-200 text-center space-y-2">
-            <div className="text-3xl">🛒</div>
-            <h2 className="text-lg font-bold text-slate-800">
-              Màn hình Bán hàng (POS)
-            </h2>
-            <p className="text-xs text-slate-500">
-              Module POS sẵn có đang được kết nối trực tiếp với thanh điều
-              hướng.
-            </p>
-          </div>
-        );
+        return <POSPage />;
       default:
         return <NotFoundPage />;
     }
