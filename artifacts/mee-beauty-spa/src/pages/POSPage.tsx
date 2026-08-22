@@ -62,13 +62,12 @@ export const POSPage: React.FC = () => {
 
   const hasPackageInCart = cartItems.some((it) => it.item_type === "PACKAGE");
 
-  // Khi thêm item, tự động gán seller_staff_id = loggedStaff
   const getDefaultSellerId = () => loggedStaff?.id || undefined;
 
   const handleAddService = (service: CatalogServiceItem) => {
     setCartItems((prev) => {
       const existing = prev.find(
-        (it) => it.item_type === "SERVICE" && it.catalog_item_id === service.id,
+        (it) => it.item_type === "SERVICE" && it.catalog_item_id === service.catalog_item_id,
       );
       if (existing) {
         return prev.map((it) =>
@@ -87,7 +86,7 @@ export const POSPage: React.FC = () => {
       const newItem: CartItem = {
         cart_item_id: `srv_${Date.now()}_${Math.random()}`,
         item_type: "SERVICE",
-        catalog_item_id: service.id,
+        catalog_item_id: service.catalog_item_id,
         actual_service_id: service.id,
         name: service.name,
         quantity: 1,
@@ -106,7 +105,7 @@ export const POSPage: React.FC = () => {
 
   const handleAddProduct = (product: CatalogProductItem) => {
     if (product.stock_quantity <= 0) {
-      showAlert("error", `Sản phẩm "${product.name}" đã hết hàng trong kho!`);
+      showAlert("error", `Sản phẩm "${product.name}" đã hết hàng!`);
       return;
     }
 
@@ -116,10 +115,7 @@ export const POSPage: React.FC = () => {
       );
       if (existing) {
         if (existing.quantity + 1 > product.stock_quantity) {
-          showAlert(
-            "error",
-            `Không thể thêm quá số lượng tồn kho (${product.stock_quantity})!`,
-          );
+          showAlert("error", `Không thể thêm quá số lượng tồn kho (${product.stock_quantity})!`);
           return prev;
         }
         const nextQty = existing.quantity + 1;
@@ -202,12 +198,7 @@ export const POSPage: React.FC = () => {
     }
 
     const item = cartItems.find((it) => it.cart_item_id === cartItemId);
-    if (
-      item &&
-      item.item_type === "PRODUCT" &&
-      item.stock_quantity &&
-      newQty > item.stock_quantity
-    ) {
+    if (item && item.item_type === "PRODUCT" && item.stock_quantity && newQty > item.stock_quantity) {
       showAlert("error", `Số lượng vượt quá tồn kho (${item.stock_quantity})!`);
       return;
     }
@@ -281,10 +272,7 @@ export const POSPage: React.FC = () => {
     }
 
     if (hasPackageInCart && !customer) {
-      showAlert(
-        "error",
-        "Gói dịch vụ (Package) bắt buộc phải chọn Khách hàng!",
-      );
+      showAlert("error", "Gói dịch vụ (Package) bắt buộc phải chọn Khách hàng!");
       return;
     }
 
@@ -317,10 +305,7 @@ export const POSPage: React.FC = () => {
     setIsSubmitting(false);
 
     if (res.success) {
-      showAlert(
-        "success",
-        `Đã lưu đơn NHÁP thành công! (Mã: ${res.invoice_id?.slice(0, 8)})`,
-      );
+      showAlert("success", `Đã lưu đơn NHÁP thành công! (Mã: ${res.invoice_id?.slice(0, 8)})`);
       setCartItems([]);
       setCustomer(null);
       setOverallDiscount(0);
@@ -336,10 +321,7 @@ export const POSPage: React.FC = () => {
     }
 
     if (hasPackageInCart && !customer) {
-      showAlert(
-        "error",
-        "Gói dịch vụ (Package) bắt buộc phải chọn Khách hàng trước khi thanh toán!",
-      );
+      showAlert("error", "Gói dịch vụ (Package) bắt buộc phải chọn Khách hàng trước khi thanh toán!");
       return;
     }
 
@@ -397,14 +379,13 @@ export const POSPage: React.FC = () => {
       setCartItems([]);
       setCustomer(null);
       setOverallDiscount(0);
-      loadData(); // Cập nhật lại tồn kho sản phẩm live
+      loadData();
     } else {
       showAlert("error", res.error || "Thanh toán thất bại!");
     }
   };
 
-  const formatVND = (val: number) =>
-    new Intl.NumberFormat("vi-VN").format(val) + " đ";
+  const formatVND = (val: number) => new Intl.NumberFormat("vi-VN").format(val) + " đ";
 
   return (
     <div className="min-h-screen bg-slate-100 p-3 sm:p-4 font-sans text-slate-800">
@@ -451,7 +432,6 @@ export const POSPage: React.FC = () => {
         </div>
       ) : (
         <div className="flex flex-col gap-3 lg:grid lg:grid-cols-12 lg:gap-4">
-          {/* LEFT COLUMN: Customer + Catalog */}
           <div className="lg:col-span-7 space-y-3 order-1">
             <POSCustomerSelect
               selectedCustomer={customer}
@@ -469,7 +449,6 @@ export const POSPage: React.FC = () => {
             />
           </div>
 
-          {/* RIGHT COLUMN: Cart + Payment */}
           <div className="lg:col-span-5 space-y-3 order-2 lg:order-2">
             <POSCart
               items={cartItems}
@@ -484,9 +463,7 @@ export const POSPage: React.FC = () => {
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2 text-xs">
               <div className="flex justify-between text-slate-600">
                 <span>Tạm tính (Subtotal):</span>
-                <span className="font-semibold text-slate-800">
-                  {formatVND(subtotal)}
-                </span>
+                <span className="font-semibold text-slate-800">{formatVND(subtotal)}</span>
               </div>
 
               <div className="flex justify-between items-center text-slate-600">
@@ -494,18 +471,14 @@ export const POSPage: React.FC = () => {
                 <input
                   type="number"
                   value={overallDiscount}
-                  onChange={(e) =>
-                    setOverallDiscount(Math.max(0, Number(e.target.value)))
-                  }
+                  onChange={(e) => setOverallDiscount(Math.max(0, Number(e.target.value)))}
                   className="w-28 text-right p-1 border border-slate-300 rounded focus:ring-1 focus:ring-emerald-500 text-xs font-semibold bg-white"
                 />
               </div>
 
               <div className="flex justify-between text-slate-600 border-t border-slate-100 pt-2">
                 <span>Tổng giảm giá:</span>
-                <span className="font-semibold text-red-600">
-                  -{formatVND(totalDiscount)}
-                </span>
+                <span className="font-semibold text-red-600">-{formatVND(totalDiscount)}</span>
               </div>
 
               <div className="flex justify-between items-center text-base font-extrabold text-emerald-800 border-t border-slate-200 pt-2">

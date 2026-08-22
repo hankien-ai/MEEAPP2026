@@ -136,6 +136,7 @@ export interface CustomerPackage {
   branch_id?: string;
   customer_id: string;
   catalog_item_id: string;
+  package_id?: string;
   package_name?: string;
   total_sessions: number;
   remaining_sessions: number;
@@ -143,9 +144,23 @@ export interface CustomerPackage {
   purchased_at: string;
   expires_at: string | null;
   status: PackageStatus;
+  is_gift?: boolean;
   created_at: string;
   updated_at: string;
   catalog_item?: CatalogItem;
+  customer_package_items?: CustomerPackageItem[];
+}
+
+export interface CustomerPackageItem {
+  id: string;
+  customer_package_id: string;
+  package_item_id: string;
+  total_quantity: number;
+  used_quantity: number;
+  remaining_quantity: number;
+  created_at: string;
+  updated_at: string;
+  package_item?: PackageItem;
 }
 
 export interface ServiceSession {
@@ -172,6 +187,9 @@ export interface PackageUsage {
   customer_id: string;
   package_id: string;
   service_session_id?: string | null;
+  package_item_id?: string | null;
+  customer_package_item_id?: string | null;
+  service_id?: string | null;
   used_at: string;
   notes?: string | null;
   created_at: string;
@@ -181,10 +199,17 @@ export interface InvoiceItem {
   id: string;
   invoice_id: string;
   catalog_item_id?: string | null;
+  package_id?: string | null;
+  actual_service_id?: string | null;
   item_name: string;
   quantity: number;
   unit_price: number;
   subtotal: number;
+  discount_amount?: number;
+  total_amount?: number;
+  seller_staff_id?: string | null;
+  performing_staff_id?: string | null;
+  is_gift?: boolean;
   created_at?: string;
 }
 
@@ -201,8 +226,19 @@ export interface Invoice {
   payment_method: PaymentMethod;
   status: InvoiceStatus;
   notes?: string | null;
+  is_gift?: boolean;
+  paid_amount?: number;
   created_at: string;
   items?: InvoiceItem[];
+}
+
+export interface InvoiceItemStaff {
+  id: string;
+  invoice_item_id: string;
+  staff_id: string;
+  share_percent: number;
+  commission_amount: number;
+  created_at: string;
 }
 
 export interface Staff {

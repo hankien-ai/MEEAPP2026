@@ -6,6 +6,7 @@ import {
   ServiceSession,
   Invoice,
   PhotoType,
+  CustomerPackageItem,
 } from "../types/domain";
 
 export type CustomerInput = Omit<
@@ -150,7 +151,6 @@ export async function fetchCustomerPhotos(
 
   const photos = (data as CustomerPhoto[]) || [];
 
-  // Generate private signed URLs for each photo
   const photosWithSignedUrls = await Promise.all(
     photos.map(async (photo) => {
       if (!photo.storage_path) return photo;
@@ -188,7 +188,6 @@ export async function uploadCustomerPhoto(
   const cleanFileName = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
   const storagePath = `${customerId}/${cleanFileName}`;
 
-  // 1. Upload to private bucket customer-photos
   const { error: uploadError } = await supabase.storage
     .from("customer-photos")
     .upload(storagePath, file, {
@@ -201,7 +200,6 @@ export async function uploadCustomerPhoto(
     throw uploadError;
   }
 
-  // 2. Insert record into database
   const insertPayload = {
     organization_id: DEFAULT_ORG_ID,
     branch_id: DEFAULT_BRANCH_ID,
@@ -222,7 +220,6 @@ export async function uploadCustomerPhoto(
     throw dbError;
   }
 
-  // 3. Generate signed URL for instant rendering
   const { data: signedData } = await supabase.storage
     .from("customer-photos")
     .createSignedUrl(storagePath, 3600);
@@ -237,7 +234,6 @@ export async function deleteCustomerPhoto(
   photoId: string,
   storagePath: string,
 ): Promise<boolean> {
-  // 1. Remove file from private storage
   if (storagePath) {
     const { error: storageError } = await supabase.storage
       .from("customer-photos")
@@ -248,7 +244,6 @@ export async function deleteCustomerPhoto(
     }
   }
 
-  // 2. Remove record from customer_photos
   const { error: dbError } = await supabase
     .from("customer_photos")
     .delete()
@@ -269,7 +264,7 @@ export async function fetchCustomerPackages(
 ): Promise<CustomerPackage[]> {
   const { data, error } = await supabase
     .from("customer_packages")
-    .select("*, catalog_items(*)")
+    .select("*")
     .eq("customer_id", customerId)
     .order("created_at", { ascending: false });
 
@@ -281,89 +276,94 @@ export async function fetchCustomerPackages(
   return (data as CustomerPackage[]) || [];
 }
 
-export async function usePackageSession(
-  packageId: string,
+export async function fetchCustomerPackageItems(
+  customerPackageId: string,
+): Promise<CustomerPackageItem[]> {
+  const { data, error } = await supabase
+    .from("customer_package_items")
+    .select("*, package_item:package_items(*)")
+    .eq("customer_package_id", customerPackageId);
+
+  if (error) {
+    console.error(`Error fetching package items for ${customerPackageId}:`, error);
+    return [];
+  }
+
+  return (data as CustomerPackageItem[]) || [];
+}
+
+export async function fetchCustomerPackageWithItems(
+  customerId: string,
+): Promise<(CustomerPackage & { items: CustomerPackageItem[] })[]> {
+  const packages = await fetchCustomerPackages(customerId);
+
+  const result = await Promise.all(
+    packages.map(async (pkg) => {
+      const items = await fetchCustomerPackageItems(pkg.id);
+      return {
+        ...pkg,
+        items,
+      };
+    }),
+  );
+
+  return result;
+}
+
+/**
+ * Sử dụng package (trừ 1 buổi cho một service cụ thể)
+ * Gọi RPC use_package_session_v2
+ */
+export async function usePackageSessionV2(
+  customerPackageId: string,
+  packageItemId: string,
+  serviceId: string,
   staffId?: string,
   notes?: string,
-): Promise<{ success: boolean; remaining_sessions: number }> {
-  // Call Postgres RPC use_package_session
-  const { data, error } = await supabase.rpc("use_package_session", {
-    p_package_id: packageId,
+): Promise<{ success: boolean; message: string; remaining_quantity: number }> {
+  const { data, error } = await supabase.rpc("use_package_session_v2", {
+    p_customer_package_id: customerPackageId,
+    p_package_item_id: packageItemId,
+    p_service_id: serviceId,
     p_staff_id: staffId || null,
     p_notes: notes || null,
   });
 
   if (error) {
-    console.error(
-      `RPC use_package_session failed for package ${packageId}:`,
-      error,
-    );
-
-    // Atomic fallback if RPC not installed yet
-    const { data: pkg, error: fetchErr } = await supabase
-      .from("customer_packages")
-      .select("*")
-      .eq("id", packageId)
-      .single();
-
-    if (fetchErr || !pkg)
-      throw new Error("Không tìm thấy thông tin gói liệu trình");
-    if (pkg.remaining_sessions <= 0)
-      throw new Error("Gói liệu trình đã hết số buổi");
-
-    const newRemaining = pkg.remaining_sessions - 1;
-    const newStatus = newRemaining === 0 ? "DEPLETED" : pkg.status;
-
-    // Create service session
-    const { data: session, error: sessErr } = await supabase
-      .from("service_sessions")
-      .insert([
-        {
-          organization_id: pkg.organization_id || DEFAULT_ORG_ID,
-          branch_id: pkg.branch_id || DEFAULT_BRANCH_ID,
-          customer_id: pkg.customer_id,
-          catalog_item_id: pkg.catalog_item_id,
-          staff_id: staffId || null,
-          source_type: "PACKAGE",
-          package_id: packageId,
-          price_charged: 0,
-          notes: notes || "Sử dụng 1 buổi từ gói liệu trình",
-        },
-      ])
-      .select()
-      .single();
-
-    if (sessErr) throw sessErr;
-
-    // Create package usage log
-    await supabase.from("package_usages").insert([
-      {
-        organization_id: pkg.organization_id || DEFAULT_ORG_ID,
-        branch_id: pkg.branch_id || DEFAULT_BRANCH_ID,
-        customer_id: pkg.customer_id,
-        package_id: packageId,
-        service_session_id: session?.id,
-        notes: notes || null,
-      },
-    ]);
-
-    // Update package
-    await supabase
-      .from("customer_packages")
-      .update({
-        remaining_sessions: newRemaining,
-        status: newStatus,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", packageId);
-
-    return { success: true, remaining_sessions: newRemaining };
+    console.error("use_package_session_v2 error:", error);
+    return {
+      success: false,
+      message: error.message || "Lỗi sử dụng package",
+      remaining_quantity: 0,
+    };
   }
 
-  return {
-    success: data?.success || true,
-    remaining_sessions: data?.remaining_sessions ?? 0,
-  };
+  return data as { success: boolean; message: string; remaining_quantity: number };
+}
+
+/**
+ * Tạo gift package
+ */
+export async function createGiftPackage(
+  customerId: string,
+  packageId: string,
+  createdBy?: string,
+): Promise<{ success: boolean; message: string; customer_package_id?: string }> {
+  const { data, error } = await supabase.rpc("create_gift_package", {
+    p_customer_id: customerId,
+    p_package_id: packageId,
+    p_created_by: createdBy || null,
+  });
+
+  if (error) {
+    console.error("create_gift_package error:", error);
+    return {
+      success: false,
+      message: error.message || "Lỗi tạo gift package",
+    };
+  }
+
+  return data as { success: boolean; message: string; customer_package_id?: string };
 }
 
 // --- CUSTOMER SERVICE HISTORY ---
@@ -424,12 +424,18 @@ export const customerService = {
   updateCustomer,
   deleteCustomer,
   fetchCustomerPackages,
+  fetchCustomerPackageItems,
+  fetchCustomerPackageWithItems,
   fetchCustomerPhotos,
   uploadCustomerPhoto,
   deleteCustomerPhoto,
   fetchCustomerServiceHistory,
   fetchCustomerInvoices,
-  usePackageSession,
+  usePackageSessionV2,
+  createGiftPackage,
 };
+
+// Export alias usePackageSession để tương thích code cũ
+export const usePackageSession = usePackageSessionV2;
 
 export default customerService;

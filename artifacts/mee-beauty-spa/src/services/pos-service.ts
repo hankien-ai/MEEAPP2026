@@ -1,4 +1,4 @@
-import { supabase } from "./supabase";
+import { supabase, DEFAULT_ORG_ID, DEFAULT_BRANCH_ID } from "./supabase";
 import {
   Customer,
   Staff,
@@ -9,60 +9,33 @@ import {
   CheckoutPayload,
   CheckoutResult,
   CartItem,
+  InvoiceItemStaff,
 } from "@/types/pos";
 import { catalogService } from "./catalog-service";
+import { customerService } from "./customer.service";
 
 export class POSService {
   /**
-   * Truy vấn Organization ID & Branch ID thực tế từ database
-   */
-  static async resolveOrgAndBranch(): Promise<{
-    organization_id: string;
-    branch_id: string;
-  }> {
-    try {
-      const { data: org } = await supabase
-        .from("organizations")
-        .select("id")
-        .limit(1)
-        .maybeSingle();
-      const { data: branch } = await supabase
-        .from("branches")
-        .select("id")
-        .limit(1)
-        .maybeSingle();
-
-      const defaultGuid = "00000000-0000-0000-0000-000000000000";
-      return {
-        organization_id: org?.id || defaultGuid,
-        branch_id: branch?.id || defaultGuid,
-      };
-    } catch {
-      return {
-        organization_id: "00000000-0000-0000-0000-000000000000",
-        branch_id: "00000000-0000-0000-0000-000000000000",
-      };
-    }
-  }
-
-  /**
-   * Tạm thời lấy staff đầu tiên trong bảng staff (sẽ thay bằng auth sau)
+   * Lấy staff đầu tiên (tạm thời) – sẽ thay bằng auth sau
    */
   static async getLoggedInStaff(): Promise<Staff | null> {
     const { data, error } = await supabase
       .from("staff")
       .select("id, full_name, role")
+      .eq("organization_id", DEFAULT_ORG_ID)
+      .eq("branch_id", DEFAULT_BRANCH_ID)
       .eq("status", "ACTIVE")
       .order("created_at", { ascending: true })
       .limit(1)
       .maybeSingle();
 
     if (error || !data) {
-      console.warn("Không tìm thấy staff active. Lấy staff đầu tiên bất kỳ.");
-      // Fallback: lấy staff đầu tiên bất kỳ
+      console.warn("Không tìm thấy staff active, lấy staff đầu tiên.");
       const { data: anyStaff } = await supabase
         .from("staff")
         .select("id, full_name, role")
+        .eq("organization_id", DEFAULT_ORG_ID)
+        .eq("branch_id", DEFAULT_BRANCH_ID)
         .limit(1)
         .maybeSingle();
       return anyStaff || null;
@@ -76,6 +49,8 @@ export class POSService {
     const { data, error } = await supabase
       .from("customers")
       .select("id, full_name, phone, email, avatar_url")
+      .eq("organization_id", DEFAULT_ORG_ID)
+      .eq("branch_id", DEFAULT_BRANCH_ID)
       .or(`full_name.ilike.%${query}%,phone.ilike.%${query}%`)
       .limit(10);
 
@@ -91,6 +66,8 @@ export class POSService {
     const { data, error } = await supabase
       .from("staff")
       .select("id, full_name, role, avatar_url")
+      .eq("organization_id", DEFAULT_ORG_ID)
+      .eq("branch_id", DEFAULT_BRANCH_ID)
       .eq("status", "ACTIVE")
       .order("full_name");
 
@@ -103,16 +80,27 @@ export class POSService {
   }
 
   static async fetchServices(): Promise<CatalogServiceItem[]> {
-    const { data, error } = await supabase.from("services").select(`
+    const { data, error } = await supabase
+      .from("services")
+      .select(`
         id,
+        catalog_item_id,
         name,
         price,
         duration,
         sales_commission_type,
         sales_commission_value,
         performance_commission_type,
-        performance_commission_value
-      `);
+        performance_commission_value,
+        catalog_items (
+          organization_id,
+          branch_id,
+          is_active
+        )
+      `)
+      .eq("catalog_items.organization_id", DEFAULT_ORG_ID)
+      .eq("catalog_items.branch_id", DEFAULT_BRANCH_ID)
+      .eq("catalog_items.is_active", true);
 
     if (error) {
       console.error("Lỗi tải danh sách dịch vụ:", error);
@@ -121,10 +109,11 @@ export class POSService {
 
     return (data || []).map((s: any) => ({
       id: s.id,
+      catalog_item_id: s.catalog_item_id,
       name: s.name,
       price: Math.round(Number(s.price || 0)),
       duration_minutes: s.duration,
-      is_active: true,
+      is_active: s.catalog_items?.is_active ?? true,
       sales_commission_type: s.sales_commission_type,
       sales_commission_value: Number(s.sales_commission_value || 0),
       performance_commission_type: s.performance_commission_type,
@@ -132,11 +121,10 @@ export class POSService {
     }));
   }
 
-  /**
-   * CHỈ BÁN RETAIL TRÊN POS - Lọc bỏ CONSUMABLE
-   */
   static async fetchProducts(): Promise<CatalogProductItem[]> {
-    const { data, error } = await supabase.from("products").select(`
+    const { data, error } = await supabase
+      .from("products")
+      .select(`
         id,
         catalog_item_id,
         selling_price,
@@ -146,36 +134,38 @@ export class POSService {
           name,
           unit,
           product_type,
-          is_active
+          is_active,
+          organization_id,
+          branch_id
         )
-      `);
+      `)
+      .eq("catalog_items.organization_id", DEFAULT_ORG_ID)
+      .eq("catalog_items.branch_id", DEFAULT_BRANCH_ID)
+      .eq("catalog_items.is_active", true)
+      .eq("catalog_items.product_type", "RETAIL");
 
     if (error) {
       console.error("Lỗi tải danh sách sản phẩm:", error);
       return [];
     }
 
-    return (data || [])
-      .filter((p: any) => {
-        const isActive = p.catalog_items?.is_active !== false;
-        const isRetail = p.catalog_items?.product_type === "RETAIL";
-        return isActive && isRetail;
-      })
-      .map((p: any) => ({
-        id: p.id,
-        catalog_item_id: p.catalog_item_id,
-        name: p.catalog_items?.name || "Sản phẩm bán lẻ",
-        selling_price: Math.round(Number(p.selling_price || 0)),
-        stock_quantity: Number(p.stock_quantity || 0),
-        minimum_stock: Number(p.minimum_stock || 0),
-        unit: p.catalog_items?.unit || "cái",
-        product_type: "RETAIL",
-        is_active: true,
-      }));
+    return (data || []).map((p: any) => ({
+      id: p.id,
+      catalog_item_id: p.catalog_item_id,
+      name: p.catalog_items?.name || "Sản phẩm bán lẻ",
+      selling_price: Math.round(Number(p.selling_price || 0)),
+      stock_quantity: Number(p.stock_quantity || 0),
+      minimum_stock: Number(p.minimum_stock || 0),
+      unit: p.catalog_items?.unit || "cái",
+      product_type: "RETAIL",
+      is_active: p.catalog_items?.is_active ?? true,
+    }));
   }
 
   static async fetchPackages(): Promise<CatalogPackageItem[]> {
-    const { data, error } = await supabase.from("packages").select(`
+    const { data, error } = await supabase
+      .from("packages")
+      .select(`
         id,
         name,
         price,
@@ -183,6 +173,9 @@ export class POSService {
         description,
         sales_commission_type,
         sales_commission_value,
+        is_active,
+        organization_id,
+        branch_id,
         package_items (
           package_id,
           service_id,
@@ -194,7 +187,10 @@ export class POSService {
             name
           )
         )
-      `);
+      `)
+      .eq("organization_id", DEFAULT_ORG_ID)
+      .eq("branch_id", DEFAULT_BRANCH_ID)
+      .eq("is_active", true);
 
     if (error) {
       console.error("Lỗi tải danh sách gói dịch vụ:", error);
@@ -207,7 +203,7 @@ export class POSService {
       price: Math.round(Number(pkg.price || 0)),
       validity_days: pkg.validity_days ? Number(pkg.validity_days) : 365,
       description: pkg.description,
-      is_active: true,
+      is_active: pkg.is_active ?? true,
       sales_commission_type: pkg.sales_commission_type,
       sales_commission_value: Number(pkg.sales_commission_value || 0),
       items: (pkg.package_items || []).map((pi: any) => ({
@@ -243,27 +239,18 @@ export class POSService {
     };
   }
 
-  /**
-   * Tạo Hóa đơn NHÁP (DRAFT)
-   */
   static async createDraftInvoice(
     payload: CreateInvoicePayload,
   ): Promise<CheckoutResult> {
     try {
-      const { organization_id, branch_id } = await this.resolveOrgAndBranch();
-
-      // Gán seller_staff_id từ staff đăng nhập nếu chưa có
-      let sellerStaffId = payload.seller_staff_id;
-      if (!sellerStaffId) {
-        const loggedStaff = await this.getLoggedInStaff();
-        sellerStaffId = loggedStaff?.id || null;
-      }
+      const loggedStaff = await this.getLoggedInStaff();
+      const sellerStaffId = payload.seller_staff_id || loggedStaff?.id || null;
 
       const { data: invoice, error: invoiceErr } = await supabase
         .from("invoices")
         .insert({
-          organization_id: payload.organization_id || organization_id,
-          branch_id: payload.branch_id || branch_id,
+          organization_id: DEFAULT_ORG_ID,
+          branch_id: DEFAULT_BRANCH_ID,
           customer_id: payload.customer_id || null,
           seller_staff_id: sellerStaffId,
           status: "DRAFT",
@@ -272,6 +259,7 @@ export class POSService {
           total_amount: payload.total_amount,
           payment_method: payload.payment_method,
           notes: payload.notes || null,
+          is_gift: payload.is_gift || false,
         })
         .select("id")
         .single();
@@ -288,7 +276,7 @@ export class POSService {
         catalog_item_id: item.catalog_item_id || null,
         package_id: item.package_id || null,
         actual_service_id: item.actual_service_id || null,
-        seller_staff_id: item.seller_staff_id || sellerStaffId || null,
+        seller_staff_id: item.seller_staff_id || sellerStaffId,
         performing_staff_id: item.performing_staff_id || null,
         description: item.description,
         quantity: item.quantity,
@@ -315,36 +303,33 @@ export class POSService {
     }
   }
 
-  /**
-   * THANH TOÁN THỰC TẾ (REAL CHECKOUT)
-   */
   static async processCheckout(
     cartItems: CartItem[],
     payload: CheckoutPayload,
   ): Promise<CheckoutResult> {
     try {
-      const { organization_id, branch_id } = await this.resolveOrgAndBranch();
-
-      // Lấy staff đăng nhập làm Sale mặc định
       const loggedStaff = await this.getLoggedInStaff();
-      const defaultSellerId = loggedStaff?.id || null;
+      const defaultSellerId = payload.seller_staff_id || loggedStaff?.id || null;
 
-      // Kiểm tra ràng buộc tiền mặt
-      if (
-        payload.payment_method === "CASH" &&
-        (payload.cash_given || 0) < payload.total_amount
-      ) {
+      // ============ VALIDATION ============
+      if (payload.payment_method === "CASH" && (payload.cash_given || 0) < payload.total_amount) {
         return {
           success: false,
           error: "Số tiền khách đưa nhỏ hơn tổng tiền phải thanh toán!",
         };
       }
 
-      // Kiểm tra ràng buộc nợ / gói
       if (payload.payment_method === "DEBT" && !payload.customer_id) {
         return {
           success: false,
           error: "Thanh toán Ghi nợ bắt buộc phải chọn Khách hàng!",
+        };
+      }
+
+      if (payload.payment_method === "GIFT" && !payload.customer_id) {
+        return {
+          success: false,
+          error: "Tặng quà bắt buộc phải chọn Khách hàng!",
         };
       }
 
@@ -356,23 +341,32 @@ export class POSService {
         };
       }
 
-      // Xác định status invoice
+      // Kiểm tra KTV split
+      for (const item of cartItems) {
+        if (item.item_type === "SERVICE" && item.ktv_splits && item.ktv_splits.length > 0) {
+          const totalShare = item.ktv_splits.reduce((sum, s) => sum + s.share_percent, 0);
+          if (Math.abs(totalShare - 100) > 0.01) {
+            return {
+              success: false,
+              error: `Tổng tỷ lệ chia KTV cho "${item.name}" phải bằng 100% (hiện tại ${totalShare}%)`,
+            };
+          }
+        }
+      }
+
+      // ============ INVOICE ============
       let invoiceStatus: "PAID" | "PARTIALLY_PAID" = "PAID";
       if (payload.payment_method === "DEBT") {
         invoiceStatus = "PARTIALLY_PAID";
-      } else if (payload.payment_method === "GIFT") {
-        // GIFT vẫn là PAID nhưng total_amount = 0 (hoặc có thể là PARTIALLY_PAID nếu cần)
-        invoiceStatus = "PAID";
       }
 
-      // 1. Lưu Hóa Đơn Chính
       const { data: invoice, error: invoiceErr } = await supabase
         .from("invoices")
         .insert({
-          organization_id: payload.organization_id || organization_id,
-          branch_id: payload.branch_id || branch_id,
+          organization_id: DEFAULT_ORG_ID,
+          branch_id: DEFAULT_BRANCH_ID,
           customer_id: payload.customer_id || null,
-          seller_staff_id: payload.seller_staff_id || defaultSellerId,
+          seller_staff_id: defaultSellerId,
           status: invoiceStatus,
           subtotal: payload.subtotal,
           discount_amount: payload.discount_amount,
@@ -380,6 +374,7 @@ export class POSService {
           payment_method: payload.payment_method,
           notes: payload.notes || null,
           is_gift: payload.is_gift || false,
+          paid_amount: payload.paid_amount || 0,
         })
         .select("id")
         .single();
@@ -387,37 +382,79 @@ export class POSService {
       if (invoiceErr || !invoice) {
         return {
           success: false,
-          error: invoiceErr?.message || "Lỗi khi tạo hóa đơn thanh toán",
+          error: invoiceErr?.message || "Lỗi khi tạo hóa đơn",
         };
       }
 
-      // 2. Lưu Chi Tiết Hóa Đơn
-      const invoiceItemsData = cartItems.map((item) => ({
-        invoice_id: invoice.id,
-        catalog_item_id: item.catalog_item_id || null,
-        package_id: item.package_id || null,
-        actual_service_id: item.actual_service_id || null,
-        seller_staff_id: item.seller_staff_id || defaultSellerId,
-        performing_staff_id: item.performing_staff_id || null,
-        description: item.name,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-        discount_amount: item.discount_amount,
-        total_amount: item.total_amount,
-        is_gift: item.is_gift || false,
-      }));
+      // ============ INVOICE ITEMS ============
+      const invoiceItemIds: string[] = [];
 
-      const { error: itemsErr } = await supabase
-        .from("invoice_items")
-        .insert(invoiceItemsData);
-      if (itemsErr) {
-        return { success: false, error: itemsErr.message };
+      for (const item of cartItems) {
+        const { data: invItem, error: itemErr } = await supabase
+          .from("invoice_items")
+          .insert({
+            invoice_id: invoice.id,
+            catalog_item_id: item.catalog_item_id || null,
+            package_id: item.package_id || null,
+            actual_service_id: item.actual_service_id || null,
+            seller_staff_id: item.seller_staff_id || defaultSellerId,
+            performing_staff_id: item.performing_staff_id || null,
+            description: item.name,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            discount_amount: item.discount_amount,
+            total_amount: item.total_amount,
+            is_gift: item.is_gift || false,
+          })
+          .select("id")
+          .single();
+
+        if (itemErr) {
+          return { success: false, error: itemErr.message };
+        }
+
+        invoiceItemIds.push(invItem.id);
+
+        // ============ MULTI KTV ============
+        if (item.item_type === "SERVICE" && item.ktv_splits && item.ktv_splits.length > 0) {
+          const splits = item.ktv_splits.map((s) => ({
+            invoice_item_id: invItem.id,
+            staff_id: s.staff_id,
+            share_percent: s.share_percent,
+            commission_amount: s.commission_amount || 0,
+          }));
+
+          const { error: splitErr } = await supabase
+            .from("invoice_item_staff")
+            .insert(splits);
+
+          if (splitErr) {
+            console.warn("Lỗi lưu KTV split:", splitErr);
+          }
+        }
+
+        // ============ PACKAGE USAGE ============
+        if (item.use_package && item.customer_package_id && item.package_item_id && item.actual_service_id) {
+          const result = await customerService.usePackageSessionV2(
+            item.customer_package_id,
+            item.package_item_id,
+            item.actual_service_id,
+            item.performing_staff_id || null,
+            `Sử dụng package qua POS, invoice ${invoice.id}`,
+          );
+
+          if (!result.success) {
+            return {
+              success: false,
+              error: `Lỗi sử dụng package: ${result.message}`,
+            };
+          }
+        }
       }
 
-      // 3. Xử lý Trừ Tồn Kho Sản Phẩm RETAIL + ghi inventory transaction
+      // ============ INVENTORY (PRODUCT RETAIL) ============
       for (const item of cartItems) {
         if (item.item_type === "PRODUCT" && item.product_id) {
-          // Gọi RPC để trừ kho và ghi log
           try {
             await catalogService.processInventoryTransaction({
               product_id: item.product_id,
@@ -426,8 +463,7 @@ export class POSService {
               note: `POS bán hàng, invoice ${invoice.id}`,
             });
           } catch (invErr: any) {
-            console.warn("Lỗi ghi inventory transaction:", invErr);
-            // Fallback: cập nhật trực tiếp stock_quantity
+            console.warn("Lỗi ghi inventory transaction, fallback:", invErr);
             const { data: currentProd } = await supabase
               .from("products")
               .select("stock_quantity")
@@ -448,15 +484,10 @@ export class POSService {
         }
       }
 
-      // 4. Xử lý Kích Hoạt Gói Dịch Vụ (Package Activation) – trừ khi là GIFT
+      // ============ PACKAGE PURCHASE (Mua Package mới) ============
       for (const item of cartItems) {
-        if (
-          item.item_type === "PACKAGE" &&
-          item.package_id &&
-          payload.customer_id
-        ) {
-          // Nếu là GIFT, đánh dấu is_gift = true
-          const isGift = payload.payment_method === "GIFT";
+        if (item.item_type === "PACKAGE" && item.package_id && payload.customer_id) {
+          const isGift = payload.payment_method === "GIFT" || item.is_gift;
 
           const { data: pkgInfo } = await supabase
             .from("packages")
@@ -464,9 +495,7 @@ export class POSService {
             .eq("id", item.package_id)
             .single();
 
-          const validityDays = pkgInfo?.validity_days
-            ? Number(pkgInfo.validity_days)
-            : 365;
+          const validityDays = pkgInfo?.validity_days ? Number(pkgInfo.validity_days) : 365;
           const totalSessionsPerPkg = (pkgInfo?.package_items || []).reduce(
             (acc: number, pi: any) => acc + Number(pi.quantity || 1),
             0,
@@ -476,41 +505,48 @@ export class POSService {
           const expiresAt = new Date();
           expiresAt.setDate(expiresAt.getDate() + validityDays);
 
-          await supabase.from("customer_packages").insert({
-            customer_id: payload.customer_id,
-            package_id: item.package_id,
-            invoice_id: invoice.id,
-            total_sessions: totalSessions,
-            remaining_sessions: totalSessions,
-            status: "ACTIVE",
-            expires_at: expiresAt.toISOString(),
-            is_gift: isGift, // Thêm field này nếu có migration
-          });
+          // Tạo customer_package
+          const { data: customerPkg, error: cpErr } = await supabase
+            .from("customer_packages")
+            .insert({
+              customer_id: payload.customer_id,
+              package_id: item.package_id,
+              invoice_id: invoice.id,
+              total_sessions: totalSessions,
+              remaining_sessions: totalSessions,
+              status: "ACTIVE",
+              expires_at: expiresAt.toISOString(),
+              is_gift: isGift,
+              price_paid: isGift ? 0 : item.total_amount,
+            })
+            .select("id")
+            .single();
+
+          if (cpErr) {
+            console.warn("Lỗi tạo customer_package:", cpErr);
+          }
+
+          // Trigger sẽ tự động tạo customer_package_items
         }
       }
 
-      // 5. Tính và Ghi nhận Commission Logs
+      // ============ COMMISSION ============
       const commissionLogs = [];
 
       for (const item of cartItems) {
-        // Bỏ qua commission nếu là GIFT (không có hoa hồng cho quà tặng)
+        // Gift không tính commission
         if (item.is_gift) continue;
+        if (payload.payment_method === "GIFT") continue;
 
         // Sale Commission
         const sellerStaffId = item.seller_staff_id || defaultSellerId;
         if (sellerStaffId) {
           let saleComm = 0;
           if (item.sales_commission_type === "PERCENT") {
-            const pct = Math.min(
-              100,
-              Math.max(0, Number(item.sales_commission_value || 0)),
-            );
+            const pct = Math.min(100, Math.max(0, Number(item.sales_commission_value || 0)));
             saleComm = Math.round((item.total_amount * pct) / 100);
           } else if (item.sales_commission_type === "FIXED") {
-            const fixVal = Math.max(
-              0,
-              Number(item.sales_commission_value || 0),
-            );
+            const fixVal = Math.max(0, Number(item.sales_commission_value || 0));
             saleComm = fixVal * item.quantity;
           }
 
@@ -525,30 +561,39 @@ export class POSService {
           }
         }
 
-        // KTV Commission (Chỉ tính cho SERVICE, và không phải GIFT)
-        if (item.item_type === "SERVICE" && item.performing_staff_id) {
-          let ktvComm = 0;
-          if (item.performance_commission_type === "PERCENT") {
-            const pct = Math.min(
-              100,
-              Math.max(0, Number(item.performance_commission_value || 0)),
-            );
-            ktvComm = Math.round((item.total_amount * pct) / 100);
-          } else if (item.performance_commission_type === "FIXED") {
-            const fixVal = Math.max(
-              0,
-              Number(item.performance_commission_value || 0),
-            );
-            ktvComm = fixVal * item.quantity;
-          }
+        // KTV Commission (chỉ cho SERVICE)
+        if (item.item_type === "SERVICE") {
+          const totalPerformanceComm = item.performance_commission_type && item.performance_commission_value
+            ? (() => {
+                if (item.performance_commission_type === "PERCENT") {
+                  const pct = Math.min(100, Math.max(0, Number(item.performance_commission_value || 0)));
+                  return Math.round((item.total_amount * pct) / 100);
+                } else {
+                  return Math.max(0, Number(item.performance_commission_value || 0)) * item.quantity;
+                }
+              })()
+            : 0;
 
-          if (ktvComm > 0) {
+          if (totalPerformanceComm > 0 && item.ktv_splits && item.ktv_splits.length > 0) {
+            for (const split of item.ktv_splits) {
+              const commAmount = Math.round((totalPerformanceComm * split.share_percent) / 100);
+              if (commAmount > 0) {
+                commissionLogs.push({
+                  staff_id: split.staff_id,
+                  invoice_id: invoice.id,
+                  commission_type: "PERFORMANCE",
+                  amount: commAmount,
+                  description: `Hoa hồng KTV (${split.share_percent}%): ${item.name}`,
+                });
+              }
+            }
+          } else if (totalPerformanceComm > 0 && item.performing_staff_id) {
             commissionLogs.push({
               staff_id: item.performing_staff_id,
               invoice_id: invoice.id,
               commission_type: "PERFORMANCE",
-              amount: ktvComm,
-              description: `Hoa hồng kỹ thuật viên: ${item.name}`,
+              amount: totalPerformanceComm,
+              description: `Hoa hồng KTV: ${item.name}`,
             });
           }
         }
