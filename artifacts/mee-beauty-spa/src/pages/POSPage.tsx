@@ -35,7 +35,6 @@ export const POSPage: React.FC = () => {
 
   const [selectedSellerId, setSelectedSellerId] = useState<string | undefined>(undefined);
 
-  // Package usage modal
   const [packageUsageModal, setPackageUsageModal] = useState<{
     isOpen: boolean;
     customerPackageId: string;
@@ -50,16 +49,13 @@ export const POSPage: React.FC = () => {
     message: string;
   } | null>(null);
 
-  // QR Code
   const [qrCodeUrl, setQrCodeUrl] = useState<string | undefined>(undefined);
   const [isQRModalOpen, setIsQRModalOpen] = useState(false);
 
-  // Kiểm tra admin
   const isAdmin = loggedStaff?.role === 'admin';
 
   useEffect(() => {
     loadData();
-    // Load QR từ localStorage (hoặc database)
     const savedQr = localStorage.getItem('pos_qr_code');
     if (savedQr) setQrCodeUrl(savedQr);
   }, []);
@@ -111,9 +107,8 @@ export const POSPage: React.FC = () => {
         );
       }
 
-      // Mặc định KTV splits: nếu không phải admin, tự động gán loggedStaff 100%
       let defaultSplits: KTVSplit[] = [];
-      if (!isAdmin && loggedStaff) {
+      if (loggedStaff) {
         defaultSplits = [{ staff_id: loggedStaff.id, staff_name: loggedStaff.full_name, share_percent: 100 }];
       }
 
@@ -133,7 +128,7 @@ export const POSPage: React.FC = () => {
         performance_commission_type: service.performance_commission_type,
         performance_commission_value: service.performance_commission_value,
         ktv_splits: defaultSplits,
-        performing_staff_id: loggedStaff?.id, // vẫn giữ cho tương thích
+        performing_staff_id: loggedStaff?.id,
       };
       return [...prev, newItem];
     });
@@ -452,7 +447,6 @@ export const POSPage: React.FC = () => {
 
   const handleConfirmPayment = async (
     method: PaymentMethod,
-    cashGiven: number,
     paidAmount: number,
     notes?: string,
   ) => {
@@ -471,7 +465,6 @@ export const POSPage: React.FC = () => {
       discount_amount: totalDiscount,
       total_amount: finalTotalAmount,
       payment_method: method,
-      cash_given: cashGiven,
       notes: notes || undefined,
       is_gift: isGift,
       paid_amount: actualPaidAmount,
@@ -555,7 +548,6 @@ export const POSPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Dropdown chọn nhân viên chính (chỉ hiển thị nếu admin) */}
           {isAdmin && (
             <div className="flex items-center gap-1 text-xs">
               <span className="text-slate-500">Sale:</span>
@@ -579,7 +571,6 @@ export const POSPage: React.FC = () => {
             🔄 Tải lại
           </button>
 
-          {/* Nút cài đặt QR (chỉ admin) */}
           {isAdmin && (
             <button
               onClick={() => setIsQRModalOpen(true)}
@@ -597,7 +588,6 @@ export const POSPage: React.FC = () => {
         </div>
       ) : (
         <div className="flex flex-col gap-3 lg:grid lg:grid-cols-12 lg:gap-4">
-          {/* LEFT COLUMN: Customer + Benefits + Catalog */}
           <div className="lg:col-span-7 space-y-3 order-1">
             <POSCustomerSelect
               selectedCustomer={customer}
@@ -624,7 +614,6 @@ export const POSPage: React.FC = () => {
             />
           </div>
 
-          {/* RIGHT COLUMN: Cart + KTV + Payment */}
           <div className="lg:col-span-5 space-y-3 order-2 lg:order-2">
             <POSCart
               items={cartItems}
@@ -641,7 +630,6 @@ export const POSPage: React.FC = () => {
               loggedStaffName={loggedStaff?.full_name}
             />
 
-            {/* KTV Selector cho từng Service */}
             {cartItems
               .filter((item) => item.item_type === "SERVICE")
               .map((item) => {
@@ -658,7 +646,6 @@ export const POSPage: React.FC = () => {
                       selectedSplits={item.ktv_splits || []}
                       onSplitsChange={(splits) => handleUpdateKTYSplits(item.cart_item_id, splits)}
                       totalCommission={totalComm}
-                      isAdmin={isAdmin}
                     />
                   </div>
                 );
@@ -704,7 +691,6 @@ export const POSPage: React.FC = () => {
         </div>
       )}
 
-      {/* Package Usage Modal */}
       {packageUsageModal && (
         <POSPackageUsageModal
           isOpen={packageUsageModal.isOpen}
@@ -716,7 +702,6 @@ export const POSPage: React.FC = () => {
         />
       )}
 
-      {/* Payment Modal */}
       <POSPaymentModal
         isOpen={isPaymentModalOpen}
         onClose={() => setIsPaymentModalOpen(false)}
@@ -731,7 +716,6 @@ export const POSPage: React.FC = () => {
         qrCodeUrl={qrCodeUrl}
       />
 
-      {/* QR Code Settings Modal */}
       <QRCodeSettingsModal
         isOpen={isQRModalOpen}
         onClose={() => setIsQRModalOpen(false)}

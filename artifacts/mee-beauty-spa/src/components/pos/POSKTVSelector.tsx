@@ -1,13 +1,12 @@
 import React, { useState } from "react";
 import { Staff, KTVSplit } from "@/types/pos";
-import { X, Plus, User } from "lucide-react";
+import { X, Plus, User, Settings, Equal } from "lucide-react";
 
 interface Props {
   staffList: Staff[];
   selectedSplits: KTVSplit[];
   onSplitsChange: (splits: KTVSplit[]) => void;
-  totalCommission: number; // tổng commission KTV (đã tính theo service)
-  isAdmin: boolean; // true nếu là admin, false nếu nhân viên thường
+  totalCommission: number;
 }
 
 export const POSKTVSelector: React.FC<Props> = ({
@@ -15,11 +14,10 @@ export const POSKTVSelector: React.FC<Props> = ({
   selectedSplits,
   onSplitsChange,
   totalCommission,
-  isAdmin,
 }) => {
   const [isAdding, setIsAdding] = useState(false);
   const [tempStaffId, setTempStaffId] = useState("");
-  const [tempShare, setTempShare] = useState<number>(0);
+  const [isCustomMode, setIsCustomMode] = useState(false); // true: hiển thị input %, false: chỉ hiển thị đã chia đều
 
   const availableStaff = staffList.filter(
     (s) => !selectedSplits.some((split) => split.staff_id === s.id)
@@ -30,39 +28,69 @@ export const POSKTVSelector: React.FC<Props> = ({
 
   const formatVND = (val: number) => new Intl.NumberFormat("vi-VN").format(val) + " đ";
 
-  // Nếu không phải admin và chưa có split, tự động tạo split với staff đầu tiên (hoặc staff đang đăng nhập)
-  // Việc này đã được xử lý ở POSPage, nên ở đây ta chỉ hiển thị.
+  // Hàm chia đều cho tất cả KTV hiện có
+  const handleSplitEqually = () => {
+    if (selectedSplits.length === 0) return;
+    const equalShare = Math.floor(100 / selectedSplits.length);
+    const remainder = 100 - equalShare * selectedSplits.length;
+    const newSplits = selectedSplits.map((split, index) => ({
+      ...split,
+      share_percent: index === 0 ? equalShare + remainder : equalShare,
+    }));
+    onSplitsChange(newSplits);
+  };
 
+  // Thêm KTV mới với chia đều tự động
   const handleAdd = () => {
-    if (!isAdmin) return;
-    if (!tempStaffId || tempShare <= 0) return;
-    if (totalShare + tempShare > 100) {
-      alert(`Tổng tỷ lệ không được vượt quá 100%. Còn ${remainingPercent}%`);
-      return;
-    }
+    if (!tempStaffId) return;
     const staff = staffList.find((s) => s.id === tempStaffId);
+    if (!staff) return;
+
+    // Tính số KTV mới
+    const newCount = selectedSplits.length + 1;
+    const equalShare = Math.floor(100 / newCount);
+    const remainder = 100 - equalShare * newCount;
+
+    // Tạo danh sách mới: các KTV cũ + KTV mới, chia đều
     const newSplits = [
-      ...selectedSplits,
+      ...selectedSplits.map((s) => ({
+        ...s,
+        share_percent: equalShare,
+      })),
       {
-        staff_id: tempStaffId,
-        staff_name: staff?.full_name,
-        share_percent: tempShare,
+        staff_id: staff.id,
+        staff_name: staff.full_name,
+        share_percent: equalShare + remainder, // cộng phần dư vào KTV cuối
       },
     ];
     onSplitsChange(newSplits);
     setTempStaffId("");
-    setTempShare(0);
     setIsAdding(false);
+    setIsCustomMode(false); // khi thêm mới, tự động về chế độ chia đều
   };
 
   const handleRemove = (index: number) => {
-    if (!isAdmin) return;
+    if (selectedSplits.length <= 1) {
+      alert("Phải có ít nhất 1 KTV");
+      return;
+    }
     const newSplits = selectedSplits.filter((_, i) => i !== index);
-    onSplitsChange(newSplits);
+    // Tự động chia đều lại sau khi xóa
+    const equalShare = Math.floor(100 / newSplits.length);
+    const remainder = 100 - equalShare * newSplits.length;
+    const rebalanced = newSplits.map((s, idx) => ({
+      ...s,
+      share_percent: idx === 0 ? equalShare + remainder : equalShare,
+    }));
+    onSplitsChange(rebalanced);
+    if (!isCustomMode) setIsCustomMode(false);
   };
 
   const handleShareChange = (index: number, newShare: number) => {
-    if (!isAdmin) return;
+    if (!isCustomMode) {
+      // Nếu chưa bật chế độ tùy chỉnh, bật lên
+      setIsCustomMode(true);
+    }
     const newSplits = [...selectedSplits];
     const diff = newShare - newSplits[index].share_percent;
     const newTotal = totalShare + diff;
@@ -75,11 +103,28 @@ export const POSKTVSelector: React.FC<Props> = ({
     onSplitsChange(newSplits);
   };
 
-  // Nếu không có split nào, hiển thị thông báo (đã được xử lý ở POSPage)
-  if (selectedSplits.length === 0) {
+  // Khi số lượng KTV là 1, hiển thị 100% và không cho chỉnh sửa
+  if (selectedSplits.length === 1) {
     return (
-      <div className="p-2 bg-slate-50 rounded-lg border border-dashed border-slate-300 text-center text-xs text-slate-500">
-        Chưa có KTV
+      <div className="p-2 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <User className="w-3.5 h-3.5 text-slate-500" />
+          <span className="text-sm font-medium text-slate-800">{selectedSplits[0].staff_name || "KTV"}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold text-slate-700">100%</span>
+          <span className="text-xs font-medium text-emerald-700">{formatVND(totalCommission)}</span>
+          {staffList.length > 1 && (
+            <button
+              type="button"
+              onClick={() => setIsAdding(true)}
+              className="p-1 text-emerald-600 hover:text-emerald-800"
+              title="Thêm KTV"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
       </div>
     );
   }
@@ -94,8 +139,8 @@ export const POSKTVSelector: React.FC<Props> = ({
               <User className="w-3.5 h-3.5 text-slate-500" />
               <span className="text-sm font-medium text-slate-800">{split.staff_name || "KTV"}</span>
             </div>
-            {isAdmin ? (
-              <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
+              {isCustomMode ? (
                 <input
                   type="number"
                   value={split.share_percent}
@@ -104,86 +149,91 @@ export const POSKTVSelector: React.FC<Props> = ({
                   min={0}
                   max={100}
                 />
-                <span className="text-xs text-slate-500">%</span>
-                <span className="text-xs font-medium text-emerald-700 min-w-[60px] text-right">
-                  {formatVND(commAmount)}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => handleRemove(index)}
-                  className="p-1 text-slate-400 hover:text-red-600"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-slate-700">{split.share_percent}%</span>
-                <span className="text-xs font-medium text-emerald-700 min-w-[60px] text-right">
-                  {formatVND(commAmount)}
-                </span>
-              </div>
-            )}
-          </div>
-        );
-      })}
-
-      {/* Chỉ admin mới được thêm KTV */}
-      {isAdmin && (
-        <>
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-slate-500">Tổng: {totalShare}%</span>
-            <span className="text-slate-500">Còn: {remainingPercent}%</span>
-            {remainingPercent > 0 && (
+              ) : (
+                <span className="text-xs font-semibold text-slate-700 min-w-[32px] text-center">{split.share_percent}%</span>
+              )}
+              <span className="text-xs text-slate-500">%</span>
+              <span className="text-xs font-medium text-emerald-700 min-w-[60px] text-right">
+                {formatVND(commAmount)}
+              </span>
               <button
                 type="button"
-                onClick={() => setIsAdding(true)}
-                className="text-emerald-600 font-semibold hover:underline flex items-center gap-1"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Thêm KTV
-              </button>
-            )}
-          </div>
-
-          {isAdding && (
-            <div className="flex items-center gap-2 bg-white p-2 rounded-lg border border-emerald-200">
-              <select
-                value={tempStaffId}
-                onChange={(e) => setTempStaffId(e.target.value)}
-                className="flex-1 p-1.5 border border-slate-300 rounded text-xs bg-white focus:ring-1 focus:ring-emerald-500"
-              >
-                <option value="">Chọn KTV...</option>
-                {availableStaff.map((s) => (
-                  <option key={s.id} value={s.id}>{s.full_name}</option>
-                ))}
-              </select>
-              <input
-                type="number"
-                value={tempShare}
-                onChange={(e) => setTempShare(Number(e.target.value))}
-                placeholder="%"
-                className="w-14 text-center p-1 border border-slate-300 rounded text-xs"
-                min={0}
-                max={remainingPercent}
-              />
-              <button
-                type="button"
-                onClick={handleAdd}
-                className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded hover:bg-emerald-700"
-              >
-                Thêm
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsAdding(false)}
-                className="p-1 text-slate-400 hover:text-slate-600"
+                onClick={() => handleRemove(index)}
+                className="p-1 text-slate-400 hover:text-red-600"
+                title="Xóa KTV"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
+          </div>
+        );
+      })}
+
+      <div className="flex items-center justify-between text-xs flex-wrap gap-2">
+        <span className="text-slate-500">Tổng: {totalShare}%</span>
+        <span className="text-slate-500">Còn: {remainingPercent}%</span>
+        <div className="flex items-center gap-1">
+          {!isCustomMode && selectedSplits.length > 1 && (
+            <button
+              type="button"
+              onClick={() => setIsCustomMode(true)}
+              className="text-blue-600 hover:text-blue-800 flex items-center gap-0.5 text-[11px] font-medium"
+            >
+              <Settings className="w-3 h-3" /> Tùy chỉnh
+            </button>
           )}
-        </>
+          {isCustomMode && (
+            <button
+              type="button"
+              onClick={() => {
+                handleSplitEqually();
+                setIsCustomMode(false);
+              }}
+              className="text-emerald-600 hover:text-emerald-800 flex items-center gap-0.5 text-[11px] font-medium"
+            >
+              <Equal className="w-3 h-3" /> Chia đều
+            </button>
+          )}
+          {staffList.length > selectedSplits.length && (
+            <button
+              type="button"
+              onClick={() => setIsAdding(true)}
+              className="text-emerald-600 font-semibold hover:underline flex items-center gap-1"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Thêm KTV
+            </button>
+          )}
+        </div>
+      </div>
+
+      {isAdding && (
+        <div className="flex items-center gap-2 bg-white p-2 rounded-lg border border-emerald-200">
+          <select
+            value={tempStaffId}
+            onChange={(e) => setTempStaffId(e.target.value)}
+            className="flex-1 p-1.5 border border-slate-300 rounded text-xs bg-white focus:ring-1 focus:ring-emerald-500"
+          >
+            <option value="">Chọn KTV...</option>
+            {availableStaff.map((s) => (
+              <option key={s.id} value={s.id}>{s.full_name}</option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={handleAdd}
+            className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded hover:bg-emerald-700"
+          >
+            Thêm
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsAdding(false)}
+            className="p-1 text-slate-400 hover:text-slate-600"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
       )}
 
       {totalShare !== 100 && selectedSplits.length > 0 && (

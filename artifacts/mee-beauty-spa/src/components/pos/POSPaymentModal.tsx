@@ -12,12 +12,10 @@ interface Props {
   staffList: Staff[];
   onConfirmPayment: (
     paymentMethod: PaymentMethod,
-    cashGiven: number,
     paidAmount: number,
     notes?: string,
   ) => void;
   isSubmitting: boolean;
-  // Thêm props để xác định QR code
   qrCodeUrl?: string;
 }
 
@@ -35,7 +33,6 @@ export const POSPaymentModal: React.FC<Props> = ({
   qrCodeUrl,
 }) => {
   const [method, setMethod] = useState<PaymentMethod>("CASH");
-  const [cashGiven, setCashGiven] = useState<number>(totalAmount);
   const [paidAmount, setPaidAmount] = useState<number>(0);
   const [notes, setNotes] = useState<string>("");
   const [errorMessage, setErrorMessage] = useState<string>("");
@@ -44,7 +41,6 @@ export const POSPaymentModal: React.FC<Props> = ({
 
   const formatVND = (val: number) =>
     new Intl.NumberFormat("vi-VN").format(val) + " đ";
-  const changeDue = Math.max(0, cashGiven - totalAmount);
   const remainingDebt = Math.max(0, totalAmount - paidAmount);
 
   const getStaffName = (id?: string) => {
@@ -56,13 +52,9 @@ export const POSPaymentModal: React.FC<Props> = ({
   const handlePay = () => {
     setErrorMessage("");
 
-    if (method === "CASH") {
-      // Bỏ kiểm tra tiền khách đưa vì đã bỏ input
-      // chỉ cần tổng tiền > 0
-      if (totalAmount <= 0) {
-        setErrorMessage("Số tiền thanh toán phải lớn hơn 0!");
-        return;
-      }
+    if (method === "CASH" && totalAmount <= 0) {
+      setErrorMessage("Số tiền thanh toán phải lớn hơn 0!");
+      return;
     }
 
     if ((method === "DEBT" || method === "GIFT") && !customer) {
@@ -75,7 +67,7 @@ export const POSPaymentModal: React.FC<Props> = ({
       return;
     }
 
-    onConfirmPayment(method, cashGiven, paidAmount, notes);
+    onConfirmPayment(method, paidAmount, notes);
   };
 
   return (
@@ -156,7 +148,6 @@ export const POSPaymentModal: React.FC<Props> = ({
           </div>
         </div>
 
-        {/* PAYMENT METHOD SELECTION */}
         <div className="space-y-3 pt-1">
           <label className="text-xs font-bold text-slate-800 block">Phương thức thanh toán:</label>
           <div className="grid grid-cols-2 gap-3">
@@ -213,7 +204,6 @@ export const POSPaymentModal: React.FC<Props> = ({
             <div className="bg-emerald-50/60 p-3 rounded-xl border border-emerald-200">
               <p className="text-xs text-slate-700">💵 Thanh toán bằng tiền mặt.</p>
               <p className="text-xs font-bold text-emerald-700 mt-1">Tổng tiền: {formatVND(totalAmount)}</p>
-              {/* Đã bỏ input tiền khách đưa */}
             </div>
           )}
 
@@ -222,7 +212,7 @@ export const POSPaymentModal: React.FC<Props> = ({
               <p>💳 Chuyển khoản qua ngân hàng. Số tiền cần chuyển: <strong>{formatVND(totalAmount)}</strong></p>
               {qrCodeUrl ? (
                 <div className="flex justify-center">
-                  <img src={qrCodeUrl} alt="QR Code thanh toán" className="w-32 h-32" />
+                  <img src={qrCodeUrl} alt="QR Code thanh toán" className="w-32 h-32 object-contain border rounded-lg bg-white p-1" />
                 </div>
               ) : (
                 <p className="text-[11px] text-blue-600">🔧 Vui lòng cấu hình mã QR trong trang thiết lập</p>

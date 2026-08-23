@@ -1,4 +1,4 @@
-import { supabase } from "./supabase";
+import { supabase, DEFAULT_ORG_ID, DEFAULT_BRANCH_ID } from "./supabase";
 import {
   Customer,
   Staff,
@@ -15,7 +15,7 @@ import { customerService } from "./customer.service";
 
 export class POSService {
   /**
-   * Lấy staff đầu tiên – chỉ select các cột tồn tại
+   * Lấy staff đầu tiên – không filter org/branch
    */
   static async getLoggedInStaff(): Promise<Staff | null> {
     console.log("🔍 getLoggedInStaff: lấy staff không filter");
@@ -35,9 +35,6 @@ export class POSService {
     return data || null;
   }
 
-  /**
-   * Tìm kiếm khách hàng – dùng customerService
-   */
   static async searchCustomers(query: string): Promise<Customer[]> {
     if (!query.trim()) {
       console.log("🔍 searchCustomers: query rỗng");
@@ -60,9 +57,6 @@ export class POSService {
     }
   }
 
-  /**
-   * Lấy danh sách staff – không select avatar_url vì không có
-   */
   static async fetchStaffList(): Promise<Staff[]> {
     console.log("🔍 fetchStaffList: lấy danh sách staff không filter");
     const { data, error } = await supabase
@@ -80,9 +74,6 @@ export class POSService {
     return data || [];
   }
 
-  /**
-   * Lấy dịch vụ – dùng catalogService
-   */
   static async fetchServices(): Promise<CatalogServiceItem[]> {
     console.log("🔍 fetchServices: lấy dịch vụ từ catalogService");
     try {
@@ -106,9 +97,6 @@ export class POSService {
     }
   }
 
-  /**
-   * Lấy sản phẩm – dùng catalogService
-   */
   static async fetchProducts(): Promise<CatalogProductItem[]> {
     console.log("🔍 fetchProducts: lấy sản phẩm từ catalogService");
     try {
@@ -133,9 +121,6 @@ export class POSService {
     }
   }
 
-  /**
-   * Lấy gói – dùng catalogService
-   */
   static async fetchPackages(): Promise<CatalogPackageItem[]> {
     console.log("🔍 fetchPackages: lấy gói từ catalogService");
     try {
@@ -192,7 +177,10 @@ export class POSService {
       const loggedStaff = await this.getLoggedInStaff();
       const sellerStaffId = payload.seller_staff_id || loggedStaff?.id || null;
 
+      // Chỉ insert các cột tồn tại trong bảng invoices
       const insertData: any = {
+        organization_id: DEFAULT_ORG_ID,
+        branch_id: DEFAULT_BRANCH_ID,
         customer_id: payload.customer_id || null,
         seller_staff_id: sellerStaffId,
         status: "DRAFT",
@@ -200,8 +188,8 @@ export class POSService {
         discount_amount: payload.discount_amount,
         total_amount: payload.total_amount,
         payment_method: payload.payment_method,
-        notes: payload.notes || null,
-        is_gift: payload.is_gift || false,
+        // notes: payload.notes || null, // TẠM THỜI BỎ vì chưa có cột
+        // is_gift: payload.is_gift || false, // Nếu chưa có cột thì bỏ
       };
 
       const { data: invoice, error: invoiceErr } = await supabase
@@ -229,7 +217,7 @@ export class POSService {
         unit_price: item.unit_price,
         discount_amount: item.discount_amount,
         total_amount: item.total_amount,
-        is_gift: item.is_gift || false,
+        is_gift: item.is_gift || false, // Có thể đã có cột này trong invoice_items
       }));
 
       const { error: itemsErr } = await supabase
@@ -258,13 +246,6 @@ export class POSService {
       const defaultSellerId = payload.seller_staff_id || loggedStaff?.id || null;
 
       // ============ VALIDATION ============
-      if (payload.payment_method === "CASH" && (payload.cash_given || 0) < payload.total_amount) {
-        return {
-          success: false,
-          error: "Số tiền khách đưa nhỏ hơn tổng tiền phải thanh toán!",
-        };
-      }
-
       if (payload.payment_method === "DEBT" && !payload.customer_id) {
         return {
           success: false,
@@ -307,6 +288,8 @@ export class POSService {
       }
 
       const invoiceData: any = {
+        organization_id: DEFAULT_ORG_ID,
+        branch_id: DEFAULT_BRANCH_ID,
         customer_id: payload.customer_id || null,
         seller_staff_id: defaultSellerId,
         status: invoiceStatus,
@@ -314,9 +297,9 @@ export class POSService {
         discount_amount: payload.discount_amount,
         total_amount: payload.total_amount,
         payment_method: payload.payment_method,
-        notes: payload.notes || null,
-        is_gift: payload.is_gift || false,
-        paid_amount: payload.paid_amount || 0,
+        // notes: payload.notes || null,
+        // is_gift: payload.is_gift || false,
+        // paid_amount: payload.paid_amount || 0,
       };
 
       const { data: invoice, error: invoiceErr } = await supabase
@@ -333,8 +316,6 @@ export class POSService {
       }
 
       // ============ INVOICE ITEMS ============
-      const invoiceItemIds: string[] = [];
-
       for (const item of cartItems) {
         const itemData: any = {
           invoice_id: invoice.id,
@@ -360,8 +341,6 @@ export class POSService {
         if (itemErr) {
           return { success: false, error: itemErr.message };
         }
-
-        invoiceItemIds.push(invItem.id);
 
         // ============ MULTI KTV ============
         if (item.item_type === "SERVICE" && item.ktv_splits && item.ktv_splits.length > 0) {
