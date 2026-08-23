@@ -177,7 +177,6 @@ export class POSService {
       const loggedStaff = await this.getLoggedInStaff();
       const sellerStaffId = payload.seller_staff_id || loggedStaff?.id || null;
 
-      // Chỉ insert các cột tồn tại trong bảng invoices
       const insertData: any = {
         organization_id: DEFAULT_ORG_ID,
         branch_id: DEFAULT_BRANCH_ID,
@@ -188,8 +187,6 @@ export class POSService {
         discount_amount: payload.discount_amount,
         total_amount: payload.total_amount,
         payment_method: payload.payment_method,
-        // notes: payload.notes || null, // TẠM THỜI BỎ vì chưa có cột
-        // is_gift: payload.is_gift || false, // Nếu chưa có cột thì bỏ
       };
 
       const { data: invoice, error: invoiceErr } = await supabase
@@ -217,7 +214,7 @@ export class POSService {
         unit_price: item.unit_price,
         discount_amount: item.discount_amount,
         total_amount: item.total_amount,
-        is_gift: item.is_gift || false, // Có thể đã có cột này trong invoice_items
+        is_gift: item.is_gift || false,
       }));
 
       const { error: itemsErr } = await supabase
@@ -297,9 +294,6 @@ export class POSService {
         discount_amount: payload.discount_amount,
         total_amount: payload.total_amount,
         payment_method: payload.payment_method,
-        // notes: payload.notes || null,
-        // is_gift: payload.is_gift || false,
-        // paid_amount: payload.paid_amount || 0,
       };
 
       const { data: invoice, error: invoiceErr } = await supabase
@@ -433,6 +427,8 @@ export class POSService {
           expiresAt.setDate(expiresAt.getDate() + validityDays);
 
           const cpData: any = {
+            organization_id: DEFAULT_ORG_ID,
+            branch_id: DEFAULT_BRANCH_ID,
             customer_id: payload.customer_id,
             package_id: item.package_id,
             invoice_id: invoice.id,
@@ -451,7 +447,58 @@ export class POSService {
             .single();
 
           if (cpErr) {
-            console.warn("Lỗi tạo customer_package:", cpErr);
+            console.error("❌ Lỗi tạo customer_package:", cpErr);
+            return {
+              success: false,
+              error: `Không thể tạo gói cho khách hàng: ${cpErr.message}`,
+            };
+          }
+
+          // ============ TẠO SERVICE SESSION CHO BUỔI ĐẦU (nếu dùng ngay) ============
+          if (item.use_package && item.actual_service_id) {
+            try {
+              // Tìm package_item_id tương ứng
+              const { data: pkgItem } = await supabase
+                .from("package_items")
+                .select("id")
+                .eq("package_id", item.package_id)
+                .eq("service_id", item.actual_service_id)
+                .single();
+
+              if (pkgItem) {
+                await customerService.usePackageSessionV2(
+                  customerPkg.id,
+                  pkgItem.id,
+                  item.actual_service_id,
+                  item.performing_staff_id || null,
+                  `Sử dụng buổi đầu từ package mới, invoice ${invoice.id}`,
+                );
+              }
+            } catch (usageErr: any) {
+              console.warn("⚠️ Lỗi sử dụng buổi đầu package:", usageErr);
+            }
+          }
+        }
+      }
+
+      // ============ SERVICE SESSION CHO SERVICE LẺ (DIRECT) ============
+      for (const item of cartItems) {
+        if (item.item_type === "SERVICE" && !item.use_package && item.actual_service_id) {
+          try {
+            await supabase.from("service_sessions").insert({
+              organization_id: DEFAULT_ORG_ID,
+              branch_id: DEFAULT_BRANCH_ID,
+              customer_id: payload.customer_id,
+              catalog_item_id: item.catalog_item_id,
+              staff_id: item.performing_staff_id || null,
+              source_type: "DIRECT",
+              package_id: null,
+              price_charged: item.total_amount,
+              notes: `Invoice ${invoice.id}`,
+              performed_at: new Date().toISOString(),
+            });
+          } catch (sessionErr: any) {
+            console.warn("⚠️ Lỗi tạo service_session cho service lẻ:", sessionErr);
           }
         }
       }

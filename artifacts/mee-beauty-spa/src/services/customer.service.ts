@@ -56,9 +56,6 @@ export async function fetchCustomerById(id: string): Promise<Customer | null> {
   return data as Customer;
 }
 
-/**
- * Tạo khách hàng mới – chỉ gửi các cột thực sự tồn tại
- */
 export async function createCustomer(
   payload: CustomerInput,
 ): Promise<Customer> {
@@ -80,7 +77,6 @@ export async function createCustomer(
     updated_at: new Date().toISOString(),
   };
 
-  // Chỉ thêm address nếu tồn tại trong payload và có giá trị
   if (payload.address) {
     insertData.address = payload.address;
   }
@@ -288,14 +284,19 @@ export async function fetchCustomerPackageItems(
 ): Promise<CustomerPackageItem[]> {
   const { data, error } = await supabase
     .from("customer_package_items")
-    .select("*, package_item:package_items(*)")
+    .select(`
+      *,
+      services:service_id (
+        id,
+        name,
+        catalog_item_id,
+        duration_minutes
+      )
+    `)
     .eq("customer_package_id", customerPackageId);
 
   if (error) {
-    console.error(
-      `Error fetching package items for ${customerPackageId}:`,
-      error,
-    );
+    console.error(`Error fetching package items for ${customerPackageId}:`, error);
     return [];
   }
 
@@ -321,20 +322,16 @@ export async function fetchCustomerPackageWithItems(
 }
 
 /**
- * Sử dụng package (trừ 1 buổi cho một service cụ thể)
- * Gọi RPC use_package_session_v2
+ * Sử dụng package (trừ 1 buổi) - phiên bản mới nhận customer_package_item_id
+ * Dành cho UI gọi từ POS hoặc Customer Profile
  */
 export async function usePackageSessionV2(
-  customerPackageId: string,
-  packageItemId: string,
-  serviceId: string,
+  customerPackageItemId: string,
   staffId?: string,
   notes?: string,
 ): Promise<{ success: boolean; message: string; remaining_quantity: number }> {
   const { data, error } = await supabase.rpc("use_package_session_v2", {
-    p_customer_package_id: customerPackageId,
-    p_package_item_id: packageItemId,
-    p_service_id: serviceId,
+    p_customer_package_item_id: customerPackageItemId,
     p_staff_id: staffId || null,
     p_notes: notes || null,
   });
@@ -348,15 +345,38 @@ export async function usePackageSessionV2(
     };
   }
 
-  return data as {
-    success: boolean;
-    message: string;
-    remaining_quantity: number;
-  };
+  return data as { success: boolean; message: string; remaining_quantity: number };
 }
 
-// Export alias usePackageSession để tương thích code cũ
-export const usePackageSession = usePackageSessionV2;
+/**
+ * Sử dụng package (trừ 1 buổi) - phiên bản tương thích với UI cũ
+ * Nhận customer_package_id, package_item_id, service_id
+ */
+export async function usePackageSession(
+  customerPackageId: string,
+  packageItemId: string,
+  serviceId: string,
+  staffId?: string,
+  notes?: string,
+): Promise<{ success: boolean; message: string; remaining_quantity: number }> {
+  // Tìm customer_package_item_id từ customerPackageId và packageItemId
+  const { data: cpi, error: cpiErr } = await supabase
+    .from("customer_package_items")
+    .select("id")
+    .eq("customer_package_id", customerPackageId)
+    .eq("package_item_id", packageItemId)
+    .single();
+
+  if (cpiErr || !cpi) {
+    return {
+      success: false,
+      message: "Không tìm thấy service trong package",
+      remaining_quantity: 0,
+    };
+  }
+
+  return usePackageSessionV2(cpi.id, staffId, notes);
+}
 
 /**
  * Tạo gift package
@@ -365,11 +385,7 @@ export async function createGiftPackage(
   customerId: string,
   packageId: string,
   createdBy?: string,
-): Promise<{
-  success: boolean;
-  message: string;
-  customer_package_id?: string;
-}> {
+): Promise<{ success: boolean; message: string; customer_package_id?: string }> {
   const { data, error } = await supabase.rpc("create_gift_package", {
     p_customer_id: customerId,
     p_package_id: packageId,
@@ -384,11 +400,7 @@ export async function createGiftPackage(
     };
   }
 
-  return data as {
-    success: boolean;
-    message: string;
-    customer_package_id?: string;
-  };
+  return data as { success: boolean; message: string; customer_package_id?: string };
 }
 
 // --- CUSTOMER SERVICE HISTORY ---
@@ -398,7 +410,21 @@ export async function fetchCustomerServiceHistory(
 ): Promise<ServiceSession[]> {
   const { data, error } = await supabase
     .from("service_sessions")
-    .select("*, catalog_items(*), staff(*)")
+    .select(`
+      *,
+      catalog_items:catalog_item_id (
+        id,
+        name,
+        price,
+        duration_minutes,
+        commission_rate
+      ),
+      staff:staff_id (
+        id,
+        full_name,
+        role
+      )
+    `)
     .eq("customer_id", customerId)
     .order("performed_at", { ascending: false });
 
@@ -420,7 +446,21 @@ export async function fetchCustomerInvoices(
 ): Promise<Invoice[]> {
   const { data, error } = await supabase
     .from("invoices")
-    .select("*, items:invoice_items(*)")
+    .select(`
+      *,
+      items:invoice_items (
+        id,
+        catalog_item_id,
+        package_id,
+        actual_service_id,
+        description,
+        quantity,
+        unit_price,
+        discount_amount,
+        total_amount,
+        is_gift
+      )
+    `)
     .eq("customer_id", customerId)
     .order("created_at", { ascending: false });
 

@@ -35,6 +35,8 @@ import {
   usePackageSession,
   fetchCustomerServiceHistory,
   fetchCustomerInvoices,
+  fetchCustomerPackageWithItems,
+  fetchCustomerPackageItems,
 } from "../services/customer.service";
 
 // --- CUSTOMER PROFILE PAGE COMPONENT ---
@@ -132,7 +134,7 @@ export function CustomerProfilePage({
     if (!customerId) return;
     setLoadingPackages(true);
     try {
-      const data = await fetchCustomerPackages(customerId);
+      const data = await fetchCustomerPackageWithItems(customerId);
       setPackages(data);
     } catch (err) {
       console.error("Lỗi tải gói liệu trình:", err);
@@ -287,25 +289,28 @@ export function CustomerProfilePage({
   );
 
   return (
-    <div className="space-y-6">
-      {/* HEADER SECTION */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between border-b pb-4 gap-4 bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-        <div>
-          <div className="flex items-center gap-3">
-            <h2 className="text-2xl font-bold text-gray-900">
+    <div className="space-y-4 max-w-full">
+      {/* HEADER SECTION - Mobile First */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-lg shrink-0">
+            {(customer.full_name || customer.name || "?").charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">
               {customer.full_name || customer.name}
             </h2>
-            {customer.code && <Badge variant="info">{customer.code}</Badge>}
+            <p className="text-sm text-gray-500 flex items-center gap-1">
+              <span>📱 {customer.phone}</span>
+              {customer.email && <span>• ✉️ {customer.email}</span>}
+            </p>
           </div>
-          <p className="text-sm text-gray-500 mt-1">
-            📱 {customer.phone} {customer.email ? `• ✉️ ${customer.email}` : ""}
-          </p>
         </div>
 
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-4 flex-wrap">
           <div className="text-right">
             <p className="text-xs text-gray-500">Tổng chi tiêu</p>
-            <p className="text-lg font-bold text-blue-600">
+            <p className="text-base font-bold text-blue-600">
               {totalSpentFormatted}
             </p>
           </div>
@@ -318,62 +323,40 @@ export function CustomerProfilePage({
             </p>
           </div>
           {onBack && (
-            <Button variant="outline" onClick={onBack}>
-              Quay lại
+            <Button variant="outline" size="sm" onClick={onBack}>
+              ← Quay lại
             </Button>
           )}
         </div>
       </div>
 
-      {/* NAVIGATION TABS */}
-      <div className="flex border-b border-gray-200 bg-white rounded-t-xl px-4 pt-2">
-        <button
-          onClick={() => setActiveTab("info")}
-          className={`py-3 px-5 font-semibold text-sm border-b-2 transition-colors ${
-            activeTab === "info"
-              ? "border-blue-600 text-blue-600"
-              : "border-transparent text-gray-500 hover:text-gray-700"
-          }`}
-        >
-          1. THÔNG TIN
-        </button>
-        <button
-          onClick={() => setActiveTab("photos")}
-          className={`py-3 px-5 font-semibold text-sm border-b-2 transition-colors ${
-            activeTab === "photos"
-              ? "border-blue-600 text-blue-600"
-              : "border-transparent text-gray-500 hover:text-gray-700"
-          }`}
-        >
-          2. NHẬT KÝ ÁNH ({photos.length})
-        </button>
-        <button
-          onClick={() => setActiveTab("packages")}
-          className={`py-3 px-5 font-semibold text-sm border-b-2 transition-colors ${
-            activeTab === "packages"
-              ? "border-blue-600 text-blue-600"
-              : "border-transparent text-gray-500 hover:text-gray-700"
-          }`}
-        >
-          3. LIỆU TRÌNH ({packages.length})
-        </button>
-        <button
-          onClick={() => setActiveTab("history")}
-          className={`py-3 px-5 font-semibold text-sm border-b-2 transition-colors ${
-            activeTab === "history"
-              ? "border-blue-600 text-blue-600"
-              : "border-transparent text-gray-500 hover:text-gray-700"
-          }`}
-        >
-          4. LỊCH SỬ DỊCH VỤ ({history.length})
-        </button>
+      {/* NAVIGATION TABS - Mobile First */}
+      <div className="flex overflow-x-auto no-scrollbar gap-1 bg-white rounded-xl border border-gray-200 p-1 shadow-sm">
+        {[
+          { key: "info", label: "📋 Thông tin" },
+          { key: "photos", label: "📷 Ảnh" },
+          { key: "packages", label: "📦 Liệu trình" },
+          { key: "history", label: "📜 Lịch sử" },
+        ].map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key as any)}
+            className={`flex-1 py-2.5 px-3 text-xs font-semibold rounded-lg transition-all whitespace-nowrap ${
+              activeTab === tab.key
+                ? "bg-blue-600 text-white shadow-sm"
+                : "text-gray-600 hover:bg-gray-100"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       {/* TAB CONTENT */}
 
       {/* TAB 1: THÔNG TIN */}
       {activeTab === "info" && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Card
             title="Thông tin chi tiết"
             action={
@@ -382,160 +365,129 @@ export function CustomerProfilePage({
                 variant="outline"
                 onClick={() => setIsEditModalOpen(true)}
               >
-                Chỉnh sửa
+                ✏️ Sửa
               </Button>
             }
           >
-            <div className="space-y-3 text-sm">
-              <div>
-                <span className="font-semibold text-gray-600">Họ và tên:</span>{" "}
-                <span className="text-gray-900 font-medium">
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between border-b border-gray-100 py-1.5">
+                <span className="text-gray-500">Họ và tên</span>
+                <span className="font-medium text-gray-900">
                   {customer.full_name || customer.name}
                 </span>
               </div>
-              <div>
-                <span className="font-semibold text-gray-600">
-                  Số điện thoại:
-                </span>{" "}
-                <span className="text-gray-900">{customer.phone}</span>
+              <div className="flex justify-between border-b border-gray-100 py-1.5">
+                <span className="text-gray-500">Số điện thoại</span>
+                <span className="font-medium text-gray-900">{customer.phone}</span>
               </div>
-              <div>
-                <span className="font-semibold text-gray-600">Email:</span>{" "}
-                <span className="text-gray-900">{customer.email || "—"}</span>
+              <div className="flex justify-between border-b border-gray-100 py-1.5">
+                <span className="text-gray-500">Email</span>
+                <span className="font-medium text-gray-900">{customer.email || "—"}</span>
               </div>
-              <div>
-                <span className="font-semibold text-gray-600">Giới tính:</span>{" "}
-                <span className="text-gray-900">{customer.gender || "—"}</span>
+              <div className="flex justify-between border-b border-gray-100 py-1.5">
+                <span className="text-gray-500">Giới tính</span>
+                <span className="font-medium text-gray-900">{customer.gender || "—"}</span>
               </div>
-              <div>
-                <span className="font-semibold text-gray-600">Ngày sinh:</span>{" "}
-                <span className="text-gray-900">
+              <div className="flex justify-between border-b border-gray-100 py-1.5">
+                <span className="text-gray-500">Ngày sinh</span>
+                <span className="font-medium text-gray-900">
                   {customer.birth_date || "—"}
                 </span>
               </div>
-              <div>
-                <span className="font-semibold text-gray-600">Địa chỉ:</span>{" "}
-                <span className="text-gray-900">{customer.address || "—"}</span>
+              <div className="flex justify-between border-b border-gray-100 py-1.5">
+                <span className="text-gray-500">Địa chỉ</span>
+                <span className="font-medium text-gray-900">{customer.address || "—"}</span>
               </div>
-              <div>
-                <span className="font-semibold text-gray-600">Ghi chú:</span>{" "}
-                <p className="mt-1 p-2 bg-gray-50 rounded border border-gray-100 text-gray-700">
+              <div className="py-1.5">
+                <span className="text-gray-500 block mb-1">Ghi chú</span>
+                <p className="text-sm text-gray-700 bg-gray-50 p-2 rounded border border-gray-100">
                   {customer.notes || "Không có ghi chú"}
                 </p>
               </div>
             </div>
           </Card>
 
-          <Card title="Thống kê tổng quan" className="md:col-span-2">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-              <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
-                <p className="text-xs text-blue-600 font-medium">
-                  Tổng chi tiêu
-                </p>
-                <p className="text-xl font-bold text-blue-900 mt-1">
+          <Card title="Thống kê tổng quan">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
+                <p className="text-xs text-blue-600 font-medium">Tổng chi tiêu</p>
+                <p className="text-lg font-bold text-blue-900 mt-1">
                   {totalSpentFormatted}
                 </p>
               </div>
-              <div className="p-4 bg-emerald-50 rounded-lg border border-emerald-100">
-                <p className="text-xs text-emerald-600 font-medium">
-                  Số lượt ghé
-                </p>
-                <p className="text-xl font-bold text-emerald-900 mt-1">
+              <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-100">
+                <p className="text-xs text-emerald-600 font-medium">Số lượt ghé</p>
+                <p className="text-lg font-bold text-emerald-900 mt-1">
                   {customer.total_visits || history.length} lượt
                 </p>
               </div>
-              <div className="p-4 bg-purple-50 rounded-lg border border-purple-100">
-                <p className="text-xs text-purple-600 font-medium">
-                  Ngày tham gia
-                </p>
-                <p className="text-sm font-bold text-purple-900 mt-2">
+              <div className="p-3 bg-purple-50 rounded-lg border border-purple-100 col-span-2">
+                <p className="text-xs text-purple-600 font-medium">Ngày tham gia</p>
+                <p className="text-sm font-bold text-purple-900 mt-1">
                   {new Date(customer.created_at).toLocaleDateString("vi-VN")}
                 </p>
               </div>
             </div>
 
-            {/* SECTIONS: HÓA ĐƠN GẦN ĐÂY */}
-            <div>
-              <h4 className="text-sm font-bold text-gray-800 mb-3">
-                Lịch sử Hóa đơn ({invoices.length})
+            <div className="mt-4">
+              <h4 className="text-sm font-bold text-gray-800 mb-2">
+                Hóa đơn gần đây ({invoices.length})
               </h4>
               {loadingInvoices ? (
                 <Spinner className="py-4" />
               ) : invoices.length === 0 ? (
-                <p className="text-xs text-gray-500 italic">
-                  Chưa có hóa đơn nào được tạo.
-                </p>
+                <p className="text-xs text-gray-500 italic">Chưa có hóa đơn nào.</p>
               ) : (
-                <Table
-                  headers={[
-                    "Mã HĐ",
-                    "Ngày",
-                    "Tổng tiền",
-                    "Giảm giá",
-                    "Thành tiền",
-                    "Thanh toán",
-                    "Chi tiết",
-                  ]}
-                  data={invoices}
-                  renderRow={(inv: Invoice) => (
-                    <tr key={inv.id} className="hover:bg-gray-50">
-                      <td className="p-2 font-mono text-xs text-gray-600">
-                        {inv.invoice_code || inv.code || inv.id.substring(0, 8)}
-                      </td>
-                      <td className="p-2 text-xs">
-                        {new Date(inv.created_at).toLocaleDateString("vi-VN")}
-                      </td>
-                      <td className="p-2 text-xs text-gray-500">
-                        {inv.total_amount?.toLocaleString("vi-VN")} đ
-                      </td>
-                      <td className="p-2 text-xs text-red-500">
-                        -{inv.discount_amount?.toLocaleString("vi-VN")} đ
-                      </td>
-                      <td className="p-2 text-xs font-bold text-blue-600">
-                        {inv.final_amount?.toLocaleString("vi-VN")} đ
-                      </td>
-                      <td className="p-2 text-xs">
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {invoices.slice(0, 5).map((inv) => (
+                    <div
+                      key={inv.id}
+                      className="flex justify-between items-center p-2 bg-gray-50 rounded-lg border border-gray-100 text-xs"
+                    >
+                      <div>
+                        <p className="font-semibold text-gray-800">
+                          #{inv.invoice_code || inv.id.slice(0, 8)}
+                        </p>
+                        <p className="text-gray-500">
+                          {new Date(inv.created_at).toLocaleDateString("vi-VN")}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-blue-600">
+                          {(inv.final_amount || 0).toLocaleString("vi-VN")} đ
+                        </p>
                         <Badge variant="info">{inv.payment_method}</Badge>
-                      </td>
-                      <td className="p-2 text-xs">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => setSelectedInvoice(inv)}
-                        >
-                          Xem
-                        </Button>
-                      </td>
-                    </tr>
-                  )}
-                />
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           </Card>
         </div>
       )}
 
-      {/* TAB 2: NHẬT KÝ ÁNH */}
+      {/* TAB 2: NHẬT KÝ ẢNH */}
       {activeTab === "photos" && (
         <Panel>
           <PanelHeader
-            title="Nhật ký hình ảnh điều trị"
+            title="Nhật ký hình ảnh"
             action={
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 flex-wrap">
                 <Select
                   value={photoFilter}
                   onChange={(e: ChangeEvent<HTMLSelectElement>) =>
                     setPhotoFilter(e.target.value)
                   }
-                  className="w-36"
+                  className="w-28"
                 >
-                  <option value="ALL">Tất cả ảnh</option>
-                  <option value="BEFORE">Trước điều trị (BEFORE)</option>
-                  <option value="PROGRESS">Tiến trình (PROGRESS)</option>
-                  <option value="AFTER">Sau điều trị (AFTER)</option>
+                  <option value="ALL">Tất cả</option>
+                  <option value="BEFORE">BEFORE</option>
+                  <option value="PROGRESS">PROGRESS</option>
+                  <option value="AFTER">AFTER</option>
                 </Select>
-                <Button onClick={() => setIsUploadModalOpen(true)}>
-                  + Tải ảnh mới
+                <Button size="sm" onClick={() => setIsUploadModalOpen(true)}>
+                  📷 + Ảnh
                 </Button>
               </div>
             }
@@ -545,38 +497,35 @@ export function CustomerProfilePage({
               <Spinner className="py-8" />
             ) : filteredPhotos.length === 0 ? (
               <EmptyState
-                title="Chưa có hình ảnh nào"
-                description="Tải ảnh điều trị BEFORE, PROGRESS, AFTER để theo dõi tiến trình làm đẹp của khách."
+                title="Chưa có hình ảnh"
+                description="Chụp hoặc tải ảnh điều trị để theo dõi tiến trình của khách."
                 action={
                   <Button onClick={() => setIsUploadModalOpen(true)}>
-                    Tải ảnh ngay
+                    📷 Tải ảnh ngay
                   </Button>
                 }
               />
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                 {filteredPhotos.map((photo) => (
                   <div
                     key={photo.id}
-                    className="group relative bg-white border rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow"
+                    className="group relative bg-white border rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow aspect-square"
+                    onClick={() => setPreviewPhoto(photo)}
                   >
-                    <div
-                      className="aspect-square bg-gray-100 overflow-hidden cursor-pointer"
-                      onClick={() => setPreviewPhoto(photo)}
-                    >
-                      {photo.signed_url ? (
-                        <img
-                          src={photo.signed_url}
-                          alt={photo.photo_type}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">
-                          Lỗi tải ảnh
-                        </div>
-                      )}
-                    </div>
-                    <div className="p-2 flex items-center justify-between bg-white border-t">
+                    {photo.signed_url ? (
+                      <img
+                        src={photo.signed_url}
+                        alt={photo.photo_type}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">
+                        Lỗi tải ảnh
+                      </div>
+                    )}
+                    <div className="absolute bottom-0 left-0 right-0 bg-black/60 p-1.5 flex items-center justify-between">
                       <Badge
                         variant={
                           photo.photo_type === "BEFORE"
@@ -585,25 +534,20 @@ export function CustomerProfilePage({
                               ? "warning"
                               : "success"
                         }
+                        className="text-[10px]"
                       >
                         {photo.photo_type}
                       </Badge>
                       <button
-                        onClick={() => handleDeletePhoto(photo)}
-                        className="text-gray-400 hover:text-red-600 text-xs font-semibold p-1"
-                        title="Xóa ảnh"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeletePhoto(photo);
+                        }}
+                        className="text-white/70 hover:text-red-400 text-xs font-semibold p-1"
                       >
-                        Xóa
+                        ✕
                       </button>
                     </div>
-                    {photo.notes && (
-                      <div
-                        className="px-2 pb-2 text-[11px] text-gray-500 truncate"
-                        title={photo.notes}
-                      >
-                        {photo.notes}
-                      </div>
-                    )}
                   </div>
                 ))}
               </div>
@@ -615,88 +559,112 @@ export function CustomerProfilePage({
       {/* TAB 3: LIỆU TRÌNH */}
       {activeTab === "packages" && (
         <Panel>
-          <PanelHeader title="Danh sách Gói liệu trình đã mua" />
+          <PanelHeader title="Danh sách gói liệu trình" />
           <PanelContent>
             {loadingPackages ? (
               <Spinner className="py-8" />
             ) : packages.length === 0 ? (
               <EmptyState
-                title="Khách hàng chưa có gói liệu trình"
-                description="Các gói dịch vụ hoặc thẻ liệu trình mua trước sẽ hiển thị tại đây."
+                title="Chưa có gói liệu trình"
+                description="Khách hàng chưa mua gói dịch vụ nào."
               />
             ) : (
-              <Table
-                headers={[
-                  "Tên Gói Liệu Trình",
-                  "Tổng số buổi",
-                  "Đã sử dụng",
-                  "Còn lại",
-                  "Giá mua",
-                  "Ngày mua",
-                  "Trạng thái",
-                  "Thao tác",
-                ]}
-                data={packages}
-                renderRow={(pkg: CustomerPackage) => {
-                  const usedSessions =
-                    pkg.total_sessions - pkg.remaining_sessions;
+              <div className="space-y-4">
+                {packages.map((pkg) => {
+                  const usedSessions = pkg.total_sessions - pkg.remaining_sessions;
                   const isDepleted = pkg.remaining_sessions <= 0;
+                  const isGift = pkg.is_gift || false;
 
                   return (
-                    <tr
+                    <div
                       key={pkg.id}
-                      className="hover:bg-gray-50 transition-colors"
+                      className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden"
                     >
-                      <td className="p-3 font-semibold text-gray-900">
-                        {pkg.package_name ||
-                          pkg.catalog_item?.name ||
-                          "Liệu trình đặc biệt"}
-                      </td>
-                      <td className="p-3 text-gray-600 text-center">
-                        {pkg.total_sessions} buổi
-                      </td>
-                      <td className="p-3 text-gray-600 text-center">
-                        {usedSessions} buổi
-                      </td>
-                      <td className="p-3 font-bold text-blue-600 text-center">
-                        {pkg.remaining_sessions} buổi
-                      </td>
-                      <td className="p-3 font-medium text-gray-900">
-                        {(pkg.price_paid || 0).toLocaleString("vi-VN")} đ
-                      </td>
-                      <td className="p-3 text-xs text-gray-500">
-                        {new Date(
-                          pkg.purchased_at || pkg.created_at,
-                        ).toLocaleDateString("vi-VN")}
-                      </td>
-                      <td className="p-3">
-                        <Badge
-                          variant={
-                            isDepleted
-                              ? "danger"
-                              : pkg.status === "ACTIVE"
-                                ? "success"
-                                : "warning"
-                          }
-                        >
-                          {isDepleted ? "Đã hết" : pkg.status}
-                        </Badge>
-                      </td>
-                      <td className="p-3">
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          disabled={isDepleted || usingSessionId === pkg.id}
-                          isLoading={usingSessionId === pkg.id}
-                          onClick={() => handleUsePackageSession(pkg)}
-                        >
-                          Trừ 1 buổi
-                        </Button>
-                      </td>
-                    </tr>
+                      <div className="p-4 border-b border-gray-100">
+                        <div className="flex justify-between items-start gap-2">
+                          <div>
+                            <h4 className="font-bold text-gray-900">
+                              {pkg.package_name || pkg.catalog_item?.name || "Gói dịch vụ"}
+                              {isGift && (
+                                <span className="ml-2 text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
+                                  🎁 Quà tặng
+                                </span>
+                              )}
+                            </h4>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              Mua ngày: {new Date(pkg.purchased_at || pkg.created_at).toLocaleDateString("vi-VN")}
+                              {pkg.expires_at && (
+                                <span className="ml-2">
+                                  • Hạn: {new Date(pkg.expires_at).toLocaleDateString("vi-VN")}
+                                </span>
+                              )}
+                            </p>
+                          </div>
+                          <Badge variant={isDepleted ? "danger" : pkg.status === "ACTIVE" ? "success" : "warning"}>
+                            {isDepleted ? "Đã hết" : pkg.status}
+                          </Badge>
+                        </div>
+
+                        <div className="mt-2 flex items-center gap-3 text-xs">
+                          <span className="text-gray-500">Tổng: {pkg.total_sessions} buổi</span>
+                          <span className="text-gray-500">Đã dùng: {usedSessions} buổi</span>
+                          <span className="font-bold text-blue-600">Còn: {pkg.remaining_sessions} buổi</span>
+                        </div>
+
+                        {/* Progress bar */}
+                        <div className="mt-2 w-full bg-gray-200 h-2 rounded-full overflow-hidden">
+                          <div
+                            className="bg-blue-600 h-full transition-all duration-300"
+                            style={{
+                              width: `${(usedSessions / pkg.total_sessions) * 100}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Package items detail */}
+                      {pkg.items && pkg.items.length > 0 && (
+                        <div className="p-3 bg-gray-50 space-y-2">
+                          <p className="text-xs font-semibold text-gray-700">Dịch vụ trong gói:</p>
+                          {pkg.items.map((item) => {
+                            const serviceName = item.package_item?.services?.name || "Dịch vụ";
+                            return (
+                              <div
+                                key={item.id}
+                                className="flex justify-between items-center bg-white p-2 rounded-lg border border-gray-100 text-xs"
+                              >
+                                <span className="font-medium text-gray-800">{serviceName}</span>
+                                <div className="flex items-center gap-3">
+                                  <span className="text-gray-500">
+                                    Còn {item.remaining_quantity} / {item.total_quantity} buổi
+                                  </span>
+                                  {item.remaining_quantity > 0 && !isDepleted && (
+                                    <Button
+                                      size="sm"
+                                      variant="secondary"
+                                      disabled={usingSessionId === pkg.id}
+                                      isLoading={usingSessionId === pkg.id}
+                                      onClick={() => handleUsePackageSession(pkg)}
+                                    >
+                                      Sử dụng
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {isDepleted && (
+                        <div className="p-2 bg-gray-50 text-center text-xs text-gray-500 border-t border-gray-100">
+                          ✅ Đã sử dụng hết gói
+                        </div>
+                      )}
+                    </div>
                   );
-                }}
-              />
+                })}
+              </div>
             )}
           </PanelContent>
         </Panel>
@@ -705,62 +673,61 @@ export function CustomerProfilePage({
       {/* TAB 4: LỊCH SỬ DỊCH VỤ */}
       {activeTab === "history" && (
         <Panel>
-          <PanelHeader title="Nhật ký & Lịch sử sử dụng dịch vụ" />
+          <PanelHeader title="Lịch sử sử dụng dịch vụ" />
           <PanelContent>
             {loadingHistory ? (
               <Spinner className="py-8" />
             ) : history.length === 0 ? (
               <EmptyState
                 title="Chưa có lịch sử dịch vụ"
-                description="Toàn bộ lượt dịch vụ thanh toán trực tiếp và lượt trừ từ gói liệu trình sẽ hiển thị đầy đủ tại đây."
+                description="Khách hàng chưa thực hiện dịch vụ nào."
               />
             ) : (
-              <Table
-                headers={[
-                  "Thời gian",
-                  "Tên Dịch Vụ",
-                  "Hình thức / Nguồn",
-                  "Nhân viên thực hiện",
-                  "Số tiền",
-                  "Ghi chú",
-                ]}
-                data={history}
-                renderRow={(item: ServiceSession) => {
+              <div className="space-y-3">
+                {history.map((item) => {
                   const isPackage = item.source_type === "PACKAGE";
                   return (
-                    <tr key={item.id} className="hover:bg-gray-50">
-                      <td className="p-3 text-xs font-mono text-gray-600">
-                        {new Date(
-                          item.performed_at || item.created_at,
-                        ).toLocaleString("vi-VN")}
-                      </td>
-                      <td className="p-3 font-medium text-gray-900">
-                        {item.catalog_item?.name || "Dịch vụ Spa"}
-                      </td>
-                      <td className="p-3">
-                        <Badge variant={isPackage ? "info" : "neutral"}>
-                          {isPackage
-                            ? "Gói liệu trình"
-                            : "Thanh toán trực tiếp"}
-                        </Badge>
-                      </td>
-                      <td className="p-3 text-sm text-gray-700">
-                        {item.staff?.full_name || "Kỹ thuật viên"}
-                      </td>
-                      <td className="p-3 font-semibold text-gray-900">
-                        {isPackage ? (
-                          <span className="text-gray-400">0 đ</span>
-                        ) : (
-                          `${(item.price_charged || 0).toLocaleString("vi-VN")} đ`
-                        )}
-                      </td>
-                      <td className="p-3 text-xs text-gray-500">
-                        {item.notes || "—"}
-                      </td>
-                    </tr>
+                    <div
+                      key={item.id}
+                      className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm"
+                    >
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="font-semibold text-gray-900">
+                              {item.catalog_item?.name || "Dịch vụ"}
+                            </h4>
+                            <Badge variant={isPackage ? "info" : "neutral"}>
+                              {isPackage ? "📦 Package" : "💰 Mua lẻ"}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {new Date(item.performed_at || item.created_at).toLocaleString("vi-VN")}
+                          </p>
+                          {item.staff && (
+                            <p className="text-xs text-gray-600 mt-0.5">
+                              KTV: {item.staff.full_name}
+                            </p>
+                          )}
+                          {isPackage && item.package_id && (
+                            <p className="text-xs text-blue-600 mt-0.5">
+                              🎁 Gói: #{item.package_id.slice(0, 8)}
+                            </p>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-bold text-emerald-700">
+                            {isPackage ? "0đ" : `${(item.price_charged || 0).toLocaleString("vi-VN")} đ`}
+                          </p>
+                          {item.notes && (
+                            <p className="text-[10px] text-gray-400 mt-1">{item.notes}</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   );
-                }}
-              />
+                })}
+              </div>
             )}
           </PanelContent>
         </Panel>
@@ -848,7 +815,7 @@ export function CustomerProfilePage({
       <Modal
         isOpen={isUploadModalOpen}
         onClose={() => setIsUploadModalOpen(false)}
-        title="Upload Ảnh Điều Trị Mới"
+        title="Upload Ảnh Điều Trị"
       >
         <form onSubmit={handleUploadPhoto} className="space-y-4">
           <div>
@@ -858,6 +825,7 @@ export function CustomerProfilePage({
             <input
               type="file"
               accept="image/*"
+              capture="environment"
               required
               onChange={(e: ChangeEvent<HTMLInputElement>) => {
                 if (e.target.files && e.target.files[0]) {
@@ -866,6 +834,9 @@ export function CustomerProfilePage({
               }}
               className="w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
             />
+            <p className="text-[10px] text-gray-400 mt-1">
+              📱 Chụp ảnh trực tiếp hoặc chọn từ thư viện
+            </p>
           </div>
           <Select
             label="Phân loại ảnh *"
@@ -894,7 +865,7 @@ export function CustomerProfilePage({
               Hủy
             </Button>
             <Button type="submit" isLoading={uploading}>
-              Tải lên
+              📤 Tải lên
             </Button>
           </div>
         </form>
@@ -930,7 +901,7 @@ export function CustomerProfilePage({
                 size="sm"
                 onClick={() => handleDeletePhoto(previewPhoto)}
               >
-                Xóa ảnh
+                🗑 Xóa ảnh
               </Button>
             </div>
           </div>
@@ -958,25 +929,24 @@ export function CustomerProfilePage({
 
             <div className="pt-2">
               <h5 className="font-bold text-xs uppercase text-gray-500 mb-2">
-                Chi tiết sản phẩm / dịch vụ:
+                Chi tiết:
               </h5>
               <div className="divide-y border rounded-lg overflow-hidden">
                 {(selectedInvoice.items || []).map((item, idx) => (
                   <div
                     key={idx}
-                    className="p-2 flex justify-between items-center bg-white"
+                    className="p-2 flex justify-between items-center bg-white text-xs"
                   >
                     <div>
                       <p className="font-semibold text-gray-900">
-                        {item.item_name}
+                        {item.description || item.item_name || "Sản phẩm"}
                       </p>
-                      <p className="text-xs text-gray-500">
-                        {item.quantity} x{" "}
-                        {item.unit_price?.toLocaleString("vi-VN")} đ
+                      <p className="text-gray-500">
+                        {item.quantity} x {item.unit_price?.toLocaleString("vi-VN")} đ
                       </p>
                     </div>
                     <span className="font-bold text-gray-800">
-                      {item.subtotal?.toLocaleString("vi-VN")} đ
+                      {item.total_amount?.toLocaleString("vi-VN")} đ
                     </span>
                   </div>
                 ))}
@@ -985,7 +955,7 @@ export function CustomerProfilePage({
 
             <div className="pt-2 space-y-1 text-right border-t">
               <p className="text-xs text-gray-500">
-                Tổng cộng:{" "}
+                Tổng:{" "}
                 <span className="font-semibold">
                   {selectedInvoice.total_amount?.toLocaleString("vi-VN")} đ
                 </span>
@@ -997,8 +967,7 @@ export function CustomerProfilePage({
                 </span>
               </p>
               <p className="text-base font-bold text-blue-600">
-                Thành tiền:{" "}
-                {selectedInvoice.final_amount?.toLocaleString("vi-VN")} đ
+                Thành tiền: {selectedInvoice.final_amount?.toLocaleString("vi-VN")} đ
               </p>
             </div>
           </div>
@@ -1098,10 +1067,10 @@ export function CustomersPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 max-w-full">
       <PageHeader
         title="Quản lý Khách hàng"
-        description="Danh sách hồ sơ khách hàng, gói liệu trình và nhật ký hình ảnh điều trị"
+        description="Danh sách hồ sơ khách hàng, gói liệu trình và nhật ký hình ảnh"
         action={
           <Button onClick={() => setIsAddModalOpen(true)}>
             + Thêm khách hàng
@@ -1111,11 +1080,11 @@ export function CustomersPage() {
 
       <Panel>
         <PanelHeader
-          title="Danh sách hồ sơ khách hàng"
+          title="Danh sách khách hàng"
           action={
-            <div className="w-72">
+            <div className="w-full sm:w-72">
               <Input
-                placeholder="Tìm theo tên hoặc số điện thoại..."
+                placeholder="🔍 Tìm theo tên hoặc số điện thoại..."
                 value={searchQuery}
                 onChange={(e: ChangeEvent<HTMLInputElement>) =>
                   setSearchQuery(e.target.value)
@@ -1138,56 +1107,41 @@ export function CustomersPage() {
               }
             />
           ) : (
-            <Table
-              headers={[
-                "Mã KH",
-                "Họ & Tên",
-                "Số điện thoại",
-                "Địa chỉ",
-                "Tổng chi tiêu",
-                "Lần ghé cuối",
-                "Thao tác",
-              ]}
-              data={filteredCustomers}
-              renderRow={(item: Customer) => (
-                <tr
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {filteredCustomers.map((item) => (
+                <div
                   key={item.id}
-                  className="hover:bg-gray-50 transition-colors cursor-pointer"
                   onClick={() => setSelectedCustomerId(item.id)}
+                  className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm hover:shadow-md transition-all cursor-pointer"
                 >
-                  <td className="p-3 text-xs font-mono text-gray-500">
-                    {item.code || item.id.substring(0, 8)}
-                  </td>
-                  <td className="p-3 font-medium text-gray-900">
-                    {item.full_name || item.name}
-                  </td>
-                  <td className="p-3 text-gray-600">{item.phone}</td>
-                  <td className="p-3 text-gray-500 text-xs truncate max-w-xs">
-                    {item.address || "—"}
-                  </td>
-                  <td className="p-3 font-semibold text-blue-600">
-                    {(item.total_spend || item.total_spent || 0).toLocaleString(
-                      "vi-VN",
-                    )}{" "}
-                    đ
-                  </td>
-                  <td className="p-3 text-xs text-gray-500">
-                    {item.last_visit
-                      ? new Date(item.last_visit).toLocaleDateString("vi-VN")
-                      : "Chưa có"}
-                  </td>
-                  <td className="p-3" onClick={(e) => e.stopPropagation()}>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setSelectedCustomerId(item.id)}
-                    >
-                      Xem chi tiết
-                    </Button>
-                  </td>
-                </tr>
-              )}
-            />
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-sm shrink-0">
+                      {(item.full_name || item.name || "?").charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-gray-900 truncate">
+                        {item.full_name || item.name}
+                      </p>
+                      <p className="text-sm text-gray-500">{item.phone}</p>
+                    </div>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-gray-100 flex justify-between text-xs text-gray-500">
+                    <span>
+                      Chi tiêu:{" "}
+                      <span className="font-semibold text-blue-600">
+                        {(item.total_spend || 0).toLocaleString("vi-VN")} đ
+                      </span>
+                    </span>
+                    <span>
+                      Ghé gần nhất:{" "}
+                      {item.last_visit
+                        ? new Date(item.last_visit).toLocaleDateString("vi-VN")
+                        : "—"}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </PanelContent>
       </Panel>
