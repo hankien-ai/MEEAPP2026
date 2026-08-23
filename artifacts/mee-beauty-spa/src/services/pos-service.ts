@@ -15,7 +15,7 @@ import { customerService } from "./customer.service";
 
 export class POSService {
   /**
-   * Lấy staff đầu tiên – không filter org/branch
+   * Lấy staff đầu tiên – chỉ select các cột tồn tại
    */
   static async getLoggedInStaff(): Promise<Staff | null> {
     console.log("🔍 getLoggedInStaff: lấy staff không filter");
@@ -45,7 +45,6 @@ export class POSService {
     }
 
     console.log(`🔍 searchCustomers: tìm "${query}"`);
-    // Sử dụng customerService.fetchCustomers() và lọc client-side
     try {
       const allCustomers = await customerService.fetchCustomers();
       const filtered = allCustomers.filter(
@@ -62,13 +61,13 @@ export class POSService {
   }
 
   /**
-   * Lấy danh sách staff – query trực tiếp (đơn giản)
+   * Lấy danh sách staff – không select avatar_url vì không có
    */
   static async fetchStaffList(): Promise<Staff[]> {
     console.log("🔍 fetchStaffList: lấy danh sách staff không filter");
     const { data, error } = await supabase
       .from("staff")
-      .select("id, full_name, role, avatar_url")
+      .select("id, full_name, role")
       .eq("status", "ACTIVE")
       .order("full_name");
 

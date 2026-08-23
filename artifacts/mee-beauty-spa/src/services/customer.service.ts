@@ -56,25 +56,34 @@ export async function fetchCustomerById(id: string): Promise<Customer | null> {
   return data as Customer;
 }
 
+/**
+ * Tạo khách hàng mới – chỉ gửi các cột thực sự tồn tại
+ */
 export async function createCustomer(
   payload: CustomerInput,
 ): Promise<Customer> {
   const nameToUse = payload.full_name || payload.name || "Khách hàng mới";
 
-  // Chỉ insert các cột chắc chắn tồn tại
   const insertData: any = {
     organization_id: DEFAULT_ORG_ID,
     branch_id: DEFAULT_BRANCH_ID,
     full_name: nameToUse,
     name: nameToUse,
     phone: payload.phone,
+    email: payload.email || null,
+    birth_date: payload.birth_date || null,
+    gender: payload.gender || null,
+    notes: payload.notes || null,
+    total_spend: payload.total_spend || 0,
+    total_spent: payload.total_spent || 0,
+    total_visits: 0,
     updated_at: new Date().toISOString(),
   };
 
-  // Thêm các trường khác nếu có (có thể không tồn tại, nhưng tạm thời bỏ qua)
-  if (payload.email) insertData.email = payload.email;
-  if (payload.notes) insertData.notes = payload.notes;
-  // Các trường birth_date, gender, address, total_spend, total_spent, total_visits, last_visit sẽ dùng default
+  // Chỉ thêm address nếu tồn tại trong payload và có giá trị
+  if (payload.address) {
+    insertData.address = payload.address;
+  }
 
   const { data, error } = await supabase
     .from("customers")
@@ -98,28 +107,6 @@ export async function updateCustomer(
     ...payload,
     updated_at: new Date().toISOString(),
   };
-
-  // Loại bỏ các trường có thể không tồn tại hoặc null
-  // Chỉ cập nhật các trường cơ bản
-  const allowedFields = [
-    "full_name",
-    "name",
-    "phone",
-    "email",
-    "notes",
-    "birth_date",
-    "gender",
-    "address",
-    "total_spend",
-    "total_spent",
-    "total_visits",
-    "last_visit",
-  ];
-  for (const key of Object.keys(updateData)) {
-    if (!allowedFields.includes(key) && key !== "updated_at") {
-      delete updateData[key];
-    }
-  }
 
   if (payload.full_name && !payload.name) {
     updateData.name = payload.full_name;
@@ -305,7 +292,10 @@ export async function fetchCustomerPackageItems(
     .eq("customer_package_id", customerPackageId);
 
   if (error) {
-    console.error(`Error fetching package items for ${customerPackageId}:`, error);
+    console.error(
+      `Error fetching package items for ${customerPackageId}:`,
+      error,
+    );
     return [];
   }
 
@@ -358,8 +348,15 @@ export async function usePackageSessionV2(
     };
   }
 
-  return data as { success: boolean; message: string; remaining_quantity: number };
+  return data as {
+    success: boolean;
+    message: string;
+    remaining_quantity: number;
+  };
 }
+
+// Export alias usePackageSession để tương thích code cũ
+export const usePackageSession = usePackageSessionV2;
 
 /**
  * Tạo gift package
@@ -368,7 +365,11 @@ export async function createGiftPackage(
   customerId: string,
   packageId: string,
   createdBy?: string,
-): Promise<{ success: boolean; message: string; customer_package_id?: string }> {
+): Promise<{
+  success: boolean;
+  message: string;
+  customer_package_id?: string;
+}> {
   const { data, error } = await supabase.rpc("create_gift_package", {
     p_customer_id: customerId,
     p_package_id: packageId,
@@ -383,7 +384,11 @@ export async function createGiftPackage(
     };
   }
 
-  return data as { success: boolean; message: string; customer_package_id?: string };
+  return data as {
+    success: boolean;
+    message: string;
+    customer_package_id?: string;
+  };
 }
 
 // --- CUSTOMER SERVICE HISTORY ---
@@ -427,9 +432,6 @@ export async function fetchCustomerInvoices(
   return (data as Invoice[]) || [];
 }
 
-// Export alias usePackageSession để tương thích code cũ
-export const usePackageSession = usePackageSessionV2;
-
 // Compatibility Helper Aliases
 export const getCustomers = fetchCustomers;
 export const getCustomerById = fetchCustomerById;
@@ -455,8 +457,8 @@ export const customerService = {
   fetchCustomerServiceHistory,
   fetchCustomerInvoices,
   usePackageSessionV2,
+  usePackageSession,
   createGiftPackage,
-  usePackageSession, // alias
 };
 
 export default customerService;

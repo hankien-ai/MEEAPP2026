@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { CartItem, Staff } from '@/types/pos';
 
 interface Props {
@@ -9,6 +9,9 @@ interface Props {
   onUpdateSellerStaff: (cartItemId: string, staffId: string) => void;
   onUpdatePerformingStaff: (cartItemId: string, staffId: string) => void;
   onRemoveItem: (cartItemId: string) => void;
+  onOverallDiscountChange?: (type: 'percent' | 'fixed', value: number) => void;
+  overallDiscountType?: 'percent' | 'fixed';
+  overallDiscountValue?: number;
 }
 
 export const POSCart: React.FC<Props> = ({
@@ -18,7 +21,10 @@ export const POSCart: React.FC<Props> = ({
   onUpdateDiscount,
   onUpdateSellerStaff,
   onUpdatePerformingStaff,
-  onRemoveItem
+  onRemoveItem,
+  onOverallDiscountChange,
+  overallDiscountType = 'fixed',
+  overallDiscountValue = 0,
 }) => {
   const formatVND = (val: number) => new Intl.NumberFormat('vi-VN').format(val) + ' đ';
 
@@ -40,6 +46,44 @@ export const POSCart: React.FC<Props> = ({
         <span>🛒 GIỎ HÀNG ({items.length})</span>
         <span className="text-[11px] text-slate-500 font-normal">NV Sale / KTV</span>
       </div>
+
+      {/* Discount tổng đơn */}
+      {onOverallDiscountChange && (
+        <div className="p-3 bg-slate-50/50 border-b border-slate-200 flex items-center gap-3 text-xs">
+          <span className="font-medium text-slate-700">Giảm giá tổng đơn:</span>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => onOverallDiscountChange('fixed', overallDiscountValue)}
+              className={`px-2 py-0.5 rounded text-xs font-medium ${
+                overallDiscountType === 'fixed' ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-600'
+              }`}
+            >
+              ₫ Tiền
+            </button>
+            <button
+              type="button"
+              onClick={() => onOverallDiscountChange('percent', overallDiscountValue)}
+              className={`px-2 py-0.5 rounded text-xs font-medium ${
+                overallDiscountType === 'percent' ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-600'
+              }`}
+            >
+              % Giảm
+            </button>
+          </div>
+          <input
+            type="number"
+            value={overallDiscountValue}
+            onChange={(e) => onOverallDiscountChange(overallDiscountType, Number(e.target.value))}
+            className="w-20 text-right p-1 border border-slate-300 rounded focus:ring-1 focus:ring-emerald-500 text-xs font-semibold bg-white"
+            min={0}
+            placeholder={overallDiscountType === 'percent' ? '%' : '₫'}
+          />
+          <span className="text-[10px] text-slate-400">
+            {overallDiscountType === 'percent' ? '(%)' : '(₫)'}
+          </span>
+        </div>
+      )}
 
       <div className="divide-y divide-slate-100 max-h-[400px] overflow-y-auto">
         {items.map((item) => {
@@ -136,7 +180,7 @@ export const POSCart: React.FC<Props> = ({
                   </select>
                 </div>
 
-                {isService ? (
+                {isService && (
                   <div>
                     <label className="text-[11px] text-slate-500 block mb-0.5">KTV Thực hiện:</label>
                     <select
@@ -151,15 +195,17 @@ export const POSCart: React.FC<Props> = ({
                         </option>
                       ))}
                     </select>
+                    {/* Hiển thị KTV splits nếu có */}
                     {item.ktv_splits && item.ktv_splits.length > 0 && (
                       <div className="mt-1 text-[10px] text-slate-500">
-                        {item.ktv_splits.map((s) => (
-                          <div key={s.staff_id}>{s.staff_name || 'KTV'}: {s.share_percent}%</div>
+                        {item.ktv_splits.map((s, idx) => (
+                          <div key={idx}>{s.staff_name || 'KTV'}: {s.share_percent}%</div>
                         ))}
                       </div>
                     )}
                   </div>
-                ) : (
+                )}
+                {!isService && (
                   <div className="text-[11px] text-slate-400 flex items-center italic">
                     (Sản phẩm/Gói không chọn KTV)
                   </div>

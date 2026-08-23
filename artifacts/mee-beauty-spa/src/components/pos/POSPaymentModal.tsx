@@ -13,9 +13,12 @@ interface Props {
   onConfirmPayment: (
     paymentMethod: PaymentMethod,
     cashGiven: number,
+    paidAmount: number,
     notes?: string,
   ) => void;
   isSubmitting: boolean;
+  // Thêm props để xác định QR code
+  qrCodeUrl?: string;
 }
 
 export const POSPaymentModal: React.FC<Props> = ({
@@ -29,9 +32,11 @@ export const POSPaymentModal: React.FC<Props> = ({
   staffList,
   onConfirmPayment,
   isSubmitting,
+  qrCodeUrl,
 }) => {
   const [method, setMethod] = useState<PaymentMethod>("CASH");
   const [cashGiven, setCashGiven] = useState<number>(totalAmount);
+  const [paidAmount, setPaidAmount] = useState<number>(0);
   const [notes, setNotes] = useState<string>("");
   const [errorMessage, setErrorMessage] = useState<string>("");
 
@@ -40,6 +45,7 @@ export const POSPaymentModal: React.FC<Props> = ({
   const formatVND = (val: number) =>
     new Intl.NumberFormat("vi-VN").format(val) + " đ";
   const changeDue = Math.max(0, cashGiven - totalAmount);
+  const remainingDebt = Math.max(0, totalAmount - paidAmount);
 
   const getStaffName = (id?: string) => {
     if (!id) return "---";
@@ -50,9 +56,13 @@ export const POSPaymentModal: React.FC<Props> = ({
   const handlePay = () => {
     setErrorMessage("");
 
-    if (method === "CASH" && cashGiven < totalAmount) {
-      setErrorMessage("Số tiền tiền mặt khách đưa chưa đủ!");
-      return;
+    if (method === "CASH") {
+      // Bỏ kiểm tra tiền khách đưa vì đã bỏ input
+      // chỉ cần tổng tiền > 0
+      if (totalAmount <= 0) {
+        setErrorMessage("Số tiền thanh toán phải lớn hơn 0!");
+        return;
+      }
     }
 
     if ((method === "DEBT" || method === "GIFT") && !customer) {
@@ -60,7 +70,12 @@ export const POSPaymentModal: React.FC<Props> = ({
       return;
     }
 
-    onConfirmPayment(method, cashGiven, notes);
+    if (method === "DEBT" && paidAmount > totalAmount) {
+      setErrorMessage("Số tiền trả trước không được lớn hơn tổng đơn!");
+      return;
+    }
+
+    onConfirmPayment(method, cashGiven, paidAmount, notes);
   };
 
   return (
@@ -119,7 +134,7 @@ export const POSPaymentModal: React.FC<Props> = ({
                     <div>Sale: {getStaffName(it.seller_staff_id)}</div>
                     {it.item_type === "SERVICE" && (
                       <div className="text-blue-600">
-                        KTV: {getStaffName(it.performing_staff_id)}
+                        KTV: {it.ktv_splits?.map(s => s.staff_name).join(", ") || "Chưa chọn"}
                       </div>
                     )}
                   </td>
@@ -195,53 +210,52 @@ export const POSPaymentModal: React.FC<Props> = ({
           </div>
 
           {method === "CASH" && (
-            <div className="bg-emerald-50/60 p-3 rounded-xl border border-emerald-200 space-y-2">
-              <div className="flex items-center justify-between gap-4">
-                <label className="text-xs font-bold text-slate-700">Tiền khách đưa:</label>
-                <input
-                  type="number"
-                  value={cashGiven}
-                  onChange={(e) => setCashGiven(Number(e.target.value))}
-                  className="w-40 text-right px-3 py-1 font-bold text-sm border border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-400 bg-white"
-                />
-              </div>
-              <div className="flex justify-end gap-1">
-                {[totalAmount, 100000, 200000, 500000].map((amt) => (
-                  <button
-                    key={amt}
-                    type="button"
-                    onClick={() => setCashGiven(amt)}
-                    className="text-[11px] bg-white border border-emerald-300 hover:bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-medium"
-                  >
-                    {formatVND(amt)}
-                  </button>
-                ))}
-              </div>
-              <div className="flex justify-between items-center text-xs font-bold border-t border-emerald-200 pt-2">
-                <span className="text-slate-600">Tiền thừa trả khách:</span>
-                <span className="text-emerald-700 text-sm">{formatVND(changeDue)}</span>
-              </div>
+            <div className="bg-emerald-50/60 p-3 rounded-xl border border-emerald-200">
+              <p className="text-xs text-slate-700">💵 Thanh toán bằng tiền mặt.</p>
+              <p className="text-xs font-bold text-emerald-700 mt-1">Tổng tiền: {formatVND(totalAmount)}</p>
+              {/* Đã bỏ input tiền khách đưa */}
             </div>
           )}
 
           {method === "BANK_TRANSFER" && (
-            <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-800">
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-800 space-y-2">
               <p>💳 Chuyển khoản qua ngân hàng. Số tiền cần chuyển: <strong>{formatVND(totalAmount)}</strong></p>
+              {qrCodeUrl ? (
+                <div className="flex justify-center">
+                  <img src={qrCodeUrl} alt="QR Code thanh toán" className="w-32 h-32" />
+                </div>
+              ) : (
+                <p className="text-[11px] text-blue-600">🔧 Vui lòng cấu hình mã QR trong trang thiết lập</p>
+              )}
             </div>
           )}
 
           {method === "GIFT" && (
             <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-800">
               <p>🎁 Tặng gói dịch vụ cho khách hàng <strong>{customer?.full_name || "chưa chọn"}</strong>.</p>
-              <p className="mt-1 text-[11px]">Khách sẽ nhận được gói quà tặng theo cấu hình.</p>
               <p className="mt-1 text-[11px] font-bold text-purple-700">Số tiền phải trả: 0đ</p>
+              <p className="mt-0.5 text-[10px] text-purple-600">* Các dịch vụ sẽ được tạo thành gói trong hồ sơ khách hàng</p>
             </div>
           )}
 
           {method === "DEBT" && (
-            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 space-y-2">
               <p>📝 Ghi nợ cho khách <strong>{customer?.full_name || "chưa chọn"}</strong>.</p>
-              <p className="mt-1 text-[11px]">Số tiền còn nợ: <strong>{formatVND(totalAmount)}</strong></p>
+              <div className="flex items-center justify-between gap-4">
+                <label className="text-xs font-bold text-slate-700">Khách trả trước:</label>
+                <input
+                  type="number"
+                  value={paidAmount}
+                  onChange={(e) => setPaidAmount(Number(e.target.value))}
+                  className="w-40 text-right px-3 py-1 font-bold text-sm border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-400 bg-white"
+                  min={0}
+                  max={totalAmount}
+                />
+              </div>
+              <div className="flex justify-between items-center text-xs font-bold border-t border-amber-200 pt-2">
+                <span className="text-slate-600">Còn nợ:</span>
+                <span className="text-amber-700 text-sm">{formatVND(remainingDebt)}</span>
+              </div>
             </div>
           )}
 

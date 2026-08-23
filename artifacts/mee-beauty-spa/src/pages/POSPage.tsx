@@ -14,7 +14,7 @@ import { customerService } from "@/services/customer.service";
 import { POSCustomerSelect } from "@/components/pos/POSCustomerSelect";
 import { POSCustomerBenefits } from "@/components/pos/POSCustomerBenefits";
 import { POSPackageUsageModal } from "@/components/pos/POSPackageUsageModal";
-import { POSMultiKTVSelector } from "@/components/pos/POSMultiKTVSelector";
+import { POSKTVSelector } from "@/components/pos/POSKTVSelector";
 import { POSCatalogPicker } from "@/components/pos/POSCatalogPicker";
 import { POSCart } from "@/components/pos/POSCart";
 import { POSPaymentModal } from "@/components/pos/POSPaymentModal";
@@ -29,8 +29,13 @@ export const POSPage: React.FC = () => {
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [overallDiscount, setOverallDiscount] = useState<number>(0);
+  const [overallDiscountType, setOverallDiscountType] = useState<'percent' | 'fixed'>('fixed');
+  const [overallDiscountValue, setOverallDiscountValue] = useState<number>(0);
 
-  // Package usage states
+  // Seller staff selection
+  const [selectedSellerId, setSelectedSellerId] = useState<string | undefined>(undefined);
+
+  // Package usage modal
   const [packageUsageModal, setPackageUsageModal] = useState<{
     isOpen: boolean;
     customerPackageId: string;
@@ -44,6 +49,9 @@ export const POSPage: React.FC = () => {
     type: "success" | "error";
     message: string;
   } | null>(null);
+
+  // QR Code placeholder (sẽ được config sau)
+  const [qrCodeUrl, setQrCodeUrl] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     loadData();
@@ -64,6 +72,7 @@ export const POSPage: React.FC = () => {
     setPackages(pkgData);
     setStaffList(staffData);
     setLoggedStaff(logged);
+    setSelectedSellerId(logged?.id);
     setLoading(false);
   };
 
@@ -73,13 +82,10 @@ export const POSPage: React.FC = () => {
   };
 
   const hasPackageInCart = cartItems.some((it) => it.item_type === "PACKAGE");
-  const getDefaultSellerId = () => loggedStaff?.id || undefined;
+  const getDefaultSellerId = () => selectedSellerId || loggedStaff?.id || undefined;
 
-  // ===================== HANDLERS =====================
-
+  // ========== ADD ITEMS TO CART ==========
   const handleAddService = (service: CatalogServiceItem) => {
-    // Kiểm tra khách có package phù hợp không
-    // (phần này sẽ được xử lý thông qua POSCustomerBenefits)
     setCartItems((prev) => {
       const existing = prev.find(
         (it) => it.item_type === "SERVICE" && it.catalog_item_id === service.catalog_item_id,
@@ -208,6 +214,7 @@ export const POSPage: React.FC = () => {
     });
   };
 
+  // ========== CART OPERATIONS ==========
   const handleUpdateQuantity = (cartItemId: string, newQty: number) => {
     if (newQty <= 0) {
       handleRemoveItem(cartItemId);
@@ -262,16 +269,6 @@ export const POSPage: React.FC = () => {
     );
   };
 
-  const handleUpdatePerformingStaff = (cartItemId: string, staffId: string) => {
-    setCartItems((prev) =>
-      prev.map((it) =>
-        it.cart_item_id === cartItemId
-          ? { ...it, performing_staff_id: staffId }
-          : it,
-      ),
-    );
-  };
-
   const handleUpdateKTYSplits = (cartItemId: string, splits: KTVSplit[]) => {
     setCartItems((prev) =>
       prev.map((it) =>
@@ -286,16 +283,23 @@ export const POSPage: React.FC = () => {
     setCartItems((prev) => prev.filter((it) => it.cart_item_id !== cartItemId));
   };
 
-  const {
-    subtotal,
-    discount_amount: totalDiscount,
-    total_amount: finalTotal,
-  } = POSService.calculateTotals(cartItems, overallDiscount);
+  // ========== DISCOUNT HANDLING ==========
+  const handleOverallDiscountChange = (type: 'percent' | 'fixed', value: number) => {
+    setOverallDiscountType(type);
+    setOverallDiscountValue(value);
+    // Tính tổng discount dựa trên subtotal
+    const subtotal = cartItems.reduce((sum, item) => sum + item.total_amount, 0);
+    let discountAmount = 0;
+    if (type === 'percent') {
+      discountAmount = Math.round((subtotal * value) / 100);
+    } else {
+      discountAmount = Math.min(value, subtotal);
+    }
+    setOverallDiscount(discountAmount);
+  };
 
-  // ===================== PACKAGE USAGE =====================
-
+  // ========== PACKAGE USAGE ==========
   const handleUsePackage = async (customerPackageId: string, packageItemId: string, serviceId: string, serviceName: string) => {
-    // Tìm thông tin package để hiển thị trong modal
     try {
       const items = await customerService.fetchCustomerPackageItems(customerPackageId);
       const packageItems = items.map((item) => ({
@@ -329,8 +333,7 @@ export const POSPage: React.FC = () => {
       if (result.success) {
         showAlert("success", `Sử dụng package thành công. Còn ${result.remaining_quantity} buổi`);
         setPackageUsageModal(null);
-        // Refresh benefits
-        await loadData();
+        loadData();
       } else {
         showAlert("error", result.message);
       }
@@ -342,17 +345,19 @@ export const POSPage: React.FC = () => {
   };
 
   const handleSelectGift = async (customerPackageId: string) => {
-    // Tương tự như use package, nhưng xác nhận là gift
     handleUsePackage(customerPackageId, "", "", "");
   };
 
   const handlePayDebt = () => {
-    // Mở payment modal với DEBT option
     setIsPaymentModalOpen(true);
   };
 
-  // ===================== CHECKOUT =====================
+  // ========== CALCULATE TOTALS ==========
+  const subtotal = cartItems.reduce((sum, item) => sum + item.total_amount, 0);
+  const totalDiscount = overallDiscount;
+  const finalTotal = Math.max(0, subtotal - totalDiscount);
 
+  // ========== CHECKOUT ==========
   const handleSaveDraft = async () => {
     if (cartItems.length === 0) {
       showAlert("error", "Giỏ hàng đang trống!");
@@ -368,7 +373,7 @@ export const POSPage: React.FC = () => {
 
     const payload = {
       customer_id: customer?.id || null,
-      seller_staff_id: loggedStaff?.id || null,
+      seller_staff_id: getDefaultSellerId() || null,
       status: "DRAFT" as const,
       subtotal,
       discount_amount: totalDiscount,
@@ -378,7 +383,7 @@ export const POSPage: React.FC = () => {
         catalog_item_id: it.catalog_item_id || null,
         package_id: it.package_id || null,
         actual_service_id: it.actual_service_id || null,
-        seller_staff_id: it.seller_staff_id || loggedStaff?.id || null,
+        seller_staff_id: it.seller_staff_id || getDefaultSellerId() || null,
         performing_staff_id: it.performing_staff_id || null,
         description: it.name,
         quantity: it.quantity,
@@ -386,6 +391,10 @@ export const POSPage: React.FC = () => {
         discount_amount: it.discount_amount,
         total_amount: it.total_amount,
         is_gift: false,
+        use_package: it.use_package || false,
+        customer_package_id: it.customer_package_id,
+        package_item_id: it.package_item_id,
+        ktv_splits: it.ktv_splits,
       })),
     };
 
@@ -397,6 +406,7 @@ export const POSPage: React.FC = () => {
       setCartItems([]);
       setCustomer(null);
       setOverallDiscount(0);
+      setOverallDiscountValue(0);
     } else {
       showAlert("error", res.error || "Lưu đơn nháp thất bại!");
     }
@@ -430,17 +440,20 @@ export const POSPage: React.FC = () => {
   const handleConfirmPayment = async (
     method: PaymentMethod,
     cashGiven: number,
+    paidAmount: number,
     notes?: string,
   ) => {
     setIsSubmitting(true);
 
     const isGift = method === "GIFT";
     const finalTotalAmount = isGift ? 0 : finalTotal;
+    const isDebt = method === "DEBT";
+    const actualPaidAmount = isDebt ? paidAmount : finalTotalAmount;
 
     const payload = {
       customer_id: customer?.id || null,
-      seller_staff_id: loggedStaff?.id || null,
-      status: (method === "DEBT" ? "PARTIALLY_PAID" : "PAID") as const,
+      seller_staff_id: getDefaultSellerId() || null,
+      status: (isDebt ? "PARTIALLY_PAID" : "PAID") as const,
       subtotal,
       discount_amount: totalDiscount,
       total_amount: finalTotalAmount,
@@ -448,12 +461,12 @@ export const POSPage: React.FC = () => {
       cash_given: cashGiven,
       notes: notes || undefined,
       is_gift: isGift,
-      paid_amount: method === "DEBT" ? 0 : finalTotalAmount,
+      paid_amount: actualPaidAmount,
       items: cartItems.map((it) => ({
         catalog_item_id: it.catalog_item_id || null,
         package_id: it.package_id || null,
         actual_service_id: it.actual_service_id || null,
-        seller_staff_id: it.seller_staff_id || loggedStaff?.id || null,
+        seller_staff_id: it.seller_staff_id || getDefaultSellerId() || null,
         performing_staff_id: it.performing_staff_id || null,
         description: it.name,
         quantity: it.quantity,
@@ -483,6 +496,7 @@ export const POSPage: React.FC = () => {
       setCartItems([]);
       setCustomer(null);
       setOverallDiscount(0);
+      setOverallDiscountValue(0);
       loadData();
     } else {
       showAlert("error", res.error || "Thanh toán thất bại!");
@@ -491,8 +505,7 @@ export const POSPage: React.FC = () => {
 
   const formatVND = (val: number) => new Intl.NumberFormat("vi-VN").format(val) + " đ";
 
-  // ===================== RENDER =====================
-
+  // ========== RENDER ==========
   return (
     <div className="min-h-screen bg-slate-100 p-3 sm:p-4 font-sans text-slate-800">
       {notification && (
@@ -507,7 +520,7 @@ export const POSPage: React.FC = () => {
         </div>
       )}
 
-      <header className="bg-white rounded-xl border border-slate-200 p-3 mb-3 shadow-sm flex justify-between items-center">
+      <header className="bg-white rounded-xl border border-slate-200 p-3 mb-3 shadow-sm flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-black text-sm shadow-md shadow-emerald-600/30">
             M
@@ -516,20 +529,38 @@ export const POSPage: React.FC = () => {
             <h1 className="font-extrabold text-slate-900 text-sm sm:text-base">
               POS Thu Ngân
             </h1>
-            {loggedStaff && (
-              <p className="text-[10px] text-slate-500">
-                Sale: {loggedStaff.full_name}
-              </p>
-            )}
+            <p className="text-[10px] text-slate-500">
+              Sale: {loggedStaff?.full_name || "Chưa xác định"}
+            </p>
           </div>
         </div>
 
-        <button
-          onClick={loadData}
-          className="px-2.5 py-1.5 border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg text-[10px] font-medium transition-all"
-        >
-          🔄 Tải lại
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Dropdown chọn nhân viên chính (chỉ hiển thị nếu là admin) */}
+          {/* Giả định: nếu loggedStaff có role = 'admin' thì hiển thị dropdown */}
+          {loggedStaff?.role === 'admin' && (
+            <div className="flex items-center gap-1 text-xs">
+              <span className="text-slate-500">Sale:</span>
+              <select
+                value={selectedSellerId || ""}
+                onChange={(e) => setSelectedSellerId(e.target.value || undefined)}
+                className="border border-slate-300 rounded px-2 py-1 text-xs bg-white focus:ring-1 focus:ring-emerald-500"
+              >
+                <option value="">-- Chọn --</option>
+                {staffList.map((s) => (
+                  <option key={s.id} value={s.id}>{s.full_name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <button
+            onClick={loadData}
+            className="px-2.5 py-1.5 border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg text-[10px] font-medium transition-all"
+          >
+            🔄 Tải lại
+          </button>
+        </div>
       </header>
 
       {loading ? (
@@ -573,34 +604,34 @@ export const POSPage: React.FC = () => {
               onUpdateQuantity={handleUpdateQuantity}
               onUpdateDiscount={handleUpdateDiscount}
               onUpdateSellerStaff={handleUpdateSellerStaff}
-              onUpdatePerformingStaff={handleUpdatePerformingStaff}
+              onUpdatePerformingStaff={() => {}}
               onRemoveItem={handleRemoveItem}
+              onOverallDiscountChange={handleOverallDiscountChange}
+              overallDiscountType={overallDiscountType}
+              overallDiscountValue={overallDiscountValue}
             />
 
-            {/* Multi KTV selector cho service đầu tiên chưa có KTV */}
-            {cartItems.some((item) => item.item_type === "SERVICE" && (!item.ktv_splits || item.ktv_splits.length === 0)) && (
-              <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-                <div className="text-xs font-bold text-slate-700 mb-2">Phân công KTV</div>
-                {cartItems
-                  .filter((item) => item.item_type === "SERVICE" && (!item.ktv_splits || item.ktv_splits.length === 0))
-                  .map((item) => {
-                    const totalComm = item.performance_commission_type === "PERCENT"
-                      ? Math.round((item.total_amount * Math.min(100, Math.max(0, Number(item.performance_commission_value || 0)))) / 100)
-                      : Math.max(0, Number(item.performance_commission_value || 0)) * item.quantity;
-                    return (
-                      <div key={item.cart_item_id} className="mb-2 p-2 bg-slate-50 rounded-lg border border-slate-200">
-                        <div className="text-xs font-medium text-slate-700 mb-1">{item.name}</div>
-                        <POSMultiKTVSelector
-                          staffList={staffList}
-                          selectedSplits={item.ktv_splits || []}
-                          onSplitsChange={(splits) => handleUpdateKTYSplits(item.cart_item_id, splits)}
-                          totalCommission={totalComm}
-                        />
-                      </div>
-                    );
-                  })}
-              </div>
-            )}
+            {/* KTV Selector cho từng Service chưa có splits */}
+            {cartItems
+              .filter((item) => item.item_type === "SERVICE" && (!item.ktv_splits || item.ktv_splits.length === 0))
+              .map((item) => {
+                const totalComm = item.performance_commission_type === "PERCENT"
+                  ? Math.round((item.total_amount * Math.min(100, Math.max(0, Number(item.performance_commission_value || 0)))) / 100)
+                  : Math.max(0, Number(item.performance_commission_value || 0)) * item.quantity;
+                return (
+                  <div key={item.cart_item_id} className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                    <div className="text-xs font-bold text-slate-700 mb-2">
+                      Phân công KTV cho "{item.name}"
+                    </div>
+                    <POSKTVSelector
+                      staffList={staffList}
+                      selectedSplits={item.ktv_splits || []}
+                      onSplitsChange={(splits) => handleUpdateKTYSplits(item.cart_item_id, splits)}
+                      totalCommission={totalComm}
+                    />
+                  </div>
+                );
+              })}
 
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2 text-xs">
               <div className="flex justify-between text-slate-600">
@@ -608,18 +639,8 @@ export const POSPage: React.FC = () => {
                 <span className="font-semibold text-slate-800">{formatVND(subtotal)}</span>
               </div>
 
-              <div className="flex justify-between items-center text-slate-600">
-                <span>Giảm giá tổng đơn:</span>
-                <input
-                  type="number"
-                  value={overallDiscount}
-                  onChange={(e) => setOverallDiscount(Math.max(0, Number(e.target.value)))}
-                  className="w-28 text-right p-1 border border-slate-300 rounded focus:ring-1 focus:ring-emerald-500 text-xs font-semibold bg-white"
-                />
-              </div>
-
-              <div className="flex justify-between text-slate-600 border-t border-slate-100 pt-2">
-                <span>Tổng giảm giá:</span>
+              <div className="flex justify-between text-slate-600">
+                <span>Giảm giá:</span>
                 <span className="font-semibold text-red-600">-{formatVND(totalDiscount)}</span>
               </div>
 
@@ -676,6 +697,7 @@ export const POSPage: React.FC = () => {
         staffList={staffList}
         onConfirmPayment={handleConfirmPayment}
         isSubmitting={isSubmitting}
+        qrCodeUrl={qrCodeUrl}
       />
     </div>
   );

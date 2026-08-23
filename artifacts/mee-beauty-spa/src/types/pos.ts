@@ -134,3 +134,5 @@ export interface CheckoutResult {
   invoice_id?: string;
   error?: string;
 }
+
+export type PaymentMethod = "CASH" | "BANK_TRANSFER" | "GIFT" | "DEBT";
