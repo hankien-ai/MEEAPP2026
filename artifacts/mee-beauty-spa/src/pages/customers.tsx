@@ -1,4 +1,5 @@
 import React, { useState, useEffect, ChangeEvent, FormEvent } from "react";
+import { supabase } from "../services/supabase";
 import {
   Button,
   Card,
@@ -84,6 +85,17 @@ export function CustomerProfilePage({
   const [loadingPackages, setLoadingPackages] = useState<boolean>(false);
   const [usingSessionId, setUsingSessionId] = useState<string | null>(null);
 
+  // Tab 3b: Edit Package Modal
+  const [editPackageModal, setEditPackageModal] = useState<{
+    isOpen: boolean;
+    pkg: CustomerPackage | null;
+  }>({ isOpen: false, pkg: null });
+  const [editPackageData, setEditPackageData] = useState({
+    remaining_sessions: 0,
+    expires_at: "",
+    status: "",
+  });
+
   // Tab 4: History State
   const [history, setHistory] = useState<ServiceSession[]>([]);
   const [loadingHistory, setLoadingHistory] = useState<boolean>(false);
@@ -92,6 +104,9 @@ export function CustomerProfilePage({
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loadingInvoices, setLoadingInvoices] = useState<boolean>(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+
+  // Admin check (tạm thời)
+  const isAdmin = true; // TODO: lấy từ auth context
 
   const loadCustomerDetails = async () => {
     if (!customerId) return;
@@ -238,8 +253,19 @@ export function CustomerProfilePage({
     }
   };
 
-  const handleUsePackageSession = async (pkg: CustomerPackage) => {
-    if (pkg.remaining_sessions <= 0) return;
+  const handleUsePackageSession = async (
+    pkg: CustomerPackage,
+    packageItemId: string,
+    serviceId: string,
+  ) => {
+    if (!packageItemId) {
+      alert("Không xác định được dịch vụ trong gói");
+      return;
+    }
+    if (pkg.remaining_sessions <= 0) {
+      alert("Gói đã hết buổi");
+      return;
+    }
     if (
       !window.confirm(
         `Xác nhận trừ 1 buổi từ gói "${pkg.package_name || pkg.catalog_item?.name || "Liệu trình"}"?`,
@@ -250,7 +276,16 @@ export function CustomerProfilePage({
 
     setUsingSessionId(pkg.id);
     try {
-      await usePackageSession(pkg.id);
+      const result = await usePackageSession(
+        pkg.id,
+        packageItemId,
+        serviceId,
+        customer?.id, // staffId tạm thời
+        "Sử dụng package từ Customer Profile",
+      );
+      if (!result.success) {
+        alert(result.message);
+      }
       await loadPackages();
       await loadHistory();
       await loadCustomerDetails();
@@ -259,6 +294,35 @@ export function CustomerProfilePage({
       alert(err instanceof Error ? err.message : "Thao tác thất bại");
     } finally {
       setUsingSessionId(null);
+    }
+  };
+
+  const handleEditPackage = (pkg: CustomerPackage) => {
+    setEditPackageData({
+      remaining_sessions: pkg.remaining_sessions,
+      expires_at: pkg.expires_at || "",
+      status: pkg.status,
+    });
+    setEditPackageModal({ isOpen: true, pkg });
+  };
+
+  const handleSavePackageEdit = async () => {
+    if (!editPackageModal.pkg) return;
+    try {
+      const { error } = await supabase
+        .from("customer_packages")
+        .update({
+          remaining_sessions: editPackageData.remaining_sessions,
+          expires_at: editPackageData.expires_at || null,
+          status: editPackageData.status,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", editPackageModal.pkg.id);
+      if (error) throw error;
+      setEditPackageModal({ isOpen: false, pkg: null });
+      await loadPackages();
+    } catch (err: any) {
+      alert(err.message || "Lỗi cập nhật package");
     }
   };
 
@@ -574,6 +638,8 @@ export function CustomerProfilePage({
                   const usedSessions = pkg.total_sessions - pkg.remaining_sessions;
                   const isDepleted = pkg.remaining_sessions <= 0;
                   const isGift = pkg.is_gift || false;
+                  const isExpired = pkg.expires_at && new Date(pkg.expires_at) < new Date();
+                  const isExpiringSoon = pkg.expires_at && new Date(pkg.expires_at) < new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) && new Date(pkg.expires_at) >= new Date();
 
                   return (
                     <div
@@ -582,36 +648,41 @@ export function CustomerProfilePage({
                     >
                       <div className="p-4 border-b border-gray-100">
                         <div className="flex justify-between items-start gap-2">
-                          <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {isGift && <span className="text-purple-500 text-lg" title="Quà tặng">🎁</span>}
+                            {isExpired && <span className="text-red-500 text-lg" title="Đã hết hạn">🔒</span>}
+                            {isExpiringSoon && !isExpired && <span className="text-amber-500 text-lg" title="Sắp hết hạn">⏳</span>}
                             <h4 className="font-bold text-gray-900">
                               {pkg.package_name || pkg.catalog_item?.name || "Gói dịch vụ"}
-                              {isGift && (
-                                <span className="ml-2 text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
-                                  🎁 Quà tặng
-                                </span>
-                              )}
                             </h4>
-                            <p className="text-xs text-gray-500 mt-0.5">
-                              Mua ngày: {new Date(pkg.purchased_at || pkg.created_at).toLocaleDateString("vi-VN")}
-                              {pkg.expires_at && (
-                                <span className="ml-2">
-                                  • Hạn: {new Date(pkg.expires_at).toLocaleDateString("vi-VN")}
-                                </span>
-                              )}
-                            </p>
+                            {isAdmin && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleEditPackage(pkg)}
+                                className="ml-1"
+                              >
+                                ✏️
+                              </Button>
+                            )}
                           </div>
                           <Badge variant={isDepleted ? "danger" : pkg.status === "ACTIVE" ? "success" : "warning"}>
                             {isDepleted ? "Đã hết" : pkg.status}
                           </Badge>
                         </div>
-
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Mua ngày: {new Date(pkg.purchased_at || pkg.created_at).toLocaleDateString("vi-VN")}
+                          {pkg.expires_at && (
+                            <span className="ml-2">
+                              • Hạn: {new Date(pkg.expires_at).toLocaleDateString("vi-VN")}
+                            </span>
+                          )}
+                        </p>
                         <div className="mt-2 flex items-center gap-3 text-xs">
                           <span className="text-gray-500">Tổng: {pkg.total_sessions} buổi</span>
                           <span className="text-gray-500">Đã dùng: {usedSessions} buổi</span>
                           <span className="font-bold text-blue-600">Còn: {pkg.remaining_sessions} buổi</span>
                         </div>
-
-                        {/* Progress bar */}
                         <div className="mt-2 w-full bg-gray-200 h-2 rounded-full overflow-hidden">
                           <div
                             className="bg-blue-600 h-full transition-all duration-300"
@@ -627,7 +698,7 @@ export function CustomerProfilePage({
                         <div className="p-3 bg-gray-50 space-y-2">
                           <p className="text-xs font-semibold text-gray-700">Dịch vụ trong gói:</p>
                           {pkg.items.map((item) => {
-                            const serviceName = item.package_item?.services?.name || "Dịch vụ";
+                            const serviceName = item.services?.name || "Dịch vụ";
                             return (
                               <div
                                 key={item.id}
@@ -644,7 +715,7 @@ export function CustomerProfilePage({
                                       variant="secondary"
                                       disabled={usingSessionId === pkg.id}
                                       isLoading={usingSessionId === pkg.id}
-                                      onClick={() => handleUsePackageSession(pkg)}
+                                      onClick={() => handleUsePackageSession(pkg, item.package_item_id, item.service_id)}
                                     >
                                       Sử dụng
                                     </Button>
@@ -700,6 +771,11 @@ export function CustomerProfilePage({
                             <Badge variant={isPackage ? "info" : "neutral"}>
                               {isPackage ? "📦 Package" : "💰 Mua lẻ"}
                             </Badge>
+                            {item.invoice_id && (
+                              <Badge variant="outline" className="text-[10px]">
+                                HĐ: #{item.invoice_id.slice(0, 8)}
+                              </Badge>
+                            )}
                           </div>
                           <p className="text-xs text-gray-500 mt-1">
                             {new Date(item.performed_at || item.created_at).toLocaleString("vi-VN")}
@@ -969,6 +1045,65 @@ export function CustomerProfilePage({
               <p className="text-base font-bold text-blue-600">
                 Thành tiền: {selectedInvoice.final_amount?.toLocaleString("vi-VN")} đ
               </p>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* MODAL: EDIT PACKAGE */}
+      {editPackageModal.isOpen && (
+        <Modal
+          isOpen={editPackageModal.isOpen}
+          onClose={() => setEditPackageModal({ isOpen: false, pkg: null })}
+          title="Chỉnh sửa gói liệu trình"
+        >
+          <div className="space-y-4">
+            <Input
+              label="Số buổi còn lại"
+              type="number"
+              value={editPackageData.remaining_sessions}
+              onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                setEditPackageData({
+                  ...editPackageData,
+                  remaining_sessions: Number(e.target.value),
+                })
+              }
+              min={0}
+            />
+            <Input
+              label="Ngày hết hạn"
+              type="date"
+              value={editPackageData.expires_at?.split("T")[0] || ""}
+              onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                setEditPackageData({
+                  ...editPackageData,
+                  expires_at: e.target.value,
+                })
+              }
+            />
+            <Select
+              label="Trạng thái"
+              value={editPackageData.status}
+              onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+                setEditPackageData({
+                  ...editPackageData,
+                  status: e.target.value,
+                })
+              }
+            >
+              <option value="ACTIVE">Đang hoạt động</option>
+              <option value="EXPIRED">Hết hạn</option>
+              <option value="DEPLETED">Đã hết buổi</option>
+              <option value="CANCELLED">Hủy</option>
+            </Select>
+            <div className="flex justify-end gap-2 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => setEditPackageModal({ isOpen: false, pkg: null })}
+              >
+                Hủy
+              </Button>
+              <Button onClick={handleSavePackageEdit}>Lưu</Button>
             </div>
           </div>
         </Modal>
