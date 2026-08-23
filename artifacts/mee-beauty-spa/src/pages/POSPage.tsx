@@ -18,6 +18,7 @@ import { POSKTVSelector } from "@/components/pos/POSKTVSelector";
 import { POSCatalogPicker } from "@/components/pos/POSCatalogPicker";
 import { POSCart } from "@/components/pos/POSCart";
 import { POSPaymentModal } from "@/components/pos/POSPaymentModal";
+import { QRCodeSettingsModal } from "@/components/pos/QRCodeSettingsModal";
 
 export const POSPage: React.FC = () => {
   const [services, setServices] = useState<CatalogServiceItem[]>([]);
@@ -32,7 +33,6 @@ export const POSPage: React.FC = () => {
   const [overallDiscountType, setOverallDiscountType] = useState<'percent' | 'fixed'>('fixed');
   const [overallDiscountValue, setOverallDiscountValue] = useState<number>(0);
 
-  // Seller staff selection
   const [selectedSellerId, setSelectedSellerId] = useState<string | undefined>(undefined);
 
   // Package usage modal
@@ -50,11 +50,18 @@ export const POSPage: React.FC = () => {
     message: string;
   } | null>(null);
 
-  // QR Code placeholder (sẽ được config sau)
+  // QR Code
   const [qrCodeUrl, setQrCodeUrl] = useState<string | undefined>(undefined);
+  const [isQRModalOpen, setIsQRModalOpen] = useState(false);
+
+  // Kiểm tra admin
+  const isAdmin = loggedStaff?.role === 'admin';
 
   useEffect(() => {
     loadData();
+    // Load QR từ localStorage (hoặc database)
+    const savedQr = localStorage.getItem('pos_qr_code');
+    if (savedQr) setQrCodeUrl(savedQr);
   }, []);
 
   const loadData = async () => {
@@ -104,6 +111,12 @@ export const POSPage: React.FC = () => {
         );
       }
 
+      // Mặc định KTV splits: nếu không phải admin, tự động gán loggedStaff 100%
+      let defaultSplits: KTVSplit[] = [];
+      if (!isAdmin && loggedStaff) {
+        defaultSplits = [{ staff_id: loggedStaff.id, staff_name: loggedStaff.full_name, share_percent: 100 }];
+      }
+
       const newItem: CartItem = {
         cart_item_id: `srv_${Date.now()}_${Math.random()}`,
         item_type: "SERVICE",
@@ -119,7 +132,8 @@ export const POSPage: React.FC = () => {
         sales_commission_value: service.sales_commission_value,
         performance_commission_type: service.performance_commission_type,
         performance_commission_value: service.performance_commission_value,
-        ktv_splits: [],
+        ktv_splits: defaultSplits,
+        performing_staff_id: loggedStaff?.id, // vẫn giữ cho tương thích
       };
       return [...prev, newItem];
     });
@@ -287,7 +301,6 @@ export const POSPage: React.FC = () => {
   const handleOverallDiscountChange = (type: 'percent' | 'fixed', value: number) => {
     setOverallDiscountType(type);
     setOverallDiscountValue(value);
-    // Tính tổng discount dựa trên subtotal
     const subtotal = cartItems.reduce((sum, item) => sum + item.total_amount, 0);
     let discountAmount = 0;
     if (type === 'percent') {
@@ -503,6 +516,12 @@ export const POSPage: React.FC = () => {
     }
   };
 
+  const handleSaveQrCode = (url: string) => {
+    setQrCodeUrl(url);
+    localStorage.setItem('pos_qr_code', url);
+    showAlert("success", "Đã lưu mã QR thành công!");
+  };
+
   const formatVND = (val: number) => new Intl.NumberFormat("vi-VN").format(val) + " đ";
 
   // ========== RENDER ==========
@@ -536,9 +555,8 @@ export const POSPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Dropdown chọn nhân viên chính (chỉ hiển thị nếu là admin) */}
-          {/* Giả định: nếu loggedStaff có role = 'admin' thì hiển thị dropdown */}
-          {loggedStaff?.role === 'admin' && (
+          {/* Dropdown chọn nhân viên chính (chỉ hiển thị nếu admin) */}
+          {isAdmin && (
             <div className="flex items-center gap-1 text-xs">
               <span className="text-slate-500">Sale:</span>
               <select
@@ -560,6 +578,16 @@ export const POSPage: React.FC = () => {
           >
             🔄 Tải lại
           </button>
+
+          {/* Nút cài đặt QR (chỉ admin) */}
+          {isAdmin && (
+            <button
+              onClick={() => setIsQRModalOpen(true)}
+              className="px-2.5 py-1.5 bg-purple-100 text-purple-700 rounded-lg text-[10px] font-medium hover:bg-purple-200 transition-all"
+            >
+              📱 QR
+            </button>
+          )}
         </div>
       </header>
 
@@ -609,11 +637,13 @@ export const POSPage: React.FC = () => {
               onOverallDiscountChange={handleOverallDiscountChange}
               overallDiscountType={overallDiscountType}
               overallDiscountValue={overallDiscountValue}
+              isAdmin={isAdmin}
+              loggedStaffName={loggedStaff?.full_name}
             />
 
-            {/* KTV Selector cho từng Service chưa có splits */}
+            {/* KTV Selector cho từng Service */}
             {cartItems
-              .filter((item) => item.item_type === "SERVICE" && (!item.ktv_splits || item.ktv_splits.length === 0))
+              .filter((item) => item.item_type === "SERVICE")
               .map((item) => {
                 const totalComm = item.performance_commission_type === "PERCENT"
                   ? Math.round((item.total_amount * Math.min(100, Math.max(0, Number(item.performance_commission_value || 0)))) / 100)
@@ -628,6 +658,7 @@ export const POSPage: React.FC = () => {
                       selectedSplits={item.ktv_splits || []}
                       onSplitsChange={(splits) => handleUpdateKTYSplits(item.cart_item_id, splits)}
                       totalCommission={totalComm}
+                      isAdmin={isAdmin}
                     />
                   </div>
                 );
@@ -698,6 +729,14 @@ export const POSPage: React.FC = () => {
         onConfirmPayment={handleConfirmPayment}
         isSubmitting={isSubmitting}
         qrCodeUrl={qrCodeUrl}
+      />
+
+      {/* QR Code Settings Modal */}
+      <QRCodeSettingsModal
+        isOpen={isQRModalOpen}
+        onClose={() => setIsQRModalOpen(false)}
+        currentQrUrl={qrCodeUrl}
+        onSave={handleSaveQrCode}
       />
     </div>
   );

@@ -15,12 +15,13 @@ export interface Customer {
 export interface Staff {
   id: string;
   full_name: string;
-  role?: string;
+  role?: string; // 'admin' hoặc 'staff'
   avatar_url?: string;
 }
 
 export interface CatalogServiceItem {
   id: string;
+  catalog_item_id?: string;
   name: string;
   price: number;
   duration_minutes?: number;
@@ -70,6 +71,12 @@ export interface CatalogPackageItem {
 
 export type POSCartItemType = "SERVICE" | "PRODUCT" | "PACKAGE";
 
+export interface KTVSplit {
+  staff_id: string;
+  staff_name?: string;
+  share_percent: number;
+}
+
 export interface CartItem {
   cart_item_id: string;
   item_type: POSCartItemType;
@@ -94,6 +101,12 @@ export interface CartItem {
   performance_commission_value?: number;
   /** Đánh dấu item là quà tặng (GIFT) */
   is_gift?: boolean;
+  /** Danh sách KTV chia hoa hồng */
+  ktv_splits?: KTVSplit[];
+  /** Sử dụng package */
+  use_package?: boolean;
+  customer_package_id?: string;
+  package_item_id?: string;
 }
 
 export interface CreateInvoicePayload {
@@ -121,6 +134,12 @@ export interface CreateInvoicePayload {
     discount_amount: number;
     total_amount: number;
     is_gift?: boolean;
+    /** Multi KTV splits */
+    ktv_splits?: KTVSplit[];
+    /** Package usage */
+    use_package?: boolean;
+    customer_package_id?: string;
+    package_item_id?: string;
   }[];
 }
 
@@ -134,5 +153,3 @@ export interface CheckoutResult {
   invoice_id?: string;
   error?: string;
 }
-
-export type PaymentMethod = "CASH" | "BANK_TRANSFER" | "GIFT" | "DEBT";

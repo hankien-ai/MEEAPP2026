@@ -12,6 +12,8 @@ interface Props {
   onOverallDiscountChange?: (type: 'percent' | 'fixed', value: number) => void;
   overallDiscountType?: 'percent' | 'fixed';
   overallDiscountValue?: number;
+  isAdmin?: boolean; // true nếu là admin, false nếu nhân viên thường
+  loggedStaffName?: string; // tên nhân viên đang đăng nhập để hiển thị
 }
 
 export const POSCart: React.FC<Props> = ({
@@ -25,6 +27,8 @@ export const POSCart: React.FC<Props> = ({
   onOverallDiscountChange,
   overallDiscountType = 'fixed',
   overallDiscountValue = 0,
+  isAdmin = false,
+  loggedStaffName,
 }) => {
   const formatVND = (val: number) => new Intl.NumberFormat('vi-VN').format(val) + ' đ';
 
@@ -164,37 +168,51 @@ export const POSCart: React.FC<Props> = ({
               </div>
 
               <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 text-xs">
+                {/* Sale Staff */}
                 <div>
                   <label className="text-[11px] text-slate-500 block mb-0.5">NV Tư vấn / Sale:</label>
-                  <select
-                    value={item.seller_staff_id || ''}
-                    onChange={(e) => onUpdateSellerStaff(item.cart_item_id, e.target.value)}
-                    className="w-full text-xs p-1.5 border border-slate-200 rounded-lg bg-white focus:ring-1 focus:ring-emerald-500"
-                  >
-                    <option value="">-- Chọn NV Sale --</option>
-                    {staffList.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.full_name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {isService && (
-                  <div>
-                    <label className="text-[11px] text-slate-500 block mb-0.5">KTV Thực hiện:</label>
+                  {isAdmin ? (
                     <select
-                      value={item.performing_staff_id || ''}
-                      onChange={(e) => onUpdatePerformingStaff(item.cart_item_id, e.target.value)}
+                      value={item.seller_staff_id || ''}
+                      onChange={(e) => onUpdateSellerStaff(item.cart_item_id, e.target.value)}
                       className="w-full text-xs p-1.5 border border-slate-200 rounded-lg bg-white focus:ring-1 focus:ring-emerald-500"
                     >
-                      <option value="">-- Chọn KTV --</option>
+                      <option value="">-- Chọn NV Sale --</option>
                       {staffList.map((s) => (
                         <option key={s.id} value={s.id}>
                           {s.full_name}
                         </option>
                       ))}
                     </select>
+                  ) : (
+                    <div className="text-sm font-medium text-slate-700">
+                      {loggedStaffName || 'Chưa xác định'}
+                    </div>
+                  )}
+                </div>
+
+                {/* KTV */}
+                {isService && (
+                  <div>
+                    <label className="text-[11px] text-slate-500 block mb-0.5">KTV Thực hiện:</label>
+                    {isAdmin ? (
+                      <select
+                        value={item.performing_staff_id || ''}
+                        onChange={(e) => onUpdatePerformingStaff(item.cart_item_id, e.target.value)}
+                        className="w-full text-xs p-1.5 border border-slate-200 rounded-lg bg-white focus:ring-1 focus:ring-emerald-500"
+                      >
+                        <option value="">-- Chọn KTV --</option>
+                        {staffList.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.full_name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="text-sm font-medium text-slate-700">
+                        {loggedStaffName || 'Chưa xác định'}
+                      </div>
+                    )}
                     {/* Hiển thị KTV splits nếu có */}
                     {item.ktv_splits && item.ktv_splits.length > 0 && (
                       <div className="mt-1 text-[10px] text-slate-500">
