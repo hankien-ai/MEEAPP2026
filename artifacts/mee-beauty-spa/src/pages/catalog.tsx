@@ -16,6 +16,9 @@ import {
   Percent,
   Coins,
   ChevronRight,
+  Eye,
+  ArrowUpRight,
+  User,
 } from "lucide-react";
 import {
   ServiceItem,
@@ -45,7 +48,11 @@ import {
   updatePackage,
   deletePackage,
   togglePackageStatus,
+  processInventoryTransaction,
+  fetchInventoryHistory,
 } from "../services/catalog-service";
+import { supabase } from "../services/supabase";
+import { Badge, Button } from "../components/primitives";
 
 type ActiveTab = "services" | "products" | "categories" | "packages";
 
@@ -91,6 +98,37 @@ export default function CatalogManagementPage() {
     title: string;
   } | null>(null);
 
+  // === Product Detail Modal ===
+  const [productDetail, setProductDetail] = useState<{
+    isOpen: boolean;
+    product: ProductItem | null;
+    history: any[];
+    loadingHistory: boolean;
+  }>({
+    isOpen: false,
+    product: null,
+    history: [],
+    loadingHistory: false,
+  });
+
+  // === Product Export Modal (cho CONSUMABLE) ===
+  const [exportModal, setExportModal] = useState<{
+    isOpen: boolean;
+    product: ProductItem | null;
+    quantity: number;
+    note: string;
+    submitting: boolean;
+  }>({
+    isOpen: false,
+    product: null,
+    quantity: 1,
+    note: "",
+    submitting: false,
+  });
+
+  // Staff list để hiển thị người tạo giao dịch
+  const [staffList, setStaffList] = useState<any[]>([]);
+
   const showToast = (type: "success" | "error", message: string) => {
     setNotification({ type, message });
     setTimeout(() => setNotification(null), 4000);
@@ -131,8 +169,17 @@ export default function CatalogManagementPage() {
     }
   };
 
+  const loadStaff = async () => {
+    const { data } = await supabase
+      .from("staff")
+      .select("id, full_name")
+      .eq("status", "ACTIVE");
+    if (data) setStaffList(data);
+  };
+
   useEffect(() => {
     loadData();
+    loadStaff();
     setSearchTerm("");
     setCategoryFilter("");
     setStatusFilter("ALL");
@@ -233,6 +280,105 @@ export default function CatalogManagementPage() {
     }
   };
 
+  // ===== PRODUCT DETAIL =====
+  const openProductDetail = async (product: ProductItem) => {
+    setProductDetail({
+      isOpen: true,
+      product,
+      history: [],
+      loadingHistory: true,
+    });
+    try {
+      const history = await fetchInventoryHistory(product.product_id);
+      const historyWithStaff = history.map((item) => {
+        const staff = staffList.find((s) => s.id === item.created_by);
+        return {
+          ...item,
+          staff_name: staff?.full_name || "Hệ thống",
+        };
+      });
+      setProductDetail((prev) => ({
+        ...prev,
+        history: historyWithStaff,
+        loadingHistory: false,
+      }));
+    } catch (err) {
+      console.error(err);
+      setProductDetail((prev) => ({ ...prev, loadingHistory: false }));
+    }
+  };
+
+  const closeProductDetail = () => {
+    setProductDetail({ isOpen: false, product: null, history: [], loadingHistory: false });
+  };
+
+  // ===== PRODUCT EXPORT (CONSUMABLE) =====
+  const openExportModal = (product: ProductItem) => {
+    setExportModal({
+      isOpen: true,
+      product,
+      quantity: 1,
+      note: "",
+      submitting: false,
+    });
+  };
+
+  const closeExportModal = () => {
+    setExportModal({
+      isOpen: false,
+      product: null,
+      quantity: 0,
+      note: "",
+      submitting: false,
+    });
+  };
+
+  const handleExportSubmit = async () => {
+    const { product, quantity, note } = exportModal;
+    if (!product || quantity <= 0) {
+      showToast("error", "Số lượng phải lớn hơn 0");
+      return;
+    }
+    if (quantity > (product.stock_quantity || 0)) {
+      showToast("error", "Số lượng xuất vượt quá tồn kho hiện tại");
+      return;
+    }
+    setExportModal((prev) => ({ ...prev, submitting: true }));
+    try {
+      // Lấy staff hiện tại (tạm thời lấy staff đầu tiên)
+      const { data: staff } = await supabase
+        .from("staff")
+        .select("id")
+        .limit(1)
+        .single();
+      await processInventoryTransaction({
+        product_id: product.product_id,
+        type: "OUT",
+        quantity: quantity,
+        note: note || `Xuất vật tư tiêu hao: ${product.name}`,
+      });
+      // Cập nhật stock trong state
+      setProducts((prev) =>
+        prev.map((p) =>
+          p.id === product.id
+            ? { ...p, stock_quantity: (p.stock_quantity || 0) - quantity }
+            : p,
+        ),
+      );
+      showToast("success", `Đã xuất kho ${quantity} ${product.unit}`);
+      closeExportModal();
+      // Reload product detail nếu đang mở
+      if (productDetail.isOpen) {
+        await openProductDetail(product);
+      }
+      loadData();
+    } catch (err: any) {
+      showToast("error", err.message || "Lỗi xuất kho");
+    } finally {
+      setExportModal((prev) => ({ ...prev, submitting: false }));
+    }
+  };
+
   return (
     <div className="p-3 sm:p-6 max-w-7xl mx-auto space-y-4 sm:space-y-6 bg-slate-50 min-h-screen">
       {/* Header */}
@@ -242,7 +388,7 @@ export default function CatalogManagementPage() {
             Quản lý Danh mục (Catalog)
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            Dịch vụ, Sản phẩm, Danh mục & Gói liệu trình Mee Beauty Spa
+            Dịch vụ, Sản phẩm, Danh mục & Gói liệu trình
           </p>
         </div>
         <button
@@ -255,7 +401,7 @@ export default function CatalogManagementPage() {
         </button>
       </div>
 
-      {/* Toast Notification */}
+      {/* Toast */}
       {notification && (
         <div
           className={`flex items-center justify-between p-3 sm:p-4 rounded-xl border text-sm ${
@@ -278,7 +424,7 @@ export default function CatalogManagementPage() {
         </div>
       )}
 
-      {/* Navigation Tabs - Horizontal Scroll on Mobile */}
+      {/* Tabs */}
       <div className="flex overflow-x-auto no-scrollbar border-b border-slate-200 bg-white rounded-xl px-2 pt-2 shadow-sm">
         <button
           onClick={() => setActiveTab("services")}
@@ -326,7 +472,7 @@ export default function CatalogManagementPage() {
         </button>
       </div>
 
-      {/* TAB 1: DỊCH VỤ */}
+      {/* TAB 1: DỊCH VỤ (giữ nguyên) */}
       {activeTab === "services" && (
         <div className="space-y-4">
           <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-sm">
@@ -383,7 +529,7 @@ export default function CatalogManagementPage() {
                   <th className="p-3">Mã</th>
                   <th className="p-3">Tên dịch vụ</th>
                   <th className="p-3">Danh mục</th>
-                  <th className="p-3">Giá bán</th>
+                  <th className="p-3 text-right">Giá bán</th>
                   <th className="p-3">Sale Comm</th>
                   <th className="p-3">KTV Comm</th>
                   <th className="p-3">Trạng thái</th>
@@ -420,7 +566,7 @@ export default function CatalogManagementPage() {
                           "-"
                         )}
                       </td>
-                      <td className="p-3 font-semibold text-slate-900">
+                      <td className="p-3 font-semibold text-slate-900 text-right">
                         {formatVND(item.price)}
                       </td>
                       <td className="p-3 font-medium text-emerald-700">
@@ -591,7 +737,7 @@ export default function CatalogManagementPage() {
         </div>
       )}
 
-      {/* TAB 2: SẢN PHẨM */}
+      {/* TAB 2: SẢN PHẨM (ĐÃ CẢI TIẾN) */}
       {activeTab === "products" && (
         <div className="space-y-4">
           <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-sm">
@@ -640,17 +786,17 @@ export default function CatalogManagementPage() {
             </button>
           </div>
 
-          {/* Desktop Table View */}
+          {/* Desktop Table View - Có cải tiến */}
           <div className="hidden md:block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-600 uppercase">
                   <th className="p-3">SKU</th>
                   <th className="p-3">Tên sản phẩm</th>
+                  <th className="p-3">Loại</th>
                   <th className="p-3">Danh mục</th>
-                  <th className="p-3">Giá bán</th>
-                  <th className="p-3">Hoa hồng Sale</th>
-                  <th className="p-3">Tồn kho</th>
+                  <th className="p-3 text-right">Giá bán</th>
+                  <th className="p-3 text-center">Tồn kho</th>
                   <th className="p-3">Trạng thái</th>
                   <th className="p-3 text-right">Thao tác</th>
                 </tr>
@@ -663,186 +809,249 @@ export default function CatalogManagementPage() {
                     </td>
                   </tr>
                 ) : (
-                  filteredProducts.map((item) => (
-                    <tr key={item.id} className="hover:bg-slate-50">
-                      <td className="p-3 font-mono text-xs font-bold text-slate-700">
-                        {item.code}
-                      </td>
-                      <td className="p-3 font-semibold text-slate-900">
-                        {item.name}
-                      </td>
-                      <td className="p-3 text-slate-600">
-                        {item.category ? (
-                          <span className="px-2 py-0.5 bg-slate-100 rounded text-xs">
-                            {item.category}
+                  filteredProducts.map((item) => {
+                    const stock = item.stock_quantity || 0;
+                    const minStock = item.minimum_stock || 0;
+                    let stockColor = "bg-emerald-100 text-emerald-800";
+                    let stockLabel = `${stock} ${item.unit || "cái"}`;
+                    if (stock === 0) {
+                      stockColor = "bg-rose-100 text-rose-800";
+                      stockLabel = "Hết hàng";
+                    } else if (stock <= minStock) {
+                      stockColor = "bg-amber-100 text-amber-800";
+                      stockLabel = `${stock} ${item.unit || "cái"} (sắp hết)`;
+                    }
+                    return (
+                      <tr key={item.id} className="hover:bg-slate-50">
+                        <td className="p-3 font-mono text-xs font-bold text-slate-700">
+                          {item.code}
+                        </td>
+                        <td
+                          className="p-3 font-semibold text-slate-900 cursor-pointer hover:text-pink-600 transition-colors"
+                          onClick={() => openProductDetail(item)}
+                        >
+                          {item.name}
+                          <span className="block text-[10px] text-slate-400 font-normal">
+                            {item.product_type === "RETAIL" ? "💰 Bán" : "📦 Vật tư"}
                           </span>
-                        ) : (
-                          "-"
-                        )}
-                      </td>
-                      <td className="p-3 font-semibold text-slate-900">
-                        {formatVND(item.selling_price || item.price || 0)}
-                      </td>
-                      <td className="p-3 font-medium text-emerald-700">
-                        {formatCommission(
-                          item.sales_commission_type,
-                          item.sales_commission_value,
-                        )}
-                      </td>
-                      <td className="p-3">
-                        <span
-                          className={`font-semibold ${
-                            (item.stock_quantity || 0) <=
-                            (item.minimum_stock || 0)
-                              ? "text-rose-600"
-                              : "text-slate-800"
-                          }`}
-                        >
-                          {item.stock_quantity || 0} {item.unit || "Chai"}
-                        </span>
-                      </td>
-                      <td className="p-3">
-                        <button
-                          onClick={() =>
-                            handleToggleStatus(item.id, item.status, "product")
-                          }
-                          className={`px-2.5 py-1 rounded-full text-xs font-semibold cursor-pointer transition-colors ${
-                            item.status === "ACTIVE"
-                              ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
-                              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                          }`}
-                        >
-                          {item.status === "ACTIVE" ? "Hoạt động" : "Ngưng"}
-                        </button>
-                      </td>
-                      <td className="p-3 text-right space-x-2">
-                        <button
-                          onClick={() => {
-                            setEditingProduct(item);
-                            setIsProductModalOpen(true);
-                          }}
-                          className="p-1.5 text-slate-500 hover:text-pink-600"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() =>
-                            setConfirmDelete({
-                              type: "products",
-                              id: item.id,
-                              title: item.name,
-                            })
-                          }
-                          className="p-1.5 text-slate-500 hover:text-rose-600"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                        <td className="p-3">
+                          <Badge
+                            variant={
+                              item.product_type === "RETAIL"
+                                ? "success"
+                                : "neutral"
+                            }
+                          >
+                            {item.product_type === "RETAIL" ? "Bán" : "Tiêu hao"}
+                          </Badge>
+                        </td>
+                        <td className="p-3 text-slate-600">
+                          {item.category ? (
+                            <span className="px-2 py-0.5 bg-slate-100 rounded text-xs">
+                              {item.category}
+                            </span>
+                          ) : (
+                            "-"
+                          )}
+                        </td>
+                        <td className="p-3 font-semibold text-slate-900 text-right">
+                          {formatVND(item.selling_price || item.price || 0)}
+                        </td>
+                        <td className="p-3 text-center">
+                          <span
+                            className={`px-2.5 py-1 rounded-full text-xs font-semibold inline-block ${stockColor}`}
+                          >
+                            {stockLabel}
+                          </span>
+                        </td>
+                        <td className="p-3">
+                          <button
+                            onClick={() =>
+                              handleToggleStatus(item.id, item.status, "product")
+                            }
+                            className={`px-2.5 py-1 rounded-full text-xs font-semibold cursor-pointer transition-colors ${
+                              item.status === "ACTIVE"
+                                ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
+                                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                            }`}
+                          >
+                            {item.status === "ACTIVE" ? "Hoạt động" : "Ngưng"}
+                          </button>
+                        </td>
+                        <td className="p-3 text-right space-x-2">
+                          <button
+                            onClick={() => {
+                              setEditingProduct(item);
+                              setIsProductModalOpen(true);
+                            }}
+                            className="p-1.5 text-slate-500 hover:text-pink-600"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() =>
+                              setConfirmDelete({
+                                type: "products",
+                                id: item.id,
+                                title: item.name,
+                              })
+                            }
+                            className="p-1.5 text-slate-500 hover:text-rose-600"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => openProductDetail(item)}
+                            className="p-1.5 text-slate-500 hover:text-blue-600"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
           </div>
 
-          {/* Mobile Card List View */}
+          {/* Mobile Card List View - Có cải tiến */}
           <div className="md:hidden space-y-3">
             {filteredProducts.length === 0 ? (
               <div className="bg-white p-6 rounded-xl border border-slate-200 text-center text-slate-500 text-sm">
                 Chưa có sản phẩm nào phù hợp
               </div>
             ) : (
-              filteredProducts.map((item) => (
-                <div
-                  key={item.id}
-                  className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <span className="font-mono text-xs font-bold text-pink-600 bg-pink-50 px-2 py-0.5 rounded">
-                        {item.code}
-                      </span>
-                      <h3 className="font-bold text-slate-900 text-base mt-1">
-                        {item.name}
-                      </h3>
-                    </div>
-                    <button
-                      onClick={() =>
-                        handleToggleStatus(item.id, item.status, "product")
-                      }
-                      className={`px-2.5 py-1 rounded-full text-xs font-semibold shrink-0 ${
-                        item.status === "ACTIVE"
-                          ? "bg-emerald-100 text-emerald-800"
-                          : "bg-slate-100 text-slate-600"
-                      }`}
-                    >
-                      {item.status === "ACTIVE" ? "Hoạt động" : "Ngưng"}
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-2.5 rounded-lg border border-slate-100">
-                    <div>
-                      <span className="text-slate-500 block">Giá bán</span>
-                      <span className="font-bold text-slate-900 text-sm">
-                        {formatVND(item.selling_price || item.price || 0)}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-slate-500 block">Tồn kho</span>
-                      <span className="font-semibold text-slate-800">
-                        {item.stock_quantity || 0} {item.unit || "Chai"}
-                      </span>
-                    </div>
-                    <div className="col-span-2 border-t pt-1.5 mt-1 border-slate-200 flex justify-between items-center">
-                      <span className="text-slate-500">Hoa hồng Sale:</span>
-                      <span className="font-bold text-emerald-700 text-sm">
-                        {formatCommission(
-                          item.sales_commission_type,
-                          item.sales_commission_value,
-                        )}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-1">
-                    <span className="text-xs text-slate-500">
-                      {item.category
-                        ? `DM: ${item.category}`
-                        : "Chưa phân loại"}
-                    </span>
-                    <div className="flex items-center gap-2">
+              filteredProducts.map((item) => {
+                const stock = item.stock_quantity || 0;
+                const minStock = item.minimum_stock || 0;
+                let stockColor = "bg-emerald-100 text-emerald-800";
+                let stockLabel = `${stock} ${item.unit || "cái"}`;
+                if (stock === 0) {
+                  stockColor = "bg-rose-100 text-rose-800";
+                  stockLabel = "Hết hàng";
+                } else if (stock <= minStock) {
+                  stockColor = "bg-amber-100 text-amber-800";
+                  stockLabel = `${stock} ${item.unit || "cái"} (sắp hết)`;
+                }
+                return (
+                  <div
+                    key={item.id}
+                    className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3"
+                    onClick={() => openProductDetail(item)}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1">
+                        <span className="font-mono text-xs font-bold text-pink-600 bg-pink-50 px-2 py-0.5 rounded">
+                          {item.code}
+                        </span>
+                        <h3 className="font-bold text-slate-900 text-base mt-1">
+                          {item.name}
+                        </h3>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          <Badge
+                            variant={
+                              item.product_type === "RETAIL"
+                                ? "success"
+                                : "neutral"
+                            }
+                          >
+                            {item.product_type === "RETAIL" ? "Bán" : "Tiêu hao"}
+                          </Badge>
+                          {item.category && (
+                            <span className="text-xs text-slate-500">
+                              {item.category}
+                            </span>
+                          )}
+                        </div>
+                      </div>
                       <button
-                        onClick={() => {
-                          setEditingProduct(item);
-                          setIsProductModalOpen(true);
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleStatus(item.id, item.status, "product");
                         }}
-                        className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold"
+                        className={`px-2.5 py-1 rounded-full text-xs font-semibold shrink-0 ${
+                          item.status === "ACTIVE"
+                            ? "bg-emerald-100 text-emerald-800"
+                            : "bg-slate-100 text-slate-600"
+                        }`}
                       >
-                        <Edit2 className="w-3.5 h-3.5 text-pink-600" />
-                        Sửa
+                        {item.status === "ACTIVE" ? "Hoạt động" : "Ngưng"}
                       </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                      <div>
+                        <span className="text-slate-500 block">Giá bán</span>
+                        <span className="font-bold text-slate-900 text-sm">
+                          {formatVND(item.selling_price || item.price || 0)}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block">Tồn kho</span>
+                        <span
+                          className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${stockColor}`}
+                        >
+                          {stockLabel}
+                        </span>
+                      </div>
+                      <div className="col-span-2 border-t pt-1.5 mt-1 border-slate-200 flex justify-between items-center">
+                        <span className="text-slate-500">Hoa hồng Sale:</span>
+                        <span className="font-bold text-emerald-700 text-sm">
+                          {formatCommission(
+                            item.sales_commission_type,
+                            item.sales_commission_value,
+                          )}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1">
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingProduct(item);
+                            setIsProductModalOpen(true);
+                          }}
+                          className="p-1.5 bg-slate-100 text-slate-600 rounded-lg"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setConfirmDelete({
+                              type: "products",
+                              id: item.id,
+                              title: item.name,
+                            });
+                          }}
+                          className="p-1.5 bg-rose-50 text-rose-600 rounded-lg"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                       <button
-                        onClick={() =>
-                          setConfirmDelete({
-                            type: "products",
-                            id: item.id,
-                            title: item.name,
-                          })
-                        }
-                        className="p-1.5 bg-rose-50 text-rose-600 rounded-lg"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openProductDetail(item);
+                        }}
+                        className="text-xs text-blue-600 hover:underline flex items-center gap-1"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Eye className="w-3.5 h-3.5" /> Xem
                       </button>
                     </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
       )}
 
-      {/* TAB 3: DANH MỤC */}
+      {/* TAB 3: CATEGORIES (giữ nguyên) */}
       {activeTab === "categories" && (
         <div className="space-y-4">
           <div className="flex justify-end">
@@ -962,7 +1171,7 @@ export default function CatalogManagementPage() {
         </div>
       )}
 
-      {/* TAB 4: GÓI DỊCH VỤ */}
+      {/* TAB 4: PACKAGES (có cột Sale Commission) */}
       {activeTab === "packages" && (
         <div className="space-y-4">
           <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
@@ -987,15 +1196,16 @@ export default function CatalogManagementPage() {
                 <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-600 uppercase">
                   <th className="p-3">Mã gói</th>
                   <th className="p-3">Tên gói</th>
-                  <th className="p-3">Giá gói</th>
-                  <th className="p-3">Hạn dùng</th>
+                  <th className="p-3 text-right">Giá gói</th>
+                  <th className="p-3 text-right">Sale Commission</th>
+                  <th className="p-3 text-right">Hạn dùng</th>
                   <th className="p-3 text-right">Thao tác</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 text-sm">
                 {packages.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="p-6 text-center text-slate-500">
+                    <td colSpan={6} className="p-6 text-center text-slate-500">
                       Chưa có gói dịch vụ nào
                     </td>
                   </tr>
@@ -1008,10 +1218,15 @@ export default function CatalogManagementPage() {
                       <td className="p-3 font-semibold text-slate-900">
                         {pkg.name}
                       </td>
-                      <td className="p-3 font-semibold text-pink-600">
+                      <td className="p-3 font-semibold text-pink-600 text-right">
                         {formatVND(pkg.price)}
                       </td>
-                      <td className="p-3 text-slate-600 text-xs">
+                      <td className="p-3 font-medium text-emerald-700 text-right">
+                        {pkg.sales_commission_type && pkg.sales_commission_value !== undefined
+                          ? formatCommission(pkg.sales_commission_type, pkg.sales_commission_value)
+                          : "—"}
+                      </td>
+                      <td className="p-3 text-slate-600 text-right text-xs">
                         {pkg.validity_days || 0} ngày
                       </td>
                       <td className="p-3 text-right space-x-2">
@@ -1046,6 +1261,8 @@ export default function CatalogManagementPage() {
         </div>
       )}
 
+      {/* ===== MODAL FORMS (có bổ sung product_type) ===== */}
+
       {/* MODAL 1: SERVICE FORM */}
       {isServiceModalOpen && (
         <ServiceFormModal
@@ -1072,7 +1289,7 @@ export default function CatalogManagementPage() {
         />
       )}
 
-      {/* MODAL 2: PRODUCT FORM */}
+      {/* MODAL 2: PRODUCT FORM (có bổ sung product_type) */}
       {isProductModalOpen && (
         <ProductFormModal
           key={editingProduct?.id || "new-product"}
@@ -1149,14 +1366,307 @@ export default function CatalogManagementPage() {
         />
       )}
 
+      {/* ===== PRODUCT DETAIL MODAL ===== */}
+      {productDetail.isOpen && productDetail.product && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b border-slate-200 bg-slate-50 shrink-0">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">
+                  Chi tiết sản phẩm
+                </h3>
+                <p className="text-xs text-slate-500">#{productDetail.product.code}</p>
+              </div>
+              <button
+                onClick={closeProductDetail}
+                className="p-1.5 hover:bg-slate-200 rounded-full text-slate-500 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 overflow-y-auto flex-1 space-y-4">
+              {/* Thông tin cơ bản */}
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <span className="text-slate-500">Tên sản phẩm</span>
+                  <p className="font-semibold">{productDetail.product.name}</p>
+                </div>
+                <div>
+                  <span className="text-slate-500">Loại</span>
+                  <Badge
+                    variant={
+                      productDetail.product.product_type === "RETAIL"
+                        ? "success"
+                        : "neutral"
+                    }
+                  >
+                    {productDetail.product.product_type === "RETAIL"
+                      ? "Bán"
+                      : "Vật tư tiêu hao"}
+                  </Badge>
+                </div>
+                <div>
+                  <span className="text-slate-500">Giá bán</span>
+                  <p className="font-semibold text-pink-600">
+                    {formatVND(
+                      productDetail.product.selling_price ||
+                        productDetail.product.price ||
+                        0,
+                    )}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-slate-500">Đơn vị</span>
+                  <p>{productDetail.product.unit || "cái"}</p>
+                </div>
+                <div>
+                  <span className="text-slate-500">Danh mục</span>
+                  <p>{productDetail.product.category || "—"}</p>
+                </div>
+                <div>
+                  <span className="text-slate-500">Trạng thái</span>
+                  <Badge
+                    variant={
+                      productDetail.product.status === "ACTIVE"
+                        ? "success"
+                        : "neutral"
+                    }
+                  >
+                    {productDetail.product.status}
+                  </Badge>
+                </div>
+                <div className="col-span-2">
+                  <span className="text-slate-500">Mô tả</span>
+                  <p className="text-slate-700 text-sm">
+                    {productDetail.product.description || "Chưa có mô tả"}
+                  </p>
+                </div>
+              </div>
+
+              {/* Tồn kho */}
+              <div className="border-t pt-3">
+                <h4 className="font-semibold text-slate-800 mb-2">Tồn kho</h4>
+                <div className="flex items-center gap-4 flex-wrap">
+                  <div>
+                    <span className="text-slate-500">Tồn hiện tại</span>
+                    <div className="text-2xl font-bold text-slate-900">
+                      {productDetail.product.stock_quantity || 0}{" "}
+                      <span className="text-sm font-normal text-slate-500">
+                        {productDetail.product.unit || "cái"}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-slate-500">Cảnh báo tối thiểu</span>
+                    <div className="text-lg font-semibold text-slate-700">
+                      {productDetail.product.minimum_stock || 0}
+                    </div>
+                  </div>
+                  <div className="ml-auto">
+                    <span className="text-slate-500">Trạng thái</span>
+                    <div>
+                      {(productDetail.product.stock_quantity || 0) === 0 ? (
+                        <Badge variant="danger" className="text-sm">
+                          🔴 Hết hàng
+                        </Badge>
+                      ) : (
+                        (productDetail.product.stock_quantity || 0) <=
+                        (productDetail.product.minimum_stock || 0) ? (
+                          <Badge variant="warning" className="text-sm">
+                            🟠 Sắp hết
+                          </Badge>
+                        ) : (
+                          <Badge variant="success" className="text-sm">
+                            🟢 Còn hàng
+                          </Badge>
+                        )
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Xuất kho (chỉ cho CONSUMABLE) */}
+              {productDetail.product.product_type === "CONSUMABLE" && (
+                <div className="border-t pt-3">
+                  <div className="flex justify-between items-center">
+                    <h4 className="font-semibold text-slate-800">Xuất kho vật tư</h4>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        closeProductDetail();
+                        openExportModal(productDetail.product!);
+                      }}
+                    >
+                      <ArrowUpRight className="w-4 h-4" /> Xuất kho
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Lịch sử giao dịch */}
+              <div className="border-t pt-3">
+                <h4 className="font-semibold text-slate-800 mb-2">
+                  Lịch sử xuất nhập tồn
+                </h4>
+                {productDetail.loadingHistory ? (
+                  <div className="text-center py-4 text-slate-500 text-sm">
+                    Đang tải...
+                  </div>
+                ) : productDetail.history.length === 0 ? (
+                  <div className="text-center py-4 text-slate-400 text-sm">
+                    Chưa có giao dịch nào
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead className="bg-slate-50">
+                        <tr>
+                          <th className="p-2">Ngày</th>
+                          <th className="p-2">Loại</th>
+                          <th className="p-2 text-right">SL</th>
+                          <th className="p-2 text-right">Tồn trước</th>
+                          <th className="p-2 text-right">Tồn sau</th>
+                          <th className="p-2">Ghi chú</th>
+                          <th className="p-2">Người tạo</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {productDetail.history.map((tx) => (
+                          <tr key={tx.id}>
+                            <td className="p-2 whitespace-nowrap">
+                              {new Date(tx.created_at).toLocaleString("vi-VN")}
+                            </td>
+                            <td className="p-2">
+                              <Badge
+                                variant={
+                                  tx.transaction_type === "IN"
+                                    ? "success"
+                                    : tx.transaction_type === "OUT"
+                                    ? "danger"
+                                    : "neutral"
+                                }
+                              >
+                                {tx.transaction_type === "IN"
+                                  ? "+ Nhập"
+                                  : tx.transaction_type === "OUT"
+                                  ? "- Xuất"
+                                  : "Điều chỉnh"}
+                              </Badge>
+                            </td>
+                            <td className="p-2 text-right font-medium">
+                              {tx.quantity}
+                            </td>
+                            <td className="p-2 text-right text-slate-600">
+                              {tx.stock_before}
+                            </td>
+                            <td className="p-2 text-right font-semibold">
+                              {tx.stock_after}
+                            </td>
+                            <td className="p-2 text-slate-500 max-w-xs truncate">
+                              {tx.note || "—"}
+                            </td>
+                            <td className="p-2 text-slate-500">
+                              <div className="flex items-center gap-1">
+                                <User className="w-3 h-3" />
+                                {tx.staff_name || "Hệ thống"}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 p-4 border-t border-slate-200 bg-slate-50 shrink-0">
+              <Button variant="outline" onClick={closeProductDetail}>
+                Đóng
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== EXPORT MODAL (CONSUMABLE) ===== */}
+      {exportModal.isOpen && exportModal.product && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl p-5 space-y-4">
+            <div className="flex justify-between items-center border-b pb-2">
+              <h3 className="text-base font-bold text-slate-900">Xuất kho vật tư</h3>
+              <button onClick={closeExportModal} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div>
+              <p className="text-sm text-slate-700">
+                Sản phẩm: <strong>{exportModal.product.name}</strong>
+              </p>
+              <p className="text-xs text-slate-500">
+                Tồn hiện tại: {exportModal.product.stock_quantity || 0}{" "}
+                {exportModal.product.unit || "cái"}
+              </p>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Số lượng xuất *
+              </label>
+              <input
+                type="number"
+                min="1"
+                value={exportModal.quantity}
+                onChange={(e) =>
+                  setExportModal((prev) => ({
+                    ...prev,
+                    quantity: Number(e.target.value),
+                  }))
+                }
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-pink-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Lý do xuất
+              </label>
+              <input
+                type="text"
+                value={exportModal.note}
+                onChange={(e) =>
+                  setExportModal((prev) => ({ ...prev, note: e.target.value }))
+                }
+                placeholder="VD: Sử dụng vệ sinh, thay thế..."
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-pink-500"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={closeExportModal}>
+                Hủy
+              </Button>
+              <Button
+                variant="secondary"
+                isLoading={exportModal.submitting}
+                onClick={handleExportSubmit}
+                disabled={exportModal.quantity <= 0}
+              >
+                Xác nhận xuất
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* DELETE CONFIRMATION DIALOG */}
       {confirmDelete && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
           <div className="bg-white rounded-t-2xl sm:rounded-2xl p-5 max-w-sm w-full space-y-4 shadow-xl">
             <h3 className="font-bold text-lg text-slate-900">Xác nhận xóa</h3>
             <p className="text-sm text-slate-600">
-              Bạn có chắc chắn muốn xóa "<strong>{confirmDelete.title}</strong>
-              "? Thao tác này không thể hoàn tác.
+              Bạn có chắc chắn muốn xóa "<strong>{confirmDelete.title}</strong>"?
+              Thao tác này không thể hoàn tác.
             </p>
             <div className="flex justify-end gap-3 pt-2">
               <button
@@ -1180,7 +1690,7 @@ export default function CatalogManagementPage() {
 }
 
 // ==========================================
-// FORM MODAL COMPONENTS (MOBILE-FIRST)
+// SERVICE FORM MODAL
 // ==========================================
 
 function ServiceFormModal({
@@ -1252,7 +1762,6 @@ function ServiceFormModal({
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
       <div className="bg-white rounded-t-2xl sm:rounded-2xl max-w-lg w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
-        {/* Modal Header */}
         <div className="flex items-center justify-between p-4 border-b border-slate-200 bg-slate-50 shrink-0">
           <h3 className="text-base sm:text-lg font-bold text-slate-900">
             {editingService ? "Sửa Dịch vụ" : "Thêm Dịch vụ Mới"}
@@ -1265,7 +1774,6 @@ function ServiceFormModal({
           </button>
         </div>
 
-        {/* Modal Content - Scrollable */}
         <div className="p-4 sm:p-6 overflow-y-auto space-y-4 text-xs sm:text-sm">
           {validationError && (
             <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs font-semibold flex items-center gap-2">
@@ -1358,13 +1866,11 @@ function ServiceFormModal({
             </div>
           </div>
 
-          {/* COMMISSION SECTIONS */}
           <div className="border-t border-slate-200 pt-3 space-y-4">
             <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider">
               Cấu hình Hoa hồng
             </h4>
 
-            {/* SALE COMMISSION */}
             <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
               <label className="block font-bold text-slate-800 text-xs">
                 Hoa hồng Sale
@@ -1427,7 +1933,6 @@ function ServiceFormModal({
               </div>
             </div>
 
-            {/* KTV / PERFORMANCE COMMISSION */}
             <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
               <label className="block font-bold text-slate-800 text-xs">
                 Hoa hồng KTV (Kỹ thuật viên)
@@ -1510,7 +2015,6 @@ function ServiceFormModal({
           </div>
         </div>
 
-        {/* Modal Footer */}
         <div className="flex items-center justify-end gap-2 p-4 border-t border-slate-200 bg-slate-50 shrink-0">
           <button
             type="button"
@@ -1531,6 +2035,10 @@ function ServiceFormModal({
     </div>
   );
 }
+
+// ==========================================
+// PRODUCT FORM MODAL (CÓ PHÂN LOẠI SẢN PHẨM)
+// ==========================================
 
 function ProductFormModal({
   onClose,
@@ -1554,6 +2062,7 @@ function ProductFormModal({
     stock_quantity: editingProduct?.stock_quantity || 0,
     minimum_stock: editingProduct?.minimum_stock || 5,
     unit: editingProduct?.unit || "Chai",
+    product_type: editingProduct?.product_type || "RETAIL", // <-- THÊM
     sales_commission_type:
       editingProduct?.sales_commission_type || ("PERCENT" as CommissionType),
     sales_commission_value: editingProduct?.sales_commission_value ?? 0,
@@ -1654,6 +2163,31 @@ function ProductFormModal({
             />
           </div>
 
+          {/* LOẠI SẢN PHẨM (RETAIL / CONSUMABLE) */}
+          <div>
+            <label className="block font-semibold text-slate-700 mb-1">
+              Loại sản phẩm *
+            </label>
+            <select
+              value={formData.product_type}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  product_type: e.target.value as "RETAIL" | "CONSUMABLE",
+                })
+              }
+              className="w-full p-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:ring-2 focus:ring-pink-500"
+            >
+              <option value="RETAIL">💰 Bán (Retail) – Xuất hiện trên POS</option>
+              <option value="CONSUMABLE">📦 Vật tư tiêu hao – Không xuất hiện trên POS</option>
+            </select>
+            <p className="text-[10px] text-slate-400 mt-1">
+              {formData.product_type === "RETAIL"
+                ? "Sản phẩm này sẽ xuất hiện trên POS để bán cho khách."
+                : "Sản phẩm này sẽ không xuất hiện trên POS, chỉ quản lý tồn kho nội bộ."}
+            </p>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block font-semibold text-slate-700 mb-1">
@@ -1689,7 +2223,6 @@ function ProductFormModal({
             </div>
           </div>
 
-          {/* PRODUCT SALE COMMISSION ONLY */}
           <div className="border-t border-slate-200 pt-3">
             <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
               <label className="block font-bold text-slate-800 text-xs">
@@ -1824,6 +2357,10 @@ function ProductFormModal({
   );
 }
 
+// ==========================================
+// CATEGORY FORM MODAL
+// ==========================================
+
 function CategoryFormModal({
   onClose,
   editingCategory,
@@ -1907,6 +2444,10 @@ function CategoryFormModal({
     </div>
   );
 }
+
+// ==========================================
+// PACKAGE FORM MODAL
+// ==========================================
 
 function PackageFormModal({
   onClose,
