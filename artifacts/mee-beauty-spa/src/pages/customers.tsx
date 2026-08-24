@@ -1,4 +1,4 @@
-import React, { useState, useEffect, ChangeEvent, FormEvent } from "react";
+import React, { useState, useEffect, ChangeEvent, FormEvent, useRef } from "react";
 import { supabase } from "../services/supabase";
 import {
   Button,
@@ -45,7 +45,6 @@ import {
 // HELPERS
 // ============================================================
 
-/** Mask phone: chỉ hiển thị 4 số cuối cho staff */
 function maskPhone(phone: string, isAdmin: boolean): string {
   if (!phone) return "";
   if (isAdmin) return phone;
@@ -53,14 +52,11 @@ function maskPhone(phone: string, isAdmin: boolean): string {
   return "******" + phone.slice(-4);
 }
 
-/** Format currency VND */
 function formatVND(amount: number): string {
   return (amount || 0).toLocaleString("vi-VN") + " đ";
 }
 
-/** Lấy user role tạm thời – sau này thay bằng auth context */
 function useUserRole() {
-  // TODO: lấy từ auth context thực tế
   const [role] = useState<"admin" | "staff">("admin");
   return { role, isAdmin: role === "admin" };
 }
@@ -86,7 +82,6 @@ export function CustomerProfilePage({
     "info" | "photos" | "packages" | "history"
   >("info");
 
-  // Stats
   const [stats, setStats] = useState({
     total_spending: 0,
     total_visits: 0,
@@ -116,6 +111,9 @@ export function CustomerProfilePage({
   const [uploadNotes, setUploadNotes] = useState<string>("");
   const [uploading, setUploading] = useState<boolean>(false);
   const [previewPhoto, setPreviewPhoto] = useState<CustomerPhoto | null>(null);
+
+  // Ref for file input
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Tab 3: Packages
   const [packages, setPackages] = useState<CustomerPackage[]>([]);
@@ -242,16 +240,19 @@ export function CustomerProfilePage({
 
     setUpdating(true);
     try {
-      const updated = await updateCustomer(customerId, {
+      // Chỉ gửi các trường chắc chắn tồn tại
+      const payload: any = {
         full_name: editFormData.full_name,
-        name: editFormData.full_name,
         phone: editFormData.phone,
-        email: editFormData.email || null,
-        address: editFormData.address || null,
-        gender: editFormData.gender || null,
-        birth_date: editFormData.birth_date || null,
-        notes: editFormData.notes || null,
-      });
+      };
+      if (editFormData.email) payload.email = editFormData.email;
+      if (editFormData.gender) payload.gender = editFormData.gender;
+      if (editFormData.birth_date) payload.birth_date = editFormData.birth_date;
+      if (editFormData.notes) payload.notes = editFormData.notes;
+      // Không gửi address vì có thể bảng không có cột này
+      // if (editFormData.address) payload.address = editFormData.address;
+
+      const updated = await updateCustomer(customerId, payload);
       setCustomer(updated);
       setIsEditModalOpen(false);
       await loadCustomerDetails();
@@ -917,13 +918,7 @@ export function CustomerProfilePage({
               }
             />
           </div>
-          <Input
-            label="Địa chỉ"
-            value={editFormData.address}
-            onChange={(e: ChangeEvent<HTMLInputElement>) =>
-              setEditFormData({ ...editFormData, address: e.target.value })
-            }
-          />
+          {/* Bỏ input địa chỉ để tránh lỗi */}
           <Textarea
             label="Ghi chú"
             value={editFormData.notes}
@@ -942,10 +937,13 @@ export function CustomerProfilePage({
         </form>
       </Modal>
 
-      {/* MODAL: UPLOAD PHOTO */}
+      {/* MODAL: UPLOAD PHOTO - SỬA LỖI INPUT FILE */}
       <Modal
         isOpen={isUploadModalOpen}
-        onClose={() => setIsUploadModalOpen(false)}
+        onClose={() => {
+          setIsUploadModalOpen(false);
+          setSelectedFile(null);
+        }}
         title="Upload Ảnh Điều Trị"
       >
         <form onSubmit={handleUploadPhoto} className="space-y-4">
@@ -954,20 +952,32 @@ export function CustomerProfilePage({
               Chọn file ảnh *
             </label>
             <input
+              ref={fileInputRef}
               type="file"
               accept="image/*"
-              capture="environment"
+              // Không dùng capture để tránh lỗi trên desktop
+              // capture="environment" // bỏ đi
               required
               onChange={(e: ChangeEvent<HTMLInputElement>) => {
                 if (e.target.files && e.target.files[0]) {
                   setSelectedFile(e.target.files[0]);
                 }
               }}
-              className="w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+              className="w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
             />
             <p className="text-[10px] text-gray-400 mt-1">
               📱 Chụp ảnh trực tiếp hoặc chọn từ thư viện
             </p>
+            {/* Nút chọn file dự phòng nếu input không hoạt động */}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-2"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              📁 Chọn ảnh
+            </Button>
           </div>
           <Select
             label="Phân loại ảnh *"
@@ -991,7 +1001,10 @@ export function CustomerProfilePage({
           <div className="flex justify-end gap-2 pt-4">
             <Button
               variant="outline"
-              onClick={() => setIsUploadModalOpen(false)}
+              onClick={() => {
+                setIsUploadModalOpen(false);
+                setSelectedFile(null);
+              }}
             >
               Hủy
             </Button>
@@ -1203,7 +1216,6 @@ export function CustomersPage() {
     null,
   );
 
-  // Modal State
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
   const [formData, setFormData] = useState({
     name: "",
@@ -1217,7 +1229,6 @@ export function CustomersPage() {
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [addError, setAddError] = useState<string | null>(null);
 
-  // Stats for each customer (package, gift)
   const [customerBadges, setCustomerBadges] = useState<
     Record<string, { hasPackage: boolean; hasGift: boolean }>
   >({});
@@ -1228,7 +1239,6 @@ export function CustomersPage() {
       const data = await fetchCustomers();
       setCustomers(data || []);
 
-      // Load package/gift badges
       const badges: Record<string, { hasPackage: boolean; hasGift: boolean }> =
         {};
       for (const c of data || []) {
@@ -1264,7 +1274,6 @@ export function CustomersPage() {
       return;
     }
 
-    // Validate phone
     if (!/^0\d{9}$/.test(formData.phone.trim())) {
       setAddError("Số điện thoại phải bắt đầu bằng 0 và đúng 10 số");
       return;
@@ -1272,12 +1281,10 @@ export function CustomersPage() {
 
     setSubmitting(true);
     try {
-      // Chỉ gửi các trường có giá trị
       const payload: any = {
         full_name: formData.name,
         phone: formData.phone.trim(),
       };
-
       if (formData.email?.trim()) payload.email = formData.email.trim();
       if (formData.address?.trim()) payload.address = formData.address.trim();
       if (formData.gender?.trim()) payload.gender = formData.gender.trim();
@@ -1402,18 +1409,18 @@ export function CustomersPage() {
                           </span>
                         </div>
                       </div>
-                      {/* Quick Photo Button */}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          // Mở camera nhanh - trigger upload modal
-                          // Sau này có thể mở camera trực tiếp
                           setSelectedCustomerId(item.id);
                           setTimeout(() => {
-                            const profile = document.querySelector(
-                              '[data-tab="photos"] button',
-                            ) as HTMLButtonElement;
-                            if (profile) profile.click();
+                            const tabButtons = document.querySelectorAll(
+                              '[class*="flex overflow-x-auto"] button',
+                            );
+                            const photoTab = Array.from(tabButtons).find(
+                              (btn) => btn.textContent?.includes("📷 Ảnh")
+                            );
+                            if (photoTab) (photoTab as HTMLButtonElement).click();
                           }, 100);
                         }}
                         className="shrink-0 w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-sm transition-colors"
