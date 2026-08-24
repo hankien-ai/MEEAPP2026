@@ -23,7 +23,7 @@ export function App() {
       case "operations":
         return <OperationsPage />;
       case "staff":
-        return <StaffPage />;
+        return <StaffPage userRole={userRole} />; // ✅ Truyền userRole vào StaffPage
       case "pos":
         return <POSPage />;
       default:
@@ -37,7 +37,6 @@ export function App() {
       onSelectTab={setActiveTab}
       userRole={userRole}
     >
-      {/* HEADER CHO DESKTOP & TABLET */}
       <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between sticky top-0 z-30 shadow-xs">
         <div className="flex items-center gap-3">
           <div className="h-9 w-9 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black text-lg shadow-md shadow-blue-600/20">
@@ -54,7 +53,6 @@ export function App() {
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Nút giả lập Role Quản lý / Nhân viên để test Bottom Toolbar */}
           <div className="hidden sm:flex items-center bg-slate-100 p-1 rounded-xl text-xs">
             <button
               type="button"
@@ -80,7 +78,6 @@ export function App() {
             </button>
           </div>
 
-          {/* MENU TRÊN DESKTOP */}
           <nav className="hidden md:flex items-center gap-1">
             <button
               type="button"
@@ -152,7 +149,6 @@ export function App() {
         </div>
       </header>
 
-      {/* VÙNG CHỨA NỘI DUNG CHÍNH */}
       <div className="max-w-7xl w-full mx-auto p-4 sm:p-6">
         {renderContent()}
       </div>
