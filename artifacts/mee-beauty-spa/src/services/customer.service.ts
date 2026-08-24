@@ -9,21 +9,41 @@ import {
   CustomerPackageItem,
 } from "../types/domain";
 
-export type CustomerInput = Omit<
-  Partial<Customer>,
-  "id" | "created_at" | "updated_at"
-> & {
-  full_name?: string;
-  name?: string;
+export type CustomerInput = {
+  full_name: string;
   phone: string;
   email?: string | null;
-  birth_date?: string | null;
-  gender?: string | null;
   address?: string | null;
+  gender?: string | null;
+  birth_date?: string | null;
   notes?: string | null;
+  total_spend?: number;
+  total_spent?: number;
+  total_visits?: number;
 };
 
-// --- CUSTOMER CRUD ---
+// ============ VALIDATION ============
+
+export function isValidPhone(phone: string): boolean {
+  return /^0\d{9}$/.test(phone);
+}
+
+export async function isPhoneExists(phone: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("customers")
+    .select("id")
+    .eq("phone", phone)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Error checking phone existence:", error);
+    return false;
+  }
+
+  return !!data;
+}
+
+// ============ CUSTOMER CRUD ============
 
 export async function fetchCustomers(): Promise<Customer[]> {
   const { data, error } = await supabase
@@ -59,27 +79,36 @@ export async function fetchCustomerById(id: string): Promise<Customer | null> {
 export async function createCustomer(
   payload: CustomerInput,
 ): Promise<Customer> {
-  const nameToUse = payload.full_name || payload.name || "Khách hàng mới";
+  if (!payload.phone) {
+    throw new Error("Số điện thoại là bắt buộc");
+  }
+
+  if (!isValidPhone(payload.phone)) {
+    throw new Error("Số điện thoại phải bắt đầu bằng 0 và đúng 10 số");
+  }
+
+  const exists = await isPhoneExists(payload.phone);
+  if (exists) {
+    throw new Error("Số điện thoại này đã được đăng ký. Vui lòng nhập số khác.");
+  }
 
   const insertData: any = {
     organization_id: DEFAULT_ORG_ID,
     branch_id: DEFAULT_BRANCH_ID,
-    full_name: nameToUse,
-    name: nameToUse,
+    full_name: payload.full_name || "Khách hàng mới",
+    name: payload.full_name || "Khách hàng مới",
     phone: payload.phone,
-    email: payload.email || null,
-    birth_date: payload.birth_date || null,
-    gender: payload.gender || null,
-    notes: payload.notes || null,
-    total_spend: payload.total_spend || 0,
-    total_spent: payload.total_spent || 0,
+    total_spend: 0,
+    total_spent: 0,
     total_visits: 0,
     updated_at: new Date().toISOString(),
   };
 
-  if (payload.address) {
-    insertData.address = payload.address;
-  }
+  if (payload.email) insertData.email = payload.email;
+  if (payload.address) insertData.address = payload.address;
+  if (payload.gender) insertData.gender = payload.gender;
+  if (payload.birth_date) insertData.birth_date = payload.birth_date;
+  if (payload.notes) insertData.notes = payload.notes;
 
   const { data, error } = await supabase
     .from("customers")
@@ -89,7 +118,7 @@ export async function createCustomer(
 
   if (error) {
     console.error("Error creating customer in Supabase:", error);
-    throw error;
+    throw new Error(`Không thể tạo khách hàng: ${error.message}`);
   }
 
   return data as Customer;
@@ -100,15 +129,34 @@ export async function updateCustomer(
   payload: Partial<CustomerInput>,
 ): Promise<Customer> {
   const updateData: Record<string, unknown> = {
-    ...payload,
     updated_at: new Date().toISOString(),
   };
 
-  if (payload.full_name && !payload.name) {
+  if (payload.full_name !== undefined) {
+    updateData.full_name = payload.full_name;
     updateData.name = payload.full_name;
-  } else if (payload.name && !payload.full_name) {
-    updateData.full_name = payload.name;
   }
+  if (payload.phone !== undefined) {
+    if (!isValidPhone(payload.phone)) {
+      throw new Error("Số điện thoại phải bắt đầu bằng 0 và đúng 10 số");
+    }
+    const { data: existing } = await supabase
+      .from("customers")
+      .select("id")
+      .eq("phone", payload.phone)
+      .neq("id", id)
+      .maybeSingle();
+
+    if (existing) {
+      throw new Error("Số điện thoại này đã được đăng ký bởi khách hàng khác.");
+    }
+    updateData.phone = payload.phone;
+  }
+  if (payload.email !== undefined) updateData.email = payload.email;
+  if (payload.address !== undefined) updateData.address = payload.address;
+  if (payload.gender !== undefined) updateData.gender = payload.gender;
+  if (payload.birth_date !== undefined) updateData.birth_date = payload.birth_date;
+  if (payload.notes !== undefined) updateData.notes = payload.notes;
 
   const { data, error } = await supabase
     .from("customers")
@@ -119,7 +167,7 @@ export async function updateCustomer(
 
   if (error) {
     console.error(`Error updating customer ${id}:`, error);
-    throw error;
+    throw new Error(`Không thể cập nhật khách hàng: ${error.message}`);
   }
 
   return data as Customer;
@@ -130,13 +178,13 @@ export async function deleteCustomer(id: string): Promise<boolean> {
 
   if (error) {
     console.error(`Error deleting customer ${id}:`, error);
-    throw error;
+    throw new Error(`Không thể xóa khách hàng: ${error.message}`);
   }
 
   return true;
 }
 
-// --- CUSTOMER PHOTOS SERVICE ---
+// ============ CUSTOMER PHOTOS SERVICE ============
 
 export async function fetchCustomerPhotos(
   customerId: string,
@@ -187,25 +235,39 @@ export async function uploadCustomerPhoto(
   photoType: PhotoType = "BEFORE",
   notes?: string,
 ): Promise<CustomerPhoto> {
-  const fileExt = file.name.split(".").pop() || "jpg";
+  // Compress image before upload
+  let fileToUpload = file;
+
+  try {
+    if (file.size > 1024 * 1024) {
+      const compressed = await compressImage(file);
+      if (compressed) {
+        fileToUpload = compressed;
+      }
+    }
+  } catch (e) {
+    console.warn("Compression failed, using original file:", e);
+  }
+
+  const fileExt = fileToUpload.name.split(".").pop() || "jpg";
   const cleanFileName = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
   const storagePath = `${customerId}/${cleanFileName}`;
 
   const { error: uploadError } = await supabase.storage
     .from("customer-photos")
-    .upload(storagePath, file, {
+    .upload(storagePath, fileToUpload, {
       cacheControl: "3600",
       upsert: false,
     });
 
   if (uploadError) {
     console.error("Error uploading photo to storage:", uploadError);
-    throw uploadError;
+    throw new Error(`Không thể tải ảnh lên: ${uploadError.message}`);
   }
 
+  // CHỈ INSERT CÁC CỘT CÓ TRONG BẢNG customer_photos
+  // Không có organization_id và branch_id
   const insertPayload = {
-    organization_id: DEFAULT_ORG_ID,
-    branch_id: DEFAULT_BRANCH_ID,
     customer_id: customerId,
     storage_path: storagePath,
     photo_type: photoType,
@@ -220,7 +282,9 @@ export async function uploadCustomerPhoto(
 
   if (dbError) {
     console.error("Error saving photo metadata in DB:", dbError);
-    throw dbError;
+    // Rollback storage
+    await supabase.storage.from("customer-photos").remove([storagePath]);
+    throw new Error(`Không thể lưu thông tin ảnh: ${dbError.message}`);
   }
 
   const { data: signedData } = await supabase.storage
@@ -254,13 +318,60 @@ export async function deleteCustomerPhoto(
 
   if (dbError) {
     console.error(`Error deleting photo record ${photoId}:`, dbError);
-    throw dbError;
+    throw new Error(`Không thể xóa ảnh: ${dbError.message}`);
   }
 
   return true;
 }
 
-// --- CUSTOMER PACKAGES SERVICE ---
+async function compressImage(file: File): Promise<File | null> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (e) => {
+      const img = new Image();
+      img.src = e.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let width = img.width;
+        let height = img.height;
+
+        const MAX_SIZE = 1600;
+        if (width > MAX_SIZE || height > MAX_SIZE) {
+          const ratio = Math.min(MAX_SIZE / width, MAX_SIZE / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx?.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              const compressedFile = new File(
+                [blob],
+                file.name.replace(/\.[^.]+$/, ".jpg"),
+                { type: "image/jpeg" },
+              );
+              resolve(compressedFile);
+            } else {
+              resolve(null);
+            }
+          },
+          "image/jpeg",
+          0.85,
+        );
+      };
+      img.onerror = () => resolve(null);
+    };
+    reader.onerror = () => resolve(null);
+  });
+}
+
+// ============ CUSTOMER PACKAGES SERVICE ============
 
 export async function fetchCustomerPackages(
   customerId: string,
@@ -321,10 +432,8 @@ export async function fetchCustomerPackageWithItems(
   return result;
 }
 
-/**
- * Sử dụng package (trừ 1 buổi) - phiên bản mới nhận customer_package_item_id
- * Dành cho UI gọi từ POS hoặc Customer Profile
- */
+// ============ PACKAGE USAGE ============
+
 export async function usePackageSessionV2(
   customerPackageItemId: string,
   staffId?: string,
@@ -348,10 +457,6 @@ export async function usePackageSessionV2(
   return data as { success: boolean; message: string; remaining_quantity: number };
 }
 
-/**
- * Sử dụng package (trừ 1 buổi) - phiên bản tương thích với UI cũ
- * Nhận customer_package_id, package_item_id, service_id
- */
 export async function usePackageSession(
   customerPackageId: string,
   packageItemId: string,
@@ -359,7 +464,6 @@ export async function usePackageSession(
   staffId?: string,
   notes?: string,
 ): Promise<{ success: boolean; message: string; remaining_quantity: number }> {
-  // Tìm customer_package_item_id từ customerPackageId và packageItemId
   const { data: cpi, error: cpiErr } = await supabase
     .from("customer_package_items")
     .select("id")
@@ -378,32 +482,9 @@ export async function usePackageSession(
   return usePackageSessionV2(cpi.id, staffId, notes);
 }
 
-/**
- * Tạo gift package
- */
-export async function createGiftPackage(
-  customerId: string,
-  packageId: string,
-  createdBy?: string,
-): Promise<{ success: boolean; message: string; customer_package_id?: string }> {
-  const { data, error } = await supabase.rpc("create_gift_package", {
-    p_customer_id: customerId,
-    p_package_id: packageId,
-    p_created_by: createdBy || null,
-  });
+export const usePackageSessionLegacy = usePackageSession;
 
-  if (error) {
-    console.error("create_gift_package error:", error);
-    return {
-      success: false,
-      message: error.message || "Lỗi tạo gift package",
-    };
-  }
-
-  return data as { success: boolean; message: string; customer_package_id?: string };
-}
-
-// --- CUSTOMER SERVICE HISTORY ---
+// ============ CUSTOMER SERVICE HISTORY ============
 
 export async function fetchCustomerServiceHistory(
   customerId: string,
@@ -439,7 +520,7 @@ export async function fetchCustomerServiceHistory(
   return (data as ServiceSession[]) || [];
 }
 
-// --- CUSTOMER INVOICES ---
+// ============ CUSTOMER INVOICES ============
 
 export async function fetchCustomerInvoices(
   customerId: string,
@@ -472,7 +553,42 @@ export async function fetchCustomerInvoices(
   return (data as Invoice[]) || [];
 }
 
-// Compatibility Helper Aliases
+// ============ CUSTOMER STATISTICS ============
+
+export async function fetchCustomerStats(customerId: string): Promise<{
+  total_spending: number;
+  total_visits: number;
+  last_visit: string | null;
+}> {
+  const { data: invoices, error } = await supabase
+    .from("invoices")
+    .select("total_amount, created_at")
+    .eq("customer_id", customerId)
+    .in("status", ["PAID", "PARTIALLY_PAID"])
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Error fetching customer stats:", error);
+    return {
+      total_spending: 0,
+      total_visits: 0,
+      last_visit: null,
+    };
+  }
+
+  const total_spending = invoices?.reduce((sum, inv) => sum + (inv.total_amount || 0), 0) || 0;
+  const total_visits = invoices?.length || 0;
+  const last_visit = invoices?.[0]?.created_at || null;
+
+  return {
+    total_spending,
+    total_visits,
+    last_visit,
+  };
+}
+
+// ============ EXPORTS ============
+
 export const getCustomers = fetchCustomers;
 export const getCustomerById = fetchCustomerById;
 export const getCustomer = fetchCustomerById;
@@ -496,9 +612,12 @@ export const customerService = {
   deleteCustomerPhoto,
   fetchCustomerServiceHistory,
   fetchCustomerInvoices,
+  fetchCustomerStats,
   usePackageSessionV2,
   usePackageSession,
-  createGiftPackage,
+  usePackageSessionLegacy,
+  isValidPhone,
+  isPhoneExists,
 };
 
 export default customerService;
