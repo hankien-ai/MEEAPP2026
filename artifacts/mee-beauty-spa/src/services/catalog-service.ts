@@ -565,47 +565,47 @@ export async function fetchPackages(): Promise<Package[]> {
   if (!pkgs || pkgs.length === 0) return [];
 
   const pkgIds = pkgs.map((p) => p.id);
+  // Lấy package_items với join services và products
   const { data: items, error: itemErr } = await supabase
     .from("package_items")
-    .select("*")
+    .select(`
+      *,
+      service:service_id (
+        id,
+        catalog_item_id,
+        catalog_item:catalog_items ( name, code )
+      ),
+      product:product_id (
+        id,
+        catalog_item_id,
+        catalog_item:catalog_items ( name, code )
+      )
+    `)
     .in("package_id", pkgIds);
 
   if (itemErr) throw itemErr;
 
-  const serviceIds = (items || []).map((i) => i.service_id).filter(Boolean);
-  let serviceNameMap = new Map<string, { name: string; code: string }>();
-
-  if (serviceIds.length > 0) {
-    const { data: sDetails } = await supabase
-      .from("services")
-      .select("id, catalog_item_id")
-      .in("id", serviceIds);
-
-    if (sDetails && sDetails.length > 0) {
-      const cIds = sDetails.map((s) => s.catalog_item_id);
-      const { data: cItems } = await supabase
-        .from("catalog_items")
-        .select("id, name, code")
-        .in("id", cIds);
-
-      const cMap = new Map((cItems || []).map((c) => [c.id, c]));
-      sDetails.forEach((s) => {
-        const c = cMap.get(s.catalog_item_id);
-        if (c) {
-          serviceNameMap.set(s.id, { name: c.name, code: c.code });
-        }
-      });
-    }
-  }
-
   const itemsByPkg = new Map<string, PackageItem[]>();
   (items || []).forEach((it) => {
     const list = itemsByPkg.get(it.package_id) || [];
-    const info = serviceNameMap.get(it.service_id);
+    let serviceName = '', serviceCode = '';
+    let productName = '', productCode = '';
+
+    if (it.service) {
+      serviceName = it.service.catalog_item?.name || '';
+      serviceCode = it.service.catalog_item?.code || '';
+    }
+    if (it.product) {
+      productName = it.product.catalog_item?.name || '';
+      productCode = it.product.catalog_item?.code || '';
+    }
+
     list.push({
       ...it,
-      service_name: info?.name || "Dịch vụ",
-      service_code: info?.code || "",
+      service_name: serviceName,
+      service_code: serviceCode,
+      product_name: productName,
+      product_code: productCode,
     });
     itemsByPkg.set(it.package_id, list);
   });
@@ -624,9 +624,13 @@ export async function createPackage(
     validity_days: number;
     description?: string;
     is_active?: boolean;
+    sales_commission_type?: CommissionType;
+    sales_commission_value?: number;
   },
   items: Array<{
-    service_id: string;
+    service_id?: string;
+    product_id?: string;
+    item_type: 'SERVICE' | 'PRODUCT';
     quantity: number;
     price_override?: number;
   }>,
@@ -643,6 +647,8 @@ export async function createPackage(
       validity_days: pkgData.validity_days,
       description: pkgData.description || null,
       is_active: pkgData.is_active ?? true,
+      sales_commission_type: pkgData.sales_commission_type || 'PERCENT',
+      sales_commission_value: pkgData.sales_commission_value || 0,
     })
     .select()
     .single();
@@ -652,7 +658,9 @@ export async function createPackage(
   if (items.length > 0) {
     const packageItemsToInsert = items.map((it) => ({
       package_id: newPkg.id,
-      service_id: it.service_id,
+      service_id: it.item_type === 'SERVICE' ? it.service_id : null,
+      product_id: it.item_type === 'PRODUCT' ? it.product_id : null,
+      item_type: it.item_type,
       quantity: it.quantity,
       price_override: it.price_override || null,
     }));
@@ -676,9 +684,13 @@ export async function updatePackage(
     validity_days: number;
     description?: string;
     is_active?: boolean;
+    sales_commission_type?: CommissionType;
+    sales_commission_value?: number;
   },
   items: Array<{
-    service_id: string;
+    service_id?: string;
+    product_id?: string;
+    item_type: 'SERVICE' | 'PRODUCT';
     quantity: number;
     price_override?: number;
   }>,
@@ -692,18 +704,24 @@ export async function updatePackage(
       validity_days: pkgData.validity_days,
       description: pkgData.description || null,
       is_active: pkgData.is_active,
+      sales_commission_type: pkgData.sales_commission_type || 'PERCENT',
+      sales_commission_value: pkgData.sales_commission_value || 0,
     })
     .eq("id", packageId)
     .eq("organization_id", DEFAULT_ORG_ID);
 
   if (pkgErr) throw pkgErr;
 
+  // Xóa items cũ
   await supabase.from("package_items").delete().eq("package_id", packageId);
 
+  // Chèn items mới
   if (items.length > 0) {
     const packageItemsToInsert = items.map((it) => ({
       package_id: packageId,
-      service_id: it.service_id,
+      service_id: it.item_type === 'SERVICE' ? it.service_id : null,
+      product_id: it.item_type === 'PRODUCT' ? it.product_id : null,
+      item_type: it.item_type,
       quantity: it.quantity,
       price_override: it.price_override || null,
     }));

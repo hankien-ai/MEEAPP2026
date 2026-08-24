@@ -98,15 +98,19 @@ export interface Category {
   status: CategoryStatus;
 }
 
-// Bảng packages & package_items
+// Bảng packages & package_items - ĐÃ CẬP NHẬT
 export interface PackageItem {
   id?: string;
   package_id?: string;
-  service_id: string;
+  service_id?: string;          // Có thể null nếu là product
+  product_id?: string;          // MỚI: ID sản phẩm
+  item_type?: 'SERVICE' | 'PRODUCT'; // MỚI: Loại item
   quantity: number;
   price_override?: number | null;
   service_name?: string;
   service_code?: string;
+  product_name?: string;        // MỚI: Tên sản phẩm để hiển thị
+  product_code?: string;        // MỚI: Mã sản phẩm để hiển thị
 }
 
 export interface Package {
@@ -120,5 +124,7 @@ export interface Package {
   price: number;
   validity_days: number;
   is_active: boolean;
+  sales_commission_type?: CommissionType;  // MỚI
+  sales_commission_value?: number;         // MỚI
   package_items?: PackageItem[];
 }
