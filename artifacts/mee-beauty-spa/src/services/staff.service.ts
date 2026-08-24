@@ -6,8 +6,7 @@ import {
 } from "../types/domain";
 
 /**
- * Tải danh sách nhân viên từ public.staff scoped theo organization_id & branch_id.
- * Chỉ lấy các bản ghi chưa lưu trữ (archived_at IS NULL).
+ * Tải danh sách nhân viên
  */
 export const fetchStaff = async (
   searchQuery?: string,
@@ -27,7 +26,6 @@ export const fetchStaff = async (
 
   if (searchQuery && searchQuery.trim() !== "") {
     const q = searchQuery.trim();
-    // Tìm kiếm server-side theo full_name, phone, role
     query = query.or(
       `full_name.ilike.%${q}%,phone.ilike.%${q}%,role.ilike.%${q}%`,
     );
@@ -45,7 +43,7 @@ export const fetchStaff = async (
 };
 
 /**
- * Lấy chi tiết nhân viên theo id
+ * Lấy chi tiết nhân viên
  */
 export const getStaffById = async (id: string): Promise<StaffMemberDomain> => {
   const { data, error } = await supabase
@@ -64,7 +62,7 @@ export const getStaffById = async (id: string): Promise<StaffMemberDomain> => {
 };
 
 /**
- * Tạo mới nhân viên trực tiếp vào public.staff
+ * Tạo mới nhân viên
  */
 export const createStaff = async (
   input: CreateStaffInput,
@@ -76,6 +74,7 @@ export const createStaff = async (
     full_name: input.full_name,
     role: input.role,
     phone: input.phone,
+    base_salary: input.base_salary ?? 0,
     status: input.status || "ACTIVE",
     started_on: input.started_on || new Date().toISOString().split("T")[0],
   };
@@ -94,7 +93,7 @@ export const createStaff = async (
 };
 
 /**
- * Cập nhật thông tin nhân viên
+ * Cập nhật thông tin nhân viên (bao gồm lương)
  */
 export const updateStaff = async (
   id: string,
@@ -107,6 +106,7 @@ export const updateStaff = async (
   if (input.full_name !== undefined) payload.full_name = input.full_name;
   if (input.role !== undefined) payload.role = input.role;
   if (input.phone !== undefined) payload.phone = input.phone;
+  if (input.base_salary !== undefined) payload.base_salary = input.base_salary;
   if (input.status !== undefined) payload.status = input.status;
   if (input.started_on !== undefined) payload.started_on = input.started_on;
   if (input.profile_id !== undefined) payload.profile_id = input.profile_id;
@@ -128,7 +128,7 @@ export const updateStaff = async (
 };
 
 /**
- * Đổi trạng thái ACTIVE / INACTIVE
+ * Đổi trạng thái
  */
 export const updateStaffStatus = async (
   id: string,
@@ -138,7 +138,7 @@ export const updateStaffStatus = async (
 };
 
 /**
- * Soft Archive nhân viên (đặt archived_at)
+ * Lưu trữ nhân viên
  */
 export const archiveStaff = async (id: string): Promise<StaffMemberDomain> => {
   const { data, error } = await supabase

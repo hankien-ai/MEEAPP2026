@@ -2,7 +2,14 @@ export type ItemType = "SERVICE" | "PRODUCT";
 export type ItemStatus = "active" | "inactive";
 export type PaymentMethod = "CASH" | "CARD" | "TRANSFER";
 export type PackageStatus = "ACTIVE" | "EXPIRED" | "DEPLETED" | "CANCELLED";
-export type StaffRole = "MANAGER" | "TECHNICIAN" | "RECEPTIONIST" | "ACCOUNTS";
+
+// Staff role – các chức danh có sẵn trong hệ thống
+export type StaffRole =
+  | "Admin"
+  | "Cửa hàng trưởng"
+  | "Kỹ thuật viên"
+  | "Trưởng ca";
+
 export type StaffStatus = "ACTIVE" | "INACTIVE" | "ON_LEAVE";
 export type AttendanceStatus = "PRESENT" | "ABSENT" | "LATE" | "HALF_DAY";
 export type BookingStatus =
@@ -14,6 +21,7 @@ export type BookingStatus =
 export type PhotoType = "BEFORE" | "PROGRESS" | "AFTER";
 export type ServiceSourceType = "DIRECT" | "PACKAGE";
 export type InvoiceStatus = "PAID" | "UNPAID" | "CANCELLED" | "REFUNDED";
+export type PayrollStatus = "DRAFT" | "LOCKED" | "PAID";
 
 export interface Branch {
   id: string;
@@ -241,6 +249,10 @@ export interface InvoiceItemStaff {
   created_at: string;
 }
 
+// ============================================================
+// STAFF & ATTENDANCE
+// ============================================================
+
 export interface Staff {
   id: string;
   full_name: string;
@@ -248,14 +260,82 @@ export interface Staff {
   email: string | null;
   role: StaffRole;
   status: StaffStatus;
-  base_salary: number;
-  commission_rate: number;
+  base_salary: number;       // Lương cơ bản tháng
+  commission_rate: number;   // Tỷ lệ hoa hồng (có thể dùng sau)
   started_on: string;
   created_at: string;
   updated_at: string;
 }
 
 export type StaffMemberDomain = Staff;
+
+export interface Attendance {
+  id: string;
+  staff_id: string;
+  work_date: string;
+  check_in: string | null;
+  check_out: string | null;
+  status: AttendanceStatus;
+  notes: string | null;
+  organization_id?: string;
+  branch_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// ============================================================
+// PAYROLL & BONUS/PENALTY & SETTINGS
+// ============================================================
+
+export interface Payroll {
+  id: string;
+  staff_id: string;
+  month: number;
+  year: number;
+  base_salary: number;
+  total_working_days: number;      // Tổng số ngày trong tháng
+  actual_working_days: number;     // Số ngày có check-in
+  leave_days_taken: number;        // Số ngày nghỉ (không check-in)
+  allowed_leave_days: number;      // Số ngày nghỉ được phép
+  excess_leave_days: number;       // Số ngày nghỉ vượt quá cho phép
+  excess_leave_deduction: number;  // Tiền trừ do nghỉ vượt
+  total_commission: number;        // Tổng hoa hồng trong tháng
+  total_bonus: number;             // Tổng thưởng
+  total_penalty: number;           // Tổng phạt
+  net_salary: number;              // Lương thực nhận
+  status: PayrollStatus;           // DRAFT, LOCKED, PAID
+  organization_id?: string;
+  branch_id?: string;
+  created_at: string;
+  updated_at: string;
+  staff?: Staff;
+}
+
+export interface BonusPenalty {
+  id: string;
+  staff_id: string;
+  payroll_id?: string;            // Liên kết với bảng lương (nếu đã tính)
+  type: "BONUS" | "PENALTY";
+  amount: number;
+  description: string;
+  date: string;
+  created_by?: string;            // staff_id người tạo
+  created_at: string;
+}
+
+export interface SalarySetting {
+  id: string;
+  organization_id?: string;
+  branch_id?: string;
+  default_allowed_leave_days: number;  // Số ngày nghỉ mặc định
+  attendance_enabled: boolean;          // Bật/tắt chấm công
+  updated_by?: string;
+  updated_at: string;
+}
+
+// ============================================================
+// PACKAGE TEMPLATE & BOOKING (giữ nguyên)
+// ============================================================
 
 export interface PackageTemplateItem {
   catalogItemId: string;
@@ -270,18 +350,6 @@ export interface PackageTemplate {
   validityDays: number;
   items: PackageTemplateItem[];
   active: boolean;
-}
-
-export interface Attendance {
-  id: string;
-  staff_id: string;
-  work_date: string;
-  check_in: string | null;
-  check_out: string | null;
-  status: AttendanceStatus;
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
 }
 
 export interface Booking {
@@ -308,3 +376,18 @@ export interface Expense {
   created_at?: string;
   updated_at?: string;
 }
+
+// ============================================================
+// CUSTOM TYPES (dùng chung)
+// ============================================================
+
+export type CreateStaffInput = {
+  full_name: string;
+  role: StaffRole;
+  phone: string;
+  base_salary?: number;
+  status?: StaffStatus;
+  started_on?: string;
+};
+
+export type UpdateStaffInput = Partial<CreateStaffInput>;
