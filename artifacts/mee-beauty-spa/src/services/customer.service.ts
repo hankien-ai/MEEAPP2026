@@ -96,7 +96,7 @@ export async function createCustomer(
     organization_id: DEFAULT_ORG_ID,
     branch_id: DEFAULT_BRANCH_ID,
     full_name: payload.full_name || "Khách hàng mới",
-    name: payload.full_name || "Khách hàng مới",
+    name: payload.full_name || "Khách hàng mới",
     phone: payload.phone,
     total_spend: 0,
     total_spent: 0,
@@ -202,8 +202,15 @@ export async function fetchCustomerPhotos(
 
   const photos = (data as CustomerPhoto[]) || [];
 
+  // Map caption -> photo_type, notes -> notes
+  const mappedPhotos = photos.map((photo) => ({
+    ...photo,
+    photo_type: (photo.caption as PhotoType) || "BEFORE", // caption chứa loại ảnh
+    notes: photo.notes || null, // notes giữ nguyên
+  }));
+
   const photosWithSignedUrls = await Promise.all(
-    photos.map(async (photo) => {
+    mappedPhotos.map(async (photo) => {
       if (!photo.storage_path) return photo;
       try {
         const { data: signedData, error: signedError } = await supabase.storage
@@ -265,13 +272,15 @@ export async function uploadCustomerPhoto(
     throw new Error(`Không thể tải ảnh lên: ${uploadError.message}`);
   }
 
-  // CHỈ INSERT CÁC CỘT CÓ TRONG BẢNG customer_photos
-  // Không có organization_id và branch_id
+  // Insert with actual columns
   const insertPayload = {
+    organization_id: DEFAULT_ORG_ID,
+    branch_id: DEFAULT_BRANCH_ID,
     customer_id: customerId,
     storage_path: storagePath,
-    photo_type: photoType,
+    caption: photoType, // lưu loại ảnh vào caption
     notes: notes || null,
+    is_primary: false,
   };
 
   const { data, error: dbError } = await supabase
@@ -282,7 +291,6 @@ export async function uploadCustomerPhoto(
 
   if (dbError) {
     console.error("Error saving photo metadata in DB:", dbError);
-    // Rollback storage
     await supabase.storage.from("customer-photos").remove([storagePath]);
     throw new Error(`Không thể lưu thông tin ảnh: ${dbError.message}`);
   }
@@ -293,6 +301,7 @@ export async function uploadCustomerPhoto(
 
   return {
     ...(data as CustomerPhoto),
+    photo_type: photoType, // thêm virtual field để UI nhận biết
     signed_url: signedData?.signedUrl,
   };
 }

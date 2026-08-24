@@ -15,7 +15,7 @@ export function App() {
   const renderContent = () => {
     switch (activeTab) {
       case "dashboard":
-        return <DashboardPage />;
+        return <DashboardPage userRole={userRole} onNavigate={setActiveTab} />;
       case "customers":
         return <CustomersPage />;
       case "catalog":
@@ -23,7 +23,7 @@ export function App() {
       case "operations":
         return <OperationsPage />;
       case "staff":
-        return <StaffPage userRole={userRole} />; // ✅ Truyền userRole vào StaffPage
+        return <StaffPage userRole={userRole} />;
       case "pos":
         return <POSPage />;
       default:
