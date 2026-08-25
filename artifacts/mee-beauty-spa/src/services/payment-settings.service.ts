@@ -21,7 +21,6 @@ export interface PaymentSettingsInput {
   account_name: string;
 }
 
-// Danh sách ngân hàng Việt Nam
 export const vietnamBanks = [
   { code: 'VCB', name: 'Vietcombank' },
   { code: 'BIDV', name: 'BIDV' },
@@ -62,7 +61,6 @@ export const vietnamBanks = [
   { code: 'SCB', name: 'Standard Chartered' },
 ];
 
-// Hàm hash PIN bằng SHA-256 (Web Crypto API)
 async function hashPin(pin: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(pin);
@@ -119,7 +117,6 @@ export const paymentSettingsService = {
     return result;
   },
 
-  // Tạo hoặc cập nhật PIN (dùng SHA-256)
   async setPin(pin: string, orgId: string = DEFAULT_ORG_ID, branchId: string = DEFAULT_BRANCH_ID): Promise<boolean> {
     const hash = await hashPin(pin);
     const existing = await this.getSettings(orgId, branchId);
@@ -146,7 +143,6 @@ export const paymentSettingsService = {
     return true;
   },
 
-  // Xác minh PIN
   async verifyPin(pin: string, orgId: string = DEFAULT_ORG_ID, branchId: string = DEFAULT_BRANCH_ID): Promise<boolean> {
     const settings = await this.getSettings(orgId, branchId);
     if (!settings || !settings.pin_hash) return false;

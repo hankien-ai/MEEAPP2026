@@ -19,22 +19,138 @@ import { POSKTVSelector } from "@/components/pos/POSKTVSelector";
 import { POSCatalogPicker } from "@/components/pos/POSCatalogPicker";
 import { POSCart } from "@/components/pos/POSCart";
 import { POSPaymentModal } from "@/components/pos/POSPaymentModal";
-import { QRCodeSettingsModal } from "@/components/pos/QRCodeSettingsModal";
 import { QRCodeModal } from "@/components/pos/QRCodeModal";
-import { getBankConfig } from "@/config/bank";
+import bankConfig from "@/config/bank";
+import { paymentSettingsService } from "@/services/payment-settings.service";
 import { useAuth } from "@/context/AuthContext";
-import { X } from "lucide-react";
+import { X, FileText, Eye, Calendar, Search } from "lucide-react";
+
+// ============================================================
+// COMPONENT: Invoice History Modal
+// ============================================================
+interface InvoiceHistoryModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  customerId?: string | null;
+}
+
+const InvoiceHistoryModal: React.FC<InvoiceHistoryModalProps> = ({
+  isOpen,
+  onClose,
+  customerId,
+}) => {
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null);
+
+  useEffect(() => {
+    if (isOpen && customerId) {
+      loadInvoices();
+    }
+  }, [isOpen, customerId]);
+
+  const loadInvoices = async () => {
+    setLoading(true);
+    try {
+      const data = await customerService.fetchCustomerInvoices(customerId!);
+      setInvoices(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatVND = (val: number) => new Intl.NumberFormat("vi-VN").format(val) + " đ";
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+        <div className="flex justify-between items-center p-4 border-b border-slate-200 bg-slate-50 shrink-0">
+          <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+            <FileText className="w-5 h-5 text-blue-600" />
+            Lịch sử hóa đơn
+          </h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-4 overflow-y-auto flex-1">
+          {loading ? (
+            <div className="text-center py-8 text-slate-500">Đang tải...</div>
+          ) : invoices.length === 0 ? (
+            <div className="text-center py-8 text-slate-400">Chưa có hóa đơn nào</div>
+          ) : (
+            <div className="space-y-2">
+              {invoices.map((inv) => (
+                <div
+                  key={inv.id}
+                  onClick={() => setSelectedInvoice(selectedInvoice?.id === inv.id ? null : inv)}
+                  className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm cursor-pointer hover:border-blue-300 transition-colors"
+                >
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <div className="font-semibold text-sm text-slate-800">
+                        #{inv.code || inv.id.slice(0, 8)}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        {new Date(inv.created_at).toLocaleString("vi-VN")}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-bold text-emerald-700">{formatVND(inv.total_amount || 0)}</div>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+                        inv.status === 'PAID' ? 'bg-emerald-100 text-emerald-800' :
+                        inv.status === 'PARTIALLY_PAID' ? 'bg-amber-100 text-amber-800' :
+                        'bg-slate-100 text-slate-600'
+                      }`}>
+                        {inv.status === 'PAID' ? 'Đã thanh toán' : inv.status === 'PARTIALLY_PAID' ? 'Nợ' : 'Nháp'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {selectedInvoice?.id === inv.id && inv.items && (
+                    <div className="mt-3 pt-3 border-t border-slate-100">
+                      <div className="text-xs font-semibold text-slate-600 mb-2">Chi tiết:</div>
+                      <div className="space-y-1">
+                        {inv.items.map((item: any, idx: number) => (
+                          <div key={idx} className="flex justify-between text-xs text-slate-700">
+                            <span>{item.description || item.item_name || 'Sản phẩm'} x{item.quantity}</span>
+                            <span className="font-medium">{formatVND(item.total_amount || 0)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ============================================================
+// MAIN POS PAGE
+// ============================================================
 
 export const POSPage: React.FC = () => {
   const { role } = useAuth();
   const isAdminUser = role === 'admin';
 
+  // Data states
   const [services, setServices] = useState<CatalogServiceItem[]>([]);
   const [products, setProducts] = useState<CatalogProductItem[]>([]);
   const [packages, setPackages] = useState<CatalogPackageItem[]>([]);
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [loggedStaff, setLoggedStaff] = useState<Staff | null>(null);
 
+  // Customer & cart
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [overallDiscount, setOverallDiscount] = useState<number>(0);
@@ -43,15 +159,21 @@ export const POSPage: React.FC = () => {
 
   const [selectedSellerId, setSelectedSellerId] = useState<string | undefined>(undefined);
 
+  // Bank config
+  const [bankConfigState, setBankConfigState] = useState(bankConfig);
+
+  // Package usage
   const [packageUsageModal, setPackageUsageModal] = useState<{
     isOpen: boolean;
     customerPackageId: string;
     items: { package_item_id: string; service_id: string; service_name: string; remaining_quantity: number; total_quantity: number }[];
   } | null>(null);
 
+  // Modals
   const [isMethodSelectorOpen, setIsMethodSelectorOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isQRModalOpen, setIsQRModalOpen] = useState(false);
+  const [isInvoiceHistoryOpen, setIsInvoiceHistoryOpen] = useState(false);
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null);
 
   const [loading, setLoading] = useState(true);
@@ -61,19 +183,23 @@ export const POSPage: React.FC = () => {
     message: string;
   } | null>(null);
 
-  const [qrCodeUrl, setQrCodeUrl] = useState<string | undefined>(undefined);
-  const [isQRCodeSettingsOpen, setIsQRCodeSettingsOpen] = useState(false);
-
   const isAdmin = loggedStaff?.role === 'admin' || isAdminUser;
 
-  // Lấy cấu hình ngân hàng từ localStorage (hoặc mặc định)
-  const bankConfig = getBankConfig();
-
+  // Load bank config từ service
   useEffect(() => {
-    loadData();
-    const savedQr = localStorage.getItem('pos_qr_code');
-    if (savedQr) setQrCodeUrl(savedQr);
+    loadBankConfig();
   }, []);
+
+  const loadBankConfig = async () => {
+    const config = await paymentSettingsService.getBankConfig();
+    if (config) {
+      setBankConfigState({
+        bankName: config.bankName,
+        accountNumber: config.accountNumber,
+        accountName: config.accountName,
+      });
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -85,14 +211,21 @@ export const POSPage: React.FC = () => {
       POSService.getLoggedInStaff(),
     ]);
 
+    // Chỉ hiển thị sản phẩm RETAIL (loại bỏ CONSUMABLE)
+    const retailProducts = pData.filter(p => p.product_type === 'RETAIL');
+
     setServices(sData);
-    setProducts(pData);
+    setProducts(retailProducts);
     setPackages(pkgData);
     setStaffList(staffData);
     setLoggedStaff(logged);
     setSelectedSellerId(logged?.id);
     setLoading(false);
   };
+
+  useEffect(() => {
+    loadData();
+  }, []);
 
   const showAlert = (type: "success" | "error", message: string) => {
     setNotification({ type, message });
@@ -307,7 +440,7 @@ export const POSPage: React.FC = () => {
     setCartItems((prev) => prev.filter((it) => it.cart_item_id !== cartItemId));
   };
 
-  // ========== DISCOUNT HANDLING ==========
+  // ========== DISCOUNT ==========
   const handleOverallDiscountChange = (type: 'percent' | 'fixed', value: number) => {
     setOverallDiscountType(type);
     setOverallDiscountValue(value);
@@ -377,7 +510,7 @@ export const POSPage: React.FC = () => {
     setIsPaymentModalOpen(true);
   };
 
-  // ========== CALCULATE TOTALS ==========
+  // ========== TOTALS ==========
   const subtotal = cartItems.reduce((sum, item) => sum + item.total_amount, 0);
   const totalDiscount = overallDiscount;
   const finalTotal = Math.max(0, subtotal - totalDiscount);
@@ -448,7 +581,6 @@ export const POSPage: React.FC = () => {
       return;
     }
 
-    // Kiểm tra KTV splits
     for (const item of cartItems) {
       if (item.item_type === "SERVICE" && item.ktv_splits && item.ktv_splits.length > 0) {
         const totalShare = item.ktv_splits.reduce((sum, s) => sum + s.share_percent, 0);
@@ -459,7 +591,6 @@ export const POSPage: React.FC = () => {
       }
     }
 
-    // Mở method selector
     setIsMethodSelectorOpen(true);
   };
 
@@ -544,12 +675,6 @@ export const POSPage: React.FC = () => {
     }
   };
 
-  const handleSaveQrCode = (url: string) => {
-    setQrCodeUrl(url);
-    localStorage.setItem('pos_qr_code', url);
-    showAlert("success", "Đã lưu mã QR thành công!");
-  };
-
   const formatVND = (val: number) => new Intl.NumberFormat("vi-VN").format(val) + " đ";
 
   // ========== RENDER ==========
@@ -606,12 +731,13 @@ export const POSPage: React.FC = () => {
             🔄 Tải lại
           </button>
 
-          {isAdmin && (
+          {/* Nút xem hóa đơn */}
+          {customer && (
             <button
-              onClick={() => setIsQRCodeSettingsOpen(true)}
-              className="px-2.5 py-1.5 bg-purple-100 text-purple-700 rounded-lg text-[10px] font-medium hover:bg-purple-200 transition-all"
+              onClick={() => setIsInvoiceHistoryOpen(true)}
+              className="px-2.5 py-1.5 bg-blue-100 text-blue-700 rounded-lg text-[10px] font-medium hover:bg-blue-200 transition-all"
             >
-              📱 QR
+              📋 HĐ
             </button>
           )}
         </div>
@@ -726,7 +852,7 @@ export const POSPage: React.FC = () => {
         </div>
       )}
 
-      {/* ===== METHOD SELECTOR MODAL ===== */}
+      {/* ===== METHOD SELECTOR ===== */}
       {isMethodSelectorOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-sm w-full shadow-2xl p-5 space-y-4">
@@ -772,13 +898,13 @@ export const POSPage: React.FC = () => {
         onClose={() => setIsQRModalOpen(false)}
         amount={finalTotal}
         invoiceCode={customer?.id?.slice(0, 6) || 'POS'}
-        bankName={bankConfig.bankName}
-        accountNumber={bankConfig.accountNumber}
-        accountName={bankConfig.accountName}
+        bankName={bankConfigState.bankName}
+        accountNumber={bankConfigState.accountNumber}
+        accountName={bankConfigState.accountName}
         onConfirm={handleQRConfirm}
       />
 
-      {/* ===== POS PAYMENT MODAL (cho các method khác) ===== */}
+      {/* ===== POS PAYMENT MODAL ===== */}
       <POSPaymentModal
         isOpen={isPaymentModalOpen}
         onClose={() => setIsPaymentModalOpen(false)}
@@ -790,15 +916,14 @@ export const POSPage: React.FC = () => {
         staffList={staffList}
         onConfirmPayment={handleConfirmPayment}
         isSubmitting={isSubmitting}
-        qrCodeUrl={qrCodeUrl}
+        qrCodeUrl={undefined}
       />
 
-      {/* ===== QR CODE SETTINGS ===== */}
-      <QRCodeSettingsModal
-        isOpen={isQRCodeSettingsOpen}
-        onClose={() => setIsQRCodeSettingsOpen(false)}
-        currentQrUrl={qrCodeUrl}
-        onSave={handleSaveQrCode}
+      {/* ===== INVOICE HISTORY MODAL ===== */}
+      <InvoiceHistoryModal
+        isOpen={isInvoiceHistoryOpen}
+        onClose={() => setIsInvoiceHistoryOpen(false)}
+        customerId={customer?.id}
       />
 
       {/* ===== PACKAGE USAGE MODAL ===== */}
