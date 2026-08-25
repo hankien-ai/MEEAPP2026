@@ -52,7 +52,7 @@ export const POSPaymentModal: React.FC<Props> = ({
   const handlePay = () => {
     setErrorMessage("");
 
-    if (method === "CASH" && totalAmount <= 0) {
+    if (method === "CASH" && totalAmount < 0) {
       setErrorMessage("Số tiền thanh toán phải lớn hơn 0!");
       return;
     }

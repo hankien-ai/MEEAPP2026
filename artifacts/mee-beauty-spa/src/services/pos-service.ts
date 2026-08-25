@@ -1,3 +1,4 @@
+// src/services/pos-service.ts
 import { supabase, DEFAULT_ORG_ID, DEFAULT_BRANCH_ID } from "./supabase";
 import {
   Customer,
@@ -336,8 +337,8 @@ export class POSService {
           return { success: false, error: itemErr.message };
         }
 
-        // ============ MULTI KTV ============
-        if (item.item_type === "SERVICE" && item.ktv_splits && item.ktv_splits.length > 0) {
+        // ============ MULTI KTV (chỉ khi có tiền và không dùng package) ============
+        if (item.item_type === "SERVICE" && item.ktv_splits && item.ktv_splits.length > 0 && !item.use_package && item.total_amount > 0) {
           const splits = item.ktv_splits.map((s) => ({
             invoice_item_id: invItem.id,
             staff_id: s.staff_id,
@@ -345,29 +346,40 @@ export class POSService {
             commission_amount: s.commission_amount || 0,
           }));
 
-          const { error: splitErr } = await supabase
-            .from("invoice_item_staff")
-            .insert(splits);
-
-          if (splitErr) {
-            console.warn("Lỗi lưu KTV split:", splitErr);
+          try {
+            const { error: splitErr } = await supabase
+              .from("invoice_item_staff")
+              .insert(splits);
+            if (splitErr) {
+              console.warn("Lỗi lưu KTV split (bỏ qua):", splitErr);
+            }
+          } catch (err) {
+            console.warn("Không thể lưu KTV split, bỏ qua:", err);
           }
         }
 
         // ============ PACKAGE USAGE ============
         if (item.use_package && item.customer_package_id && item.package_item_id && item.actual_service_id) {
-          const result = await customerService.usePackageSessionV2(
-            item.customer_package_id,
-            item.package_item_id,
-            item.actual_service_id,
-            item.performing_staff_id || null,
-            `Sử dụng package qua POS, invoice ${invoice.id}`,
-          );
-
-          if (!result.success) {
+          try {
+            // Gọi RPC với customer_package_item_id (đã là ID của customer_package_item)
+            const result = await customerService.usePackageSessionV2(
+              item.package_item_id, // đây là customer_package_item_id
+              item.performing_staff_id || null,
+              `Sử dụng package qua POS, invoice ${invoice.id}`,
+            );
+            if (!result.success) {
+              console.error("❌ Lỗi sử dụng package:", result.message);
+              // KHÔNG xóa invoice để tránh conflict
+              return {
+                success: false,
+                error: `Lỗi sử dụng package: ${result.message}`,
+              };
+            }
+          } catch (err: any) {
+            console.error("❌ Lỗi sử dụng package:", err.message);
             return {
               success: false,
-              error: `Lỗi sử dụng package: ${result.message}`,
+              error: `Lỗi sử dụng package: ${err.message}`,
             };
           }
         }
@@ -375,7 +387,7 @@ export class POSService {
 
       // ============ INVENTORY (PRODUCT RETAIL) ============
       for (const item of cartItems) {
-        if (item.item_type === "PRODUCT" && item.product_id) {
+        if (item.item_type === "PRODUCT" && item.product_id && !item.use_package) {
           try {
             await catalogService.processInventoryTransaction({
               product_id: item.product_id,
@@ -412,7 +424,7 @@ export class POSService {
 
           const { data: pkgInfo } = await supabase
             .from("packages")
-            .select("validity_days, package_items(quantity)")
+            .select("validity_days, package_items(quantity, service_id)")
             .eq("id", item.package_id)
             .single();
 
@@ -454,22 +466,43 @@ export class POSService {
             };
           }
 
+          // ============ TẠO CUSTOMER_PACKAGE_ITEMS ============
+          if (pkgInfo?.package_items && pkgInfo.package_items.length > 0) {
+            const cpItems = pkgInfo.package_items.map((pi: any) => ({
+              customer_package_id: customerPkg.id,
+              service_id: pi.service_id,
+              total_quantity: Number(pi.quantity) * item.quantity,
+              used_quantity: 0,
+              remaining_quantity: Number(pi.quantity) * item.quantity,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            }));
+
+            const { error: cpItemsErr } = await supabase
+              .from("customer_package_items")
+              .insert(cpItems);
+
+            if (cpItemsErr) {
+              console.error("❌ Lỗi tạo customer_package_items:", cpItemsErr);
+            } else {
+              console.log(`✅ Đã tạo ${cpItems.length} customer_package_items cho gói ${customerPkg.id}`);
+            }
+          }
+
           // ============ TẠO SERVICE SESSION CHO BUỔI ĐẦU (nếu dùng ngay) ============
           if (item.use_package && item.actual_service_id) {
             try {
-              // Tìm package_item_id tương ứng
-              const { data: pkgItem } = await supabase
-                .from("package_items")
+              // Tìm customer_package_item tương ứng với service_id để trừ buổi
+              const { data: cpItem } = await supabase
+                .from("customer_package_items")
                 .select("id")
-                .eq("package_id", item.package_id)
+                .eq("customer_package_id", customerPkg.id)
                 .eq("service_id", item.actual_service_id)
                 .single();
 
-              if (pkgItem) {
+              if (cpItem) {
                 await customerService.usePackageSessionV2(
-                  customerPkg.id,
-                  pkgItem.id,
-                  item.actual_service_id,
+                  cpItem.id,
                   item.performing_staff_id || null,
                   `Sử dụng buổi đầu từ package mới, invoice ${invoice.id}`,
                 );
@@ -481,9 +514,9 @@ export class POSService {
         }
       }
 
-      // ============ SERVICE SESSION CHO SERVICE LẺ (DIRECT) ============
+      // ============ SERVICE SESSION CHO SERVICE LẺ (DIRECT, không dùng package) ============
       for (const item of cartItems) {
-        if (item.item_type === "SERVICE" && !item.use_package && item.actual_service_id) {
+        if (item.item_type === "SERVICE" && !item.use_package && item.actual_service_id && item.total_amount > 0) {
           try {
             await supabase.from("service_sessions").insert({
               organization_id: DEFAULT_ORG_ID,
@@ -503,12 +536,15 @@ export class POSService {
         }
       }
 
-      // ============ COMMISSION ============
+      // ============ COMMISSION (chỉ khi có tiền và không dùng package) ============
       const commissionLogs = [];
 
       for (const item of cartItems) {
+        // Bỏ qua nếu là quà tặng, hoặc phương thức thanh toán là GIFT, hoặc đang sử dụng package (không tính commission)
         if (item.is_gift) continue;
         if (payload.payment_method === "GIFT") continue;
+        if (item.use_package) continue;
+        if (item.total_amount <= 0) continue;
 
         // Sale Commission
         const sellerStaffId = item.seller_staff_id || defaultSellerId;
@@ -533,8 +569,8 @@ export class POSService {
           }
         }
 
-        // KTV Commission (chỉ cho SERVICE)
-        if (item.item_type === "SERVICE") {
+        // KTV Commission (chỉ cho SERVICE và không dùng package)
+        if (item.item_type === "SERVICE" && !item.use_package) {
           const totalPerformanceComm = item.performance_commission_type && item.performance_commission_value
             ? (() => {
                 if (item.performance_commission_type === "PERCENT") {
@@ -572,11 +608,15 @@ export class POSService {
       }
 
       if (commissionLogs.length > 0) {
-        await supabase.from("commission_logs").insert(commissionLogs);
+        const { error: commErr } = await supabase.from("commission_logs").insert(commissionLogs);
+        if (commErr) {
+          console.warn("Lỗi lưu commission (bỏ qua):", commErr);
+        }
       }
 
       return { success: true, invoice_id: invoice.id };
     } catch (err: any) {
+      console.error("❌ Lỗi processCheckout:", err);
       return {
         success: false,
         error: err.message || "Lỗi khi xử lý thanh toán",

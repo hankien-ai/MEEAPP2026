@@ -1,8 +1,9 @@
+// src/components/pos/POSPackageUsageModal.tsx
 import React, { useState, useEffect } from "react";
 import { X } from "lucide-react";
 
 interface PackageItem {
-  package_item_id: string;
+  customer_package_item_id: string;
   service_id: string;
   service_name: string;
   remaining_quantity: number;
@@ -14,7 +15,7 @@ interface Props {
   onClose: () => void;
   customerPackageId: string;
   packageItems: PackageItem[];
-  onConfirm: (packageItemId: string, serviceId: string) => void;
+  onConfirm: (customerPackageItemId: string, serviceId: string) => void;
   isSubmitting?: boolean;
 }
 
@@ -36,13 +37,17 @@ export const POSPackageUsageModal: React.FC<Props> = ({
 
   if (!isOpen) return null;
 
-  const selectedItem = packageItems.find((item) => item.package_item_id === selectedItemId);
+  const selectedItem = packageItems.find(
+    (item) => item.customer_package_item_id === selectedItemId
+  );
 
   const handleConfirm = () => {
     if (!selectedItemId) return;
-    const item = packageItems.find((i) => i.package_item_id === selectedItemId);
+    const item = packageItems.find(
+      (i) => i.customer_package_item_id === selectedItemId
+    );
     if (item) {
-      onConfirm(item.package_item_id, item.service_id);
+      onConfirm(item.customer_package_item_id, item.service_id);
     }
   };
 
@@ -64,10 +69,10 @@ export const POSPackageUsageModal: React.FC<Props> = ({
           ) : (
             packageItems.map((item) => (
               <button
-                key={item.package_item_id}
-                onClick={() => setSelectedItemId(item.package_item_id)}
+                key={item.customer_package_item_id}
+                onClick={() => setSelectedItemId(item.customer_package_item_id)}
                 className={`w-full p-3 rounded-xl border-2 text-left transition-all ${
-                  selectedItemId === item.package_item_id
+                  selectedItemId === item.customer_package_item_id
                     ? "border-emerald-500 bg-emerald-50"
                     : "border-slate-200 hover:border-slate-300"
                 } ${item.remaining_quantity <= 0 ? "opacity-50 cursor-not-allowed" : ""}`}
@@ -80,7 +85,7 @@ export const POSPackageUsageModal: React.FC<Props> = ({
                       Còn {item.remaining_quantity} / {item.total_quantity} buổi
                     </div>
                   </div>
-                  {selectedItemId === item.package_item_id && (
+                  {selectedItemId === item.customer_package_item_id && (
                     <span className="text-emerald-600 text-xs font-bold">✓</span>
                   )}
                 </div>

@@ -1,5 +1,5 @@
 // src/pages/POSPage.tsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Customer,
   Staff,
@@ -14,7 +14,6 @@ import { POSService } from "@/services/pos-service";
 import { customerService } from "@/services/customer.service";
 import { POSCustomerSelect } from "@/components/pos/POSCustomerSelect";
 import { POSCustomerBenefits } from "@/components/pos/POSCustomerBenefits";
-import { POSPackageUsageModal } from "@/components/pos/POSPackageUsageModal";
 import { POSKTVSelector } from "@/components/pos/POSKTVSelector";
 import { POSCatalogPicker } from "@/components/pos/POSCatalogPicker";
 import { POSCart } from "@/components/pos/POSCart";
@@ -23,7 +22,7 @@ import { QRCodeModal } from "@/components/pos/QRCodeModal";
 import bankConfig from "@/config/bank";
 import { paymentSettingsService } from "@/services/payment-settings.service";
 import { useAuth } from "@/context/AuthContext";
-import { X, FileText, Eye, Calendar, Search } from "lucide-react";
+import { X, FileText } from "lucide-react";
 
 // ============================================================
 // COMPONENT: Invoice History Modal
@@ -111,7 +110,6 @@ const InvoiceHistoryModal: React.FC<InvoiceHistoryModalProps> = ({
                       </span>
                     </div>
                   </div>
-
                   {selectedInvoice?.id === inv.id && inv.items && (
                     <div className="mt-3 pt-3 border-t border-slate-100">
                       <div className="text-xs font-semibold text-slate-600 mb-2">Chi tiết:</div>
@@ -146,7 +144,7 @@ export const POSPage: React.FC = () => {
   // Data states
   const [services, setServices] = useState<CatalogServiceItem[]>([]);
   const [products, setProducts] = useState<CatalogProductItem[]>([]);
-  const [packages, setPackages] = useState<CatalogPackageItem[]>([]);
+  const [packages, setPackages] = useState<CatalogPackageItem[]>([]); // ĐÃ SỬA LỖI
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [loggedStaff, setLoggedStaff] = useState<Staff | null>(null);
 
@@ -162,30 +160,32 @@ export const POSPage: React.FC = () => {
   // Bank config
   const [bankConfigState, setBankConfigState] = useState(bankConfig);
 
-  // Package usage
-  const [packageUsageModal, setPackageUsageModal] = useState<{
-    isOpen: boolean;
-    customerPackageId: string;
-    items: { package_item_id: string; service_id: string; service_name: string; remaining_quantity: number; total_quantity: number }[];
-  } | null>(null);
-
   // Modals
-  const [isMethodSelectorOpen, setIsMethodSelectorOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isQRModalOpen, setIsQRModalOpen] = useState(false);
   const [isInvoiceHistoryOpen, setIsInvoiceHistoryOpen] = useState(false);
-  const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [notification, setNotification] = useState<{
-    type: "success" | "error";
+    type: "success" | "error" | "info";
     message: string;
   } | null>(null);
 
   const isAdmin = loggedStaff?.role === 'admin' || isAdminUser;
 
-  // Load bank config từ service
+  // Tạo Set các ID đã có trong giỏ để highlight
+  const cartItemIds = useMemo(() => {
+    const ids = new Set<string>();
+    cartItems.forEach(item => {
+      if (item.catalog_item_id) ids.add(item.catalog_item_id);
+      if (item.package_id) ids.add(item.package_id);
+      if (item.product_id) ids.add(item.product_id);
+    });
+    return ids;
+  }, [cartItems]);
+
+  // Load bank config
   useEffect(() => {
     loadBankConfig();
   }, []);
@@ -227,7 +227,7 @@ export const POSPage: React.FC = () => {
     loadData();
   }, []);
 
-  const showAlert = (type: "success" | "error", message: string) => {
+  const showAlert = (type: "success" | "error" | "info", message: string) => {
     setNotification({ type, message });
     setTimeout(() => setNotification(null), 4000);
   };
@@ -235,13 +235,49 @@ export const POSPage: React.FC = () => {
   const hasPackageInCart = cartItems.some((it) => it.item_type === "PACKAGE");
   const getDefaultSellerId = () => selectedSellerId || loggedStaff?.id || undefined;
 
-  // ========== ADD ITEMS TO CART ==========
+  // ========== ADD ITEMS TO CART (toggle) ==========
+  const toggleCartItem = (item: any, type: 'SERVICE' | 'PRODUCT' | 'PACKAGE') => {
+    let id: string | undefined;
+    if (type === 'SERVICE') id = item.catalog_item_id;
+    else if (type === 'PRODUCT') id = item.catalog_item_id;
+    else if (type === 'PACKAGE') id = item.package_id || item.id;
+
+    // Kiểm tra xem item đã có trong giỏ chưa
+    const exists = cartItems.some((cartItem) => {
+      if (type === 'SERVICE') return cartItem.catalog_item_id === id;
+      if (type === 'PRODUCT') return cartItem.catalog_item_id === id;
+      if (type === 'PACKAGE') return cartItem.package_id === id;
+      return false;
+    });
+
+    if (exists) {
+      // Nếu đã có, xóa khỏi giỏ
+      setCartItems(prev => prev.filter((cartItem) => {
+        if (type === 'SERVICE') return cartItem.catalog_item_id !== id;
+        if (type === 'PRODUCT') return cartItem.catalog_item_id !== id;
+        if (type === 'PACKAGE') return cartItem.package_id !== id;
+        return true;
+      }));
+      showAlert("info", `Đã bỏ "${item.name}" khỏi giỏ`);
+    } else {
+      // Nếu chưa có, thêm vào giỏ
+      if (type === 'SERVICE') {
+        handleAddService(item);
+      } else if (type === 'PRODUCT') {
+        handleAddProduct(item);
+      } else if (type === 'PACKAGE') {
+        handleAddPackage(item);
+      }
+    }
+  };
+
   const handleAddService = (service: CatalogServiceItem) => {
     setCartItems((prev) => {
       const existing = prev.find(
         (it) => it.item_type === "SERVICE" && it.catalog_item_id === service.catalog_item_id,
       );
       if (existing) {
+        // Nếu đã có, tăng số lượng
         return prev.map((it) =>
           it.cart_item_id === existing.cart_item_id
             ? {
@@ -255,9 +291,11 @@ export const POSPage: React.FC = () => {
         );
       }
 
+      const selectedStaffId = getDefaultSellerId();
       let defaultSplits: KTVSplit[] = [];
-      if (loggedStaff) {
-        defaultSplits = [{ staff_id: loggedStaff.id, staff_name: loggedStaff.full_name, share_percent: 100 }];
+      if (selectedStaffId) {
+        const staffName = staffList.find(s => s.id === selectedStaffId)?.full_name || loggedStaff?.full_name || "KTV";
+        defaultSplits = [{ staff_id: selectedStaffId, staff_name: staffName, share_percent: 100 }];
       }
 
       const newItem: CartItem = {
@@ -270,13 +308,13 @@ export const POSPage: React.FC = () => {
         unit_price: service.price,
         discount_amount: 0,
         total_amount: service.price,
-        seller_staff_id: getDefaultSellerId(),
+        seller_staff_id: selectedStaffId,
+        performing_staff_id: selectedStaffId,
         sales_commission_type: service.sales_commission_type,
         sales_commission_value: service.sales_commission_value,
         performance_commission_type: service.performance_commission_type,
         performance_commission_value: service.performance_commission_value,
         ktv_splits: defaultSplits,
-        performing_staff_id: loggedStaff?.id,
       };
       return [...prev, newItem];
     });
@@ -311,6 +349,7 @@ export const POSPage: React.FC = () => {
         );
       }
 
+      const selectedStaffId = getDefaultSellerId();
       const newItem: CartItem = {
         cart_item_id: `prd_${Date.now()}_${Math.random()}`,
         item_type: "PRODUCT",
@@ -324,7 +363,7 @@ export const POSPage: React.FC = () => {
         stock_quantity: product.stock_quantity,
         unit: product.unit,
         product_type: product.product_type,
-        seller_staff_id: getDefaultSellerId(),
+        seller_staff_id: selectedStaffId,
         sales_commission_type: product.sales_commission_type,
         sales_commission_value: product.sales_commission_value,
       };
@@ -352,6 +391,7 @@ export const POSPage: React.FC = () => {
         );
       }
 
+      const selectedStaffId = getDefaultSellerId();
       const newItem: CartItem = {
         cart_item_id: `pkg_${Date.now()}_${Math.random()}`,
         item_type: "PACKAGE",
@@ -362,13 +402,66 @@ export const POSPage: React.FC = () => {
         discount_amount: 0,
         total_amount: pkg.price,
         package_items: pkg.items,
-        seller_staff_id: getDefaultSellerId(),
+        seller_staff_id: selectedStaffId,
         sales_commission_type: pkg.sales_commission_type,
         sales_commission_value: pkg.sales_commission_value,
         use_package: false,
       };
       return [...prev, newItem];
     });
+  };
+
+  // ========== PACKAGE USAGE (thêm vào giỏ, không thu tiền) ==========
+  const handleUsePackageItem = (customerPackageId: string, customerPackageItemId: string, serviceName: string, serviceId: string, remaining: number) => {
+    // Tìm service trong catalog để lấy thông tin
+    const service = services.find(s => s.id === serviceId);
+    if (!service) {
+      showAlert("error", "Không tìm thấy dịch vụ này trong danh mục");
+      return;
+    }
+
+    // Kiểm tra xem đã có trong giỏ chưa (tránh duplicate)
+    const exists = cartItems.some(item => 
+      item.use_package && 
+      item.customer_package_id === customerPackageId && 
+      item.package_item_id === customerPackageItemId
+    );
+    if (exists) {
+      showAlert("warning", "Dịch vụ này đã được thêm vào giỏ");
+      return;
+    }
+
+    const selectedStaffId = getDefaultSellerId();
+    let defaultSplits: KTVSplit[] = [];
+    if (selectedStaffId) {
+      const staffName = staffList.find(s => s.id === selectedStaffId)?.full_name || loggedStaff?.full_name || "KTV";
+      defaultSplits = [{ staff_id: selectedStaffId, staff_name: staffName, share_percent: 100 }];
+    }
+
+    const newItem: CartItem = {
+      cart_item_id: `pkg_use_${Date.now()}_${Math.random()}`,
+      item_type: "SERVICE",
+      catalog_item_id: service.catalog_item_id,
+      actual_service_id: service.id,
+      name: `📦 ${serviceName} (Dùng gói)`,
+      quantity: 1,
+      unit_price: 0,
+      discount_amount: 0,
+      total_amount: 0,
+      seller_staff_id: selectedStaffId,
+      performing_staff_id: selectedStaffId,
+      sales_commission_type: service.sales_commission_type,
+      sales_commission_value: 0,
+      performance_commission_type: service.performance_commission_type,
+      performance_commission_value: 0,
+      ktv_splits: defaultSplits,
+      use_package: true,
+      customer_package_id: customerPackageId,
+      package_item_id: customerPackageItemId,
+      is_gift: false,
+    };
+    setCartItems(prev => [...prev, newItem]);
+    showAlert("success", `Đã thêm "${serviceName}" vào giỏ (sử dụng gói)`);
   };
 
   // ========== CART OPERATIONS ==========
@@ -381,6 +474,12 @@ export const POSPage: React.FC = () => {
     const item = cartItems.find((it) => it.cart_item_id === cartItemId);
     if (item && item.item_type === "PRODUCT" && item.stock_quantity && newQty > item.stock_quantity) {
       showAlert("error", `Số lượng vượt quá tồn kho (${item.stock_quantity})!`);
+      return;
+    }
+
+    // Nếu là package usage (giá 0đ), không cho tăng số lượng
+    if (item?.use_package) {
+      showAlert("warning", "Không thể tăng số lượng cho dịch vụ dùng gói");
       return;
     }
 
@@ -417,12 +516,19 @@ export const POSPage: React.FC = () => {
   };
 
   const handleUpdateSellerStaff = (cartItemId: string, staffId: string) => {
+    // Cập nhật seller_staff_id và cập nhật KTV splits nếu là service
     setCartItems((prev) =>
-      prev.map((it) =>
-        it.cart_item_id === cartItemId
-          ? { ...it, seller_staff_id: staffId }
-          : it,
-      ),
+      prev.map((it) => {
+        if (it.cart_item_id !== cartItemId) return it;
+        const updated = { ...it, seller_staff_id: staffId };
+        // Nếu là service, cập nhật KTV splits
+        if (it.item_type === "SERVICE") {
+          const staffName = staffList.find(s => s.id === staffId)?.full_name || "KTV";
+          updated.ktv_splits = [{ staff_id: staffId, staff_name: staffName, share_percent: 100 }];
+          updated.performing_staff_id = staffId;
+        }
+        return updated;
+      }),
     );
   };
 
@@ -452,62 +558,6 @@ export const POSPage: React.FC = () => {
       discountAmount = Math.min(value, subtotal);
     }
     setOverallDiscount(discountAmount);
-  };
-
-  // ========== PACKAGE USAGE ==========
-  const handleUsePackage = async (customerPackageId: string, packageItemId: string, serviceId: string, serviceName: string) => {
-    try {
-      const items = await customerService.fetchCustomerPackageItems(customerPackageId);
-      const packageItems = items.map((item) => ({
-        package_item_id: item.package_item_id,
-        service_id: item.package_item?.service_id || "",
-        service_name: item.package_item?.services?.name || "Dịch vụ",
-        remaining_quantity: item.remaining_quantity,
-        total_quantity: item.total_quantity,
-      }));
-      setPackageUsageModal({
-        isOpen: true,
-        customerPackageId,
-        items: packageItems,
-      });
-    } catch (err) {
-      showAlert("error", "Không thể tải thông tin package");
-    }
-  };
-
-  const handleConfirmPackageUsage = async (packageItemId: string, serviceId: string) => {
-    if (!packageUsageModal) return;
-    setIsSubmitting(true);
-    try {
-      const result = await customerService.usePackageSessionV2(
-        packageUsageModal.customerPackageId,
-        packageItemId,
-        serviceId,
-        loggedStaff?.id,
-        "Sử dụng package qua POS",
-      );
-      if (result.success) {
-        showAlert("success", `Sử dụng package thành công. Còn ${result.remaining_quantity} buổi`);
-        setPackageUsageModal(null);
-        loadData();
-      } else {
-        showAlert("error", result.message);
-      }
-    } catch (err: any) {
-      showAlert("error", err.message || "Lỗi sử dụng package");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleSelectGift = async (customerPackageId: string) => {
-    handleUsePackage(customerPackageId, "", "", "");
-  };
-
-  const handlePayDebt = () => {
-    setSelectedMethod('DEBT');
-    setIsMethodSelectorOpen(false);
-    setIsPaymentModalOpen(true);
   };
 
   // ========== TOTALS ==========
@@ -570,6 +620,7 @@ export const POSPage: React.FC = () => {
     }
   };
 
+  // Bỏ method selector, chuyển thẳng đến POSPaymentModal
   const handleOpenPayment = () => {
     if (cartItems.length === 0) {
       showAlert("error", "Giỏ hàng đang trống!");
@@ -581,6 +632,7 @@ export const POSPage: React.FC = () => {
       return;
     }
 
+    // Kiểm tra KTV splits
     for (const item of cartItems) {
       if (item.item_type === "SERVICE" && item.ktv_splits && item.ktv_splits.length > 0) {
         const totalShare = item.ktv_splits.reduce((sum, s) => sum + s.share_percent, 0);
@@ -591,23 +643,8 @@ export const POSPage: React.FC = () => {
       }
     }
 
-    setIsMethodSelectorOpen(true);
-  };
-
-  const handleSelectMethod = (method: PaymentMethod) => {
-    setSelectedMethod(method);
-    setIsMethodSelectorOpen(false);
-
-    if (method === 'BANK_TRANSFER') {
-      setIsQRModalOpen(true);
-    } else {
-      setIsPaymentModalOpen(true);
-    }
-  };
-
-  const handleQRConfirm = () => {
-    setIsQRModalOpen(false);
-    handleConfirmPayment('BANK_TRANSFER', finalTotal, 'Thanh toán qua QR');
+    // Mở thẳng POSPaymentModal
+    setIsPaymentModalOpen(true);
   };
 
   const handleConfirmPayment = async (
@@ -618,9 +655,15 @@ export const POSPage: React.FC = () => {
     setIsSubmitting(true);
 
     const isGift = method === "GIFT";
-    const finalTotalAmount = isGift ? 0 : finalTotal;
+    // Nếu total = 0 (gói) hoặc GIFT, total_amount = 0
+    const finalTotalAmount = (isGift || finalTotal === 0) ? 0 : finalTotal;
     const isDebt = method === "DEBT";
     const actualPaidAmount = isDebt ? paidAmount : finalTotalAmount;
+
+    // Nếu finalTotal === 0 và method là CASH, vẫn cho phép thanh toán
+    if (finalTotal === 0 && method === "CASH") {
+      // Cho phép thanh toán 0đ
+    }
 
     const payload = {
       customer_id: customer?.id || null,
@@ -675,6 +718,11 @@ export const POSPage: React.FC = () => {
     }
   };
 
+  const handleQRConfirm = () => {
+    setIsQRModalOpen(false);
+    handleConfirmPayment('BANK_TRANSFER', finalTotal, 'Thanh toán qua QR');
+  };
+
   const formatVND = (val: number) => new Intl.NumberFormat("vi-VN").format(val) + " đ";
 
   // ========== RENDER ==========
@@ -685,10 +733,12 @@ export const POSPage: React.FC = () => {
           className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 p-3 rounded-xl shadow-2xl border text-sm font-semibold flex items-center gap-2 transition-all max-w-[90%] ${
             notification.type === "success"
               ? "bg-emerald-600 text-white border-emerald-700"
+              : notification.type === "info"
+              ? "bg-blue-600 text-white border-blue-700"
               : "bg-red-600 text-white border-red-700"
           }`}
         >
-          {notification.type === "success" ? "✅" : "⚠️"} {notification.message}
+          {notification.type === "success" ? "✅" : notification.type === "info" ? "ℹ️" : "⚠️"} {notification.message}
         </div>
       )}
 
@@ -708,21 +758,20 @@ export const POSPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          {isAdmin && (
-            <div className="flex items-center gap-1 text-xs">
-              <span className="text-slate-500">Sale:</span>
-              <select
-                value={selectedSellerId || ""}
-                onChange={(e) => setSelectedSellerId(e.target.value || undefined)}
-                className="border border-slate-300 rounded px-2 py-1 text-xs bg-white focus:ring-1 focus:ring-emerald-500"
-              >
-                <option value="">-- Chọn --</option>
-                {staffList.map((s) => (
-                  <option key={s.id} value={s.id}>{s.full_name}</option>
-                ))}
-              </select>
-            </div>
-          )}
+          {/* Chọn nhân viên */}
+          <div className="flex items-center gap-1 text-xs">
+            <span className="text-slate-500">NV:</span>
+            <select
+              value={selectedSellerId || ""}
+              onChange={(e) => setSelectedSellerId(e.target.value || undefined)}
+              className="border border-slate-300 rounded px-2 py-1 text-xs bg-white focus:ring-1 focus:ring-emerald-500 max-w-[100px]"
+            >
+              <option value="">-- Chọn --</option>
+              {staffList.map((s) => (
+                <option key={s.id} value={s.id}>{s.full_name}</option>
+              ))}
+            </select>
+          </div>
 
           <button
             onClick={loadData}
@@ -731,7 +780,6 @@ export const POSPage: React.FC = () => {
             🔄 Tải lại
           </button>
 
-          {/* Nút xem hóa đơn */}
           {customer && (
             <button
               onClick={() => setIsInvoiceHistoryOpen(true)}
@@ -759,9 +807,9 @@ export const POSPage: React.FC = () => {
             {customer && (
               <POSCustomerBenefits
                 customer={customer}
-                onUsePackage={handleUsePackage}
-                onSelectGift={handleSelectGift}
-                onPayDebt={handlePayDebt}
+                onUsePackageItem={handleUsePackageItem}
+                onSelectGift={() => {}}
+                onPayDebt={() => {}}
               />
             )}
 
@@ -769,9 +817,10 @@ export const POSPage: React.FC = () => {
               services={services}
               products={products}
               packages={packages}
-              onAddService={handleAddService}
-              onAddProduct={handleAddProduct}
-              onAddPackage={handleAddPackage}
+              onAddService={(item) => toggleCartItem(item, 'SERVICE')}
+              onAddProduct={(item) => toggleCartItem(item, 'PRODUCT')}
+              onAddPackage={(item) => toggleCartItem(item, 'PACKAGE')}
+              cartItemIds={cartItemIds}
             />
           </div>
 
@@ -792,7 +841,7 @@ export const POSPage: React.FC = () => {
             />
 
             {cartItems
-              .filter((item) => item.item_type === "SERVICE")
+              .filter((item) => item.item_type === "SERVICE" && !item.use_package && item.total_amount > 0)
               .map((item) => {
                 const totalComm = item.performance_commission_type === "PERCENT"
                   ? Math.round((item.total_amount * Math.min(100, Math.max(0, Number(item.performance_commission_value || 0)))) / 100)
@@ -827,6 +876,11 @@ export const POSPage: React.FC = () => {
                 <span>THÀNH TIỀN:</span>
                 <span className="text-lg">{formatVND(finalTotal)}</span>
               </div>
+              {finalTotal === 0 && cartItems.some(item => item.use_package) && (
+                <div className="text-[10px] text-blue-600 bg-blue-50 p-1 rounded text-center">
+                  ℹ️ Đơn hàng sử dụng gói, không thu tiền
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -852,58 +906,6 @@ export const POSPage: React.FC = () => {
         </div>
       )}
 
-      {/* ===== METHOD SELECTOR ===== */}
-      {isMethodSelectorOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full shadow-2xl p-5 space-y-4">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-              <h3 className="text-base font-bold text-slate-800">Chọn phương thức thanh toán</h3>
-              <button onClick={() => setIsMethodSelectorOpen(false)} className="text-slate-400 hover:text-slate-600">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="space-y-3">
-              <button
-                onClick={() => handleSelectMethod('CASH')}
-                className="w-full py-3 px-4 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl text-sm font-semibold text-emerald-800 flex items-center justify-center gap-2"
-              >
-                💵 Tiền mặt
-              </button>
-              <button
-                onClick={() => handleSelectMethod('BANK_TRANSFER')}
-                className="w-full py-3 px-4 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl text-sm font-semibold text-blue-800 flex items-center justify-center gap-2"
-              >
-                🏦 Chuyển khoản
-              </button>
-              <button
-                onClick={() => handleSelectMethod('GIFT')}
-                className="w-full py-3 px-4 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl text-sm font-semibold text-purple-800 flex items-center justify-center gap-2"
-              >
-                🎁 Quà tặng
-              </button>
-              <button
-                onClick={() => handleSelectMethod('DEBT')}
-                className="w-full py-3 px-4 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl text-sm font-semibold text-amber-800 flex items-center justify-center gap-2"
-              >
-                📝 Ghi nợ
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ===== QR CODE MODAL ===== */}
-      <QRCodeModal
-        isOpen={isQRModalOpen}
-        onClose={() => setIsQRModalOpen(false)}
-        amount={finalTotal}
-        invoiceCode={customer?.id?.slice(0, 6) || 'POS'}
-        bankName={bankConfigState.bankName}
-        accountNumber={bankConfigState.accountNumber}
-        accountName={bankConfigState.accountName}
-        onConfirm={handleQRConfirm}
-      />
-
       {/* ===== POS PAYMENT MODAL ===== */}
       <POSPaymentModal
         isOpen={isPaymentModalOpen}
@@ -925,18 +927,6 @@ export const POSPage: React.FC = () => {
         onClose={() => setIsInvoiceHistoryOpen(false)}
         customerId={customer?.id}
       />
-
-      {/* ===== PACKAGE USAGE MODAL ===== */}
-      {packageUsageModal && (
-        <POSPackageUsageModal
-          isOpen={packageUsageModal.isOpen}
-          onClose={() => setPackageUsageModal(null)}
-          customerPackageId={packageUsageModal.customerPackageId}
-          packageItems={packageUsageModal.items}
-          onConfirm={handleConfirmPackageUsage}
-          isSubmitting={isSubmitting}
-        />
-      )}
     </div>
   );
 };

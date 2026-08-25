@@ -1,3 +1,4 @@
+// src/components/pos/POSCatalogPicker.tsx
 import React, { useState } from 'react';
 import {
   CatalogServiceItem,
@@ -15,6 +16,8 @@ interface Props {
   onAddProduct: (item: CatalogProductItem) => void;
   onAddPackage: (item: CatalogPackageItem) => void;
   activeTab?: TabType;
+  // NEW: danh sách các item đã có trong giỏ hàng để highlight
+  cartItemIds?: Set<string>;
 }
 
 export const POSCatalogPicker: React.FC<Props> = ({
@@ -24,49 +27,18 @@ export const POSCatalogPicker: React.FC<Props> = ({
   onAddService,
   onAddProduct,
   onAddPackage,
-  activeTab: externalTab
+  activeTab: externalTab,
+  cartItemIds = new Set(),
 }) => {
   const [internalTab, setInternalTab] = useState<TabType>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
 
   const activeTab = externalTab || internalTab;
 
   const formatVND = (val: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val);
 
-  // Lọc sản phẩm: chỉ hiển thị RETAIL (sản phẩm bán)
+  // Chỉ hiển thị sản phẩm RETAIL
   const retailProducts = products.filter(p => p.product_type === 'RETAIL');
-
-  const getAllItems = () => {
-    const all: { id: string; name: string; type: 'SERVICE' | 'PRODUCT' | 'PACKAGE'; price: number; duration?: number; items?: any[] }[] = [
-      ...services.map(s => ({ ...s, type: 'SERVICE' as const })),
-      ...retailProducts.map(p => ({ ...p, type: 'PRODUCT' as const })),
-      ...packages.map(pkg => ({ ...pkg, type: 'PACKAGE' as const })),
-    ];
-    return all.filter(item => item.name.toLowerCase().includes(searchQuery.toLowerCase()));
-  };
-
-  const handleSelect = (id: string) => {
-    setSelectedItems(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(id)) newSet.delete(id);
-      else newSet.add(id);
-      return newSet;
-    });
-  };
-
-  const handleAddSelected = () => {
-    const allItems = getAllItems();
-    selectedItems.forEach(id => {
-      const item = allItems.find(i => i.id === id);
-      if (item) {
-        if (item.type === 'SERVICE') onAddService(item as CatalogServiceItem);
-        else if (item.type === 'PRODUCT') onAddProduct(item as CatalogProductItem);
-        else if (item.type === 'PACKAGE') onAddPackage(item as CatalogPackageItem);
-      }
-    });
-    setSelectedItems(new Set());
-  };
 
   const filteredServices = services.filter((s) =>
     s.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -80,7 +52,44 @@ export const POSCatalogPicker: React.FC<Props> = ({
     pkg.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const allItems = getAllItems();
+  // ALL tab: gộp tất cả, mỗi item có type
+  const allItems = [
+    ...services.map(s => ({ ...s, type: 'SERVICE' as const })),
+    ...retailProducts.map(p => ({ ...p, type: 'PRODUCT' as const })),
+    ...packages.map(pkg => ({ ...pkg, type: 'PACKAGE' as const })),
+  ].filter(item => item.name.toLowerCase().includes(searchQuery.toLowerCase()));
+
+  // Khi click vào item, thêm vào giỏ ngay
+  const handleItemClick = (item: any, type: 'SERVICE' | 'PRODUCT' | 'PACKAGE') => {
+    if (type === 'SERVICE') {
+      onAddService(item);
+    } else if (type === 'PRODUCT') {
+      onAddProduct(item);
+    } else if (type === 'PACKAGE') {
+      onAddPackage(item);
+    }
+  };
+
+  // Xác định màu viền theo loại
+  const getBorderColor = (type: string, isInCart: boolean) => {
+    if (isInCart) {
+      return 'border-emerald-500 bg-emerald-50 shadow-md';
+    }
+    switch (type) {
+      case 'SERVICE': return 'border-blue-200 hover:border-blue-500';
+      case 'PRODUCT': return 'border-orange-200 hover:border-orange-500';
+      case 'PACKAGE': return 'border-purple-200 hover:border-purple-500';
+      default: return 'border-slate-200 hover:border-slate-300';
+    }
+  };
+
+  // Lấy id để so sánh với cartItemIds
+  const getItemId = (item: any) => {
+    if (item.type === 'SERVICE') return item.catalog_item_id || item.id;
+    if (item.type === 'PRODUCT') return item.catalog_item_id || item.id;
+    if (item.type === 'PACKAGE') return item.id;
+    return item.id;
+  };
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col h-full overflow-hidden">
@@ -90,7 +99,7 @@ export const POSCatalogPicker: React.FC<Props> = ({
             onClick={() => setInternalTab('ALL')}
             className={`flex-1 py-2 px-3 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${
               activeTab === 'ALL'
-                ? 'bg-white text-emerald-700 shadow-sm'
+                ? 'bg-white text-slate-800 shadow-sm'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
@@ -100,7 +109,7 @@ export const POSCatalogPicker: React.FC<Props> = ({
             onClick={() => setInternalTab('SERVICE')}
             className={`flex-1 py-2 px-3 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${
               activeTab === 'SERVICE'
-                ? 'bg-white text-emerald-700 shadow-sm'
+                ? 'bg-white text-blue-700 shadow-sm'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
@@ -110,7 +119,7 @@ export const POSCatalogPicker: React.FC<Props> = ({
             onClick={() => setInternalTab('PRODUCT')}
             className={`flex-1 py-2 px-3 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${
               activeTab === 'PRODUCT'
-                ? 'bg-white text-emerald-700 shadow-sm'
+                ? 'bg-white text-orange-700 shadow-sm'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
@@ -120,7 +129,7 @@ export const POSCatalogPicker: React.FC<Props> = ({
             onClick={() => setInternalTab('PACKAGE')}
             className={`flex-1 py-2 px-3 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${
               activeTab === 'PACKAGE'
-                ? 'bg-white text-emerald-700 shadow-sm'
+                ? 'bg-white text-purple-700 shadow-sm'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
@@ -143,42 +152,31 @@ export const POSCatalogPicker: React.FC<Props> = ({
         {activeTab === 'ALL' && (
           <div className="grid grid-cols-2 gap-2">
             {allItems.map((item) => {
-              const isSelected = selectedItems.has(item.id);
+              const id = getItemId(item);
+              const isInCart = cartItemIds.has(id);
               return (
                 <div
-                  key={item.id}
-                  onClick={() => handleSelect(item.id)}
-                  className={`p-2.5 border-2 rounded-xl transition-all cursor-pointer ${
-                    isSelected
-                      ? 'border-emerald-500 bg-emerald-50 shadow-sm'
-                      : 'border-slate-200 hover:border-slate-300 bg-white'
+                  key={id}
+                  onClick={() => handleItemClick(item, item.type)}
+                  className={`p-3 border-2 rounded-xl transition-all cursor-pointer ${
+                    isInCart
+                      ? 'border-emerald-500 bg-emerald-50 shadow-md'
+                      : getBorderColor(item.type, false)
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-1">
-                    <div>
-                      <div className="font-semibold text-xs text-slate-800 line-clamp-2">{item.name}</div>
-                      <div className="flex items-center gap-1 mt-0.5">
-                        <span className="text-[10px] font-medium text-emerald-700">{formatVND(item.price)}</span>
-                        {item.type === 'SERVICE' && (
-                          <span className="text-[9px] text-slate-400 bg-slate-100 px-1 rounded">DV</span>
-                        )}
-                        {item.type === 'PRODUCT' && (
-                          <span className="text-[9px] text-slate-400 bg-slate-100 px-1 rounded">SP</span>
-                        )}
-                        {item.type === 'PACKAGE' && (
-                          <span className="text-[9px] text-purple-400 bg-purple-50 px-1 rounded">Gói</span>
-                        )}
-                      </div>
-                    </div>
-                    {isSelected && <span className="text-emerald-600 text-sm">✓</span>}
-                  </div>
+                  <div className="font-semibold text-sm text-slate-800 line-clamp-2">{item.name}</div>
+                  <div className="font-medium text-sm text-emerald-700">{formatVND(item.price)}</div>
                   {item.type === 'SERVICE' && (item as any).duration_minutes && (
-                    <div className="text-[10px] text-slate-400 mt-0.5">⏱ {(item as any).duration_minutes} phút</div>
+                    <div className="text-[11px] text-slate-400">⏱ {(item as any).duration_minutes} phút</div>
                   )}
-                  {item.type === 'PACKAGE' && (item as CatalogPackageItem).items && (
-                    <div className="text-[9px] text-slate-400 mt-0.5 line-clamp-1">
-                      {(item as CatalogPackageItem).items.map(i => i.service_name).join(', ')}
-                    </div>
+                  {item.type === 'PRODUCT' && (item as any).stock_quantity !== undefined && (
+                    <div className="text-[10px] text-slate-500">Tồn: {(item as any).stock_quantity}</div>
+                  )}
+                  {item.type === 'PACKAGE' && (item as any).validity_days && (
+                    <div className="text-[10px] text-purple-500">⌛ {(item as any).validity_days} ngày</div>
+                  )}
+                  {isInCart && (
+                    <div className="text-[10px] font-bold text-emerald-600 mt-1">✓ Đã thêm</div>
                   )}
                 </div>
               );
@@ -194,27 +192,26 @@ export const POSCatalogPicker: React.FC<Props> = ({
         {activeTab === 'SERVICE' && (
           <div className="grid grid-cols-2 gap-2">
             {filteredServices.map((s) => {
-              const isSelected = selectedItems.has(s.id);
+              const id = s.catalog_item_id || s.id;
+              const isInCart = cartItemIds.has(id);
               return (
                 <div
-                  key={s.id}
-                  onClick={() => handleSelect(s.id)}
-                  className={`p-2.5 border-2 rounded-xl transition-all cursor-pointer ${
-                    isSelected
-                      ? 'border-emerald-500 bg-emerald-50 shadow-sm'
-                      : 'border-slate-200 hover:border-slate-300 bg-white'
+                  key={id}
+                  onClick={() => handleItemClick(s, 'SERVICE')}
+                  className={`p-3 border-2 rounded-xl transition-all cursor-pointer ${
+                    isInCart
+                      ? 'border-emerald-500 bg-emerald-50 shadow-md'
+                      : 'border-blue-200 hover:border-blue-500'
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-1">
-                    <div>
-                      <div className="font-semibold text-xs text-slate-800 line-clamp-2">{s.name}</div>
-                      <div className="font-medium text-[11px] text-emerald-700">{formatVND(s.price)}</div>
-                      {s.duration_minutes && (
-                        <div className="text-[10px] text-slate-400">⏱ {s.duration_minutes} phút</div>
-                      )}
-                    </div>
-                    {isSelected && <span className="text-emerald-600 text-sm">✓</span>}
-                  </div>
+                  <div className="font-semibold text-sm text-slate-800 line-clamp-2">{s.name}</div>
+                  <div className="font-medium text-sm text-emerald-700">{formatVND(s.price)}</div>
+                  {s.duration_minutes && (
+                    <div className="text-[11px] text-slate-400">⏱ {s.duration_minutes} phút</div>
+                  )}
+                  {isInCart && (
+                    <div className="text-[10px] font-bold text-emerald-600 mt-1">✓ Đã thêm</div>
+                  )}
                 </div>
               );
             })}
@@ -229,37 +226,32 @@ export const POSCatalogPicker: React.FC<Props> = ({
         {activeTab === 'PRODUCT' && (
           <div className="grid grid-cols-2 gap-2">
             {filteredProducts.map((p) => {
-              const isSelected = selectedItems.has(p.id);
-              const isLowStock = p.stock_quantity <= p.minimum_stock;
+              const id = p.catalog_item_id || p.id;
+              const isInCart = cartItemIds.has(id);
               const isOutOfStock = p.stock_quantity <= 0;
               return (
                 <div
-                  key={p.id}
-                  onClick={() => !isOutOfStock && handleSelect(p.id)}
-                  className={`p-2.5 border-2 rounded-xl transition-all cursor-pointer ${
+                  key={id}
+                  onClick={() => !isOutOfStock && handleItemClick(p, 'PRODUCT')}
+                  className={`p-3 border-2 rounded-xl transition-all cursor-pointer ${
                     isOutOfStock
-                      ? 'border-red-200 opacity-50 cursor-not-allowed'
-                      : isSelected
-                      ? 'border-emerald-500 bg-emerald-50 shadow-sm'
-                      : 'border-slate-200 hover:border-slate-300 bg-white'
+                      ? 'border-red-200 opacity-50 cursor-not-allowed bg-red-50'
+                      : isInCart
+                      ? 'border-emerald-500 bg-emerald-50 shadow-md'
+                      : 'border-orange-200 hover:border-orange-500'
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-1">
-                    <div>
-                      <div className="font-semibold text-xs text-slate-800 line-clamp-2">{p.name}</div>
-                      <div className="font-medium text-[11px] text-emerald-700">{formatVND(p.selling_price)}</div>
-                      <div className="flex items-center gap-1 mt-0.5">
-                        <span className="text-[10px] text-slate-500">Tồn: {p.stock_quantity}</span>
-                        {isOutOfStock && (
-                          <span className="text-[9px] font-bold text-red-600 bg-red-50 px-1 rounded">Hết</span>
-                        )}
-                        {isLowStock && !isOutOfStock && (
-                          <span className="text-[9px] font-bold text-amber-600 bg-amber-50 px-1 rounded">Sắp hết</span>
-                        )}
-                      </div>
-                    </div>
-                    {isSelected && <span className="text-emerald-600 text-sm">✓</span>}
+                  <div className="font-semibold text-sm text-slate-800 line-clamp-2">{p.name}</div>
+                  <div className="font-medium text-sm text-emerald-700">{formatVND(p.selling_price)}</div>
+                  <div className="flex items-center gap-1 mt-1">
+                    <span className="text-[10px] text-slate-500">Tồn: {p.stock_quantity}</span>
+                    {isOutOfStock && (
+                      <span className="text-[9px] font-bold text-red-600 bg-red-100 px-1 rounded">Hết</span>
+                    )}
                   </div>
+                  {isInCart && (
+                    <div className="text-[10px] font-bold text-emerald-600 mt-1">✓ Đã thêm</div>
+                  )}
                 </div>
               );
             })}
@@ -274,29 +266,32 @@ export const POSCatalogPicker: React.FC<Props> = ({
         {activeTab === 'PACKAGE' && (
           <div className="space-y-2">
             {filteredPackages.map((pkg) => {
-              const isSelected = selectedItems.has(pkg.id);
+              const id = pkg.id;
+              const isInCart = cartItemIds.has(id);
               return (
                 <div
-                  key={pkg.id}
-                  onClick={() => handleSelect(pkg.id)}
+                  key={id}
+                  onClick={() => handleItemClick(pkg, 'PACKAGE')}
                   className={`p-3 border-2 rounded-xl transition-all cursor-pointer ${
-                    isSelected
-                      ? 'border-purple-500 bg-purple-50 shadow-sm'
-                      : 'border-slate-200 hover:border-slate-300 bg-white'
+                    isInCart
+                      ? 'border-emerald-500 bg-emerald-50 shadow-md'
+                      : 'border-purple-200 hover:border-purple-500'
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-1">
+                  <div className="flex items-start justify-between">
                     <div>
                       <div className="font-bold text-sm text-purple-900">{pkg.name}</div>
-                      <div className="font-medium text-sm text-purple-700">{formatVND(pkg.price)}</div>
+                      <div className="font-medium text-sm text-emerald-700">{formatVND(pkg.price)}</div>
                       {pkg.validity_days && (
                         <div className="text-[10px] text-purple-500">⌛ {pkg.validity_days} ngày</div>
                       )}
-                      <div className="mt-1 text-[10px] text-slate-500 line-clamp-1">
+                      <div className="mt-1 text-[10px] text-slate-500">
                         {pkg.items.map(i => i.service_name).join(', ')}
                       </div>
+                      {isInCart && (
+                        <div className="text-[10px] font-bold text-emerald-600 mt-1">✓ Đã thêm</div>
+                      )}
                     </div>
-                    {isSelected && <span className="text-purple-600 text-sm">✓</span>}
                   </div>
                 </div>
               );
@@ -309,18 +304,6 @@ export const POSCatalogPicker: React.FC<Props> = ({
           </div>
         )}
       </div>
-
-      {/* Nút Thêm các mục đã chọn */}
-      {selectedItems.size > 0 && (
-        <div className="p-3 border-t border-slate-200 bg-slate-50/80">
-          <button
-            onClick={handleAddSelected}
-            className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-xl shadow-md shadow-emerald-600/20 active:scale-95 transition-all"
-          >
-            + Thêm {selectedItems.size} mục đã chọn
-          </button>
-        </div>
-      )}
     </div>
   );
 };

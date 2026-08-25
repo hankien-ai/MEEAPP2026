@@ -342,6 +342,7 @@ export async function usePackageSessionV2(
     p_notes: notes || null,
   });
   if (error) {
+    console.error("RPC use_package_session_v2 error:", error);
     return {
       success: false,
       message: error.message || "Lỗi sử dụng package",
@@ -353,25 +354,12 @@ export async function usePackageSessionV2(
 
 export async function usePackageSession(
   customerPackageId: string,
-  packageItemId: string,
+  customerPackageItemId: string,
   serviceId: string,
   staffId?: string,
   notes?: string
 ): Promise<{ success: boolean; message: string; remaining_quantity: number }> {
-  const { data: cpi, error: cpiErr } = await supabase
-    .from("customer_package_items")
-    .select("id")
-    .eq("customer_package_id", customerPackageId)
-    .eq("id", packageItemId)
-    .single();
-  if (cpiErr || !cpi) {
-    return {
-      success: false,
-      message: "Không tìm thấy mục trong gói",
-      remaining_quantity: 0,
-    };
-  }
-  return usePackageSessionV2(cpi.id, staffId, notes);
+  return usePackageSessionV2(customerPackageItemId, staffId, notes);
 }
 
 export const usePackageSessionLegacy = usePackageSession;

@@ -1,3 +1,4 @@
+// src/components/pos/POSCustomerBenefits.tsx
 import React, { useState, useEffect } from "react";
 import { Customer } from "@/types/pos";
 import { customerService } from "@/services/customer.service";
@@ -10,13 +11,8 @@ interface CustomerPackageItem {
   total_quantity: number;
   used_quantity: number;
   remaining_quantity: number;
-  package_item?: {
-    service_id: string;
-    quantity: number;
-    services?: {
-      name: string;
-    };
-  };
+  service_name?: string;
+  service_id?: string;
 }
 
 interface CustomerPackage {
@@ -33,14 +29,14 @@ interface CustomerPackage {
 
 interface Props {
   customer: Customer | null;
-  onUsePackage: (customerPackageId: string, packageItemId: string, serviceId: string, serviceName: string) => void;
-  onSelectGift: (customerPackageId: string) => void;
+  onUsePackageItem: (customerPackageId: string, customerPackageItemId: string, serviceName: string, serviceId: string, remaining: number) => void;
+  onSelectGift: () => void;
   onPayDebt: () => void;
 }
 
 export const POSCustomerBenefits: React.FC<Props> = ({
   customer,
-  onUsePackage,
+  onUsePackageItem,
   onSelectGift,
   onPayDebt,
 }) => {
@@ -69,10 +65,27 @@ export const POSCustomerBenefits: React.FC<Props> = ({
       const giftPackages = activePackages.filter((pkg) => pkg.is_gift === true);
       const purchasedPackages = activePackages.filter((pkg) => pkg.is_gift !== true);
 
-      setPackages(purchasedPackages);
-      setGifts(giftPackages);
+      // Map items với service_name
+      const mappedPackages = purchasedPackages.map((pkg) => ({
+        ...pkg,
+        items: pkg.items.map((item: any) => ({
+          ...item,
+          service_name: item.service_name || "Dịch vụ",
+          service_id: item.service_id,
+        })),
+      }));
+      const mappedGifts = giftPackages.map((pkg) => ({
+        ...pkg,
+        items: pkg.items.map((item: any) => ({
+          ...item,
+          service_name: item.service_name || "Dịch vụ",
+          service_id: item.service_id,
+        })),
+      }));
 
-      // Lấy công nợ
+      setPackages(mappedPackages);
+      setGifts(mappedGifts);
+
       const invoices = await customerService.fetchCustomerInvoices(customer.id);
       const totalDebt = invoices
         .filter((inv) => inv.status === "UNPAID" || inv.status === "PARTIALLY_PAID")
@@ -100,7 +113,7 @@ export const POSCustomerBenefits: React.FC<Props> = ({
   }
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-3 mb-3 space-y-3">
+    <div className="bg-white rounded-xl border border-slate-200 p-3 mb-3 space-y-3 max-h-[300px] overflow-y-auto">
       <div className="text-xs font-bold text-slate-700 uppercase tracking-wider">Quyền lợi của khách</div>
 
       {/* PACKAGES */}
@@ -133,18 +146,17 @@ export const POSCustomerBenefits: React.FC<Props> = ({
                 <div className="px-2.5 pb-2.5 space-y-1.5">
                   {pkg.items && pkg.items.length > 0 ? (
                     pkg.items.map((item) => {
-                      const serviceName = item.package_item?.services?.name || "Dịch vụ";
                       const remaining = item.remaining_quantity || 0;
                       return (
                         <div key={item.id} className="flex items-center justify-between bg-white rounded p-2 text-xs border border-slate-100">
-                          <span className="font-medium text-slate-700">{serviceName}</span>
+                          <span className="font-medium text-slate-700">{item.service_name}</span>
                           <div className="flex items-center gap-3">
                             <span className="text-slate-500">
                               Còn {remaining} buổi
                             </span>
                             {remaining > 0 && (
                               <button
-                                onClick={() => onUsePackage(pkg.id, item.package_item_id, item.package_item?.service_id || "", serviceName)}
+                                onClick={() => onUsePackageItem(pkg.id, item.id, item.service_name, item.service_id, remaining)}
                                 className="px-2.5 py-1 bg-emerald-600 text-white text-[10px] font-bold rounded hover:bg-emerald-700 transition-colors"
                               >
                                 Sử dụng
@@ -180,7 +192,7 @@ export const POSCustomerBenefits: React.FC<Props> = ({
                 </div>
               </div>
               <button
-                onClick={() => onSelectGift(gift.id)}
+                onClick={() => onSelectGift()}
                 className="px-3 py-1.5 bg-purple-700 text-white text-xs font-bold rounded hover:bg-purple-800 transition-colors"
               >
                 Sử dụng
@@ -201,7 +213,7 @@ export const POSCustomerBenefits: React.FC<Props> = ({
             </div>
           </div>
           <button
-            onClick={onPayDebt}
+            onClick={() => onPayDebt()}
             className="px-3 py-1.5 bg-amber-600 text-white text-xs font-bold rounded hover:bg-amber-700 transition-colors"
           >
             Thanh toán nợ
