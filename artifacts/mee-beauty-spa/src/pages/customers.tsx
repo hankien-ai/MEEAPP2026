@@ -1,3 +1,4 @@
+// src/pages/customers.tsx
 import React, { useState, useEffect, ChangeEvent, FormEvent, useRef } from "react";
 import { supabase } from "../services/supabase";
 import {
@@ -40,6 +41,7 @@ import {
   isValidPhone,
   isPhoneExists,
 } from "../services/customer.service";
+import { User, Package, Camera, ArrowLeft } from "lucide-react";
 
 // ============================================================
 // HELPERS
@@ -68,11 +70,13 @@ function useUserRole() {
 export interface CustomerProfilePageProps {
   customerId?: string;
   onBack?: () => void;
+  initialTab?: "info" | "photos" | "packages" | "history";
 }
 
 export function CustomerProfilePage({
   customerId,
   onBack,
+  initialTab = "info",
 }: CustomerProfilePageProps) {
   const { isAdmin } = useUserRole();
 
@@ -80,7 +84,7 @@ export function CustomerProfilePage({
   const [loading, setLoading] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<
     "info" | "photos" | "packages" | "history"
-  >("info");
+  >(initialTab);
 
   const [stats, setStats] = useState({
     total_spending: 0,
@@ -96,7 +100,7 @@ export function CustomerProfilePage({
     email: "",
     address: "",
     gender: "",
-    birth_date: "",
+    birthday: "",
     notes: "",
   });
   const [updating, setUpdating] = useState<boolean>(false);
@@ -112,7 +116,6 @@ export function CustomerProfilePage({
   const [uploading, setUploading] = useState<boolean>(false);
   const [previewPhoto, setPreviewPhoto] = useState<CustomerPhoto | null>(null);
 
-  // Ref for file input
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Tab 3: Packages
@@ -120,7 +123,6 @@ export function CustomerProfilePage({
   const [loadingPackages, setLoadingPackages] = useState<boolean>(false);
   const [usingSessionId, setUsingSessionId] = useState<string | null>(null);
 
-  // Edit Package
   const [editPackageModal, setEditPackageModal] = useState<{
     isOpen: boolean;
     pkg: CustomerPackage | null;
@@ -159,7 +161,7 @@ export function CustomerProfilePage({
           email: cust.email || "",
           address: cust.address || "",
           gender: cust.gender || "",
-          birth_date: cust.birth_date || "",
+          birthday: cust.birthday || "",
           notes: cust.notes || "",
         });
       }
@@ -191,6 +193,7 @@ export function CustomerProfilePage({
       setPackages(data);
     } catch (err) {
       console.error("Lỗi tải gói liệu trình:", err);
+      setPackages([]);
     } finally {
       setLoadingPackages(false);
     }
@@ -204,6 +207,7 @@ export function CustomerProfilePage({
       setHistory(data);
     } catch (err) {
       console.error("Lỗi tải lịch sử dịch vụ:", err);
+      setHistory([]);
     } finally {
       setLoadingHistory(false);
     }
@@ -217,6 +221,7 @@ export function CustomerProfilePage({
       setInvoices(data);
     } catch (err) {
       console.error("Lỗi tải hóa đơn khách hàng:", err);
+      setInvoices([]);
     } finally {
       setLoadingInvoices(false);
     }
@@ -240,17 +245,14 @@ export function CustomerProfilePage({
 
     setUpdating(true);
     try {
-      // Chỉ gửi các trường chắc chắn tồn tại
       const payload: any = {
         full_name: editFormData.full_name,
         phone: editFormData.phone,
       };
       if (editFormData.email) payload.email = editFormData.email;
       if (editFormData.gender) payload.gender = editFormData.gender;
-      if (editFormData.birth_date) payload.birth_date = editFormData.birth_date;
+      if (editFormData.birthday) payload.birthday = editFormData.birthday;
       if (editFormData.notes) payload.notes = editFormData.notes;
-      // Không gửi address vì có thể bảng không có cột này
-      // if (editFormData.address) payload.address = editFormData.address;
 
       const updated = await updateCustomer(customerId, payload);
       setCustomer(updated);
@@ -401,48 +403,49 @@ export function CustomerProfilePage({
   );
   const hasGift = packages.some((p) => p.is_gift === true);
 
+  const handleQuickUpload = () => {
+    setIsUploadModalOpen(true);
+  };
+
   return (
     <div className="space-y-4 max-w-full">
-      {/* HEADER */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+      {/* HEADER - gọn */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-lg shrink-0">
-            {(customer.full_name || customer.name || "?").charAt(0).toUpperCase()}
+          <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+            <User className="w-5 h-5" />
           </div>
           <div>
             <h2 className="text-lg font-bold text-gray-900">
               {customer.full_name || customer.name}
             </h2>
-            <p className="text-sm text-gray-500 flex items-center gap-1 flex-wrap">
+            <p className="text-sm text-gray-500 flex items-center gap-2 flex-wrap">
               <span>📱 {maskPhone(customer.phone || "", isAdmin)}</span>
-              {customer.email && <span>• ✉️ {customer.email}</span>}
+              {customer.email && (
+                <span className="text-xs text-gray-400">• {customer.email}</span>
+              )}
+              <span className="text-xs text-gray-400">
+                • Ghé: {stats.total_visits} lần
+              </span>
             </p>
-            <div className="flex items-center gap-2 mt-0.5 text-xs">
-              {hasActivePackage && <span className="text-blue-600">📦 Package</span>}
-              {hasGift && <span className="text-purple-600">🎁 Gift</span>}
-              <span className="text-gray-400">• Ghé: {stats.total_visits} lần</span>
-            </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
           <div className="text-right">
             <p className="text-xs text-gray-500">Tổng chi tiêu</p>
             <p className="text-base font-bold text-blue-600">
               {totalSpentFormatted}
             </p>
           </div>
-          <div className="text-right">
-            <p className="text-xs text-gray-500">Lần ghé gần nhất</p>
-            <p className="text-sm font-semibold text-gray-800">
-              {stats.last_visit
-                ? new Date(stats.last_visit).toLocaleDateString("vi-VN")
-                : "Chưa có"}
-            </p>
-          </div>
           {onBack && (
-            <Button variant="outline" size="sm" onClick={onBack}>
-              ← Quay lại
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onBack}
+              className="flex items-center gap-1"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" /> Quay lại
             </Button>
           )}
         </div>
@@ -459,7 +462,7 @@ export function CustomerProfilePage({
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key as any)}
-            className={`flex-1 py-2.5 px-3 text-xs font-semibold rounded-lg transition-all whitespace-nowrap ${
+            className={`flex-1 py-2 px-3 text-xs font-semibold rounded-lg transition-all whitespace-nowrap ${
               activeTab === tab.key
                 ? "bg-blue-600 text-white shadow-sm"
                 : "text-gray-600 hover:bg-gray-100"
@@ -470,7 +473,7 @@ export function CustomerProfilePage({
         ))}
       </div>
 
-      {/* TAB 1: THÔNG TIN */}
+      {/* TAB 1: THÔNG TIN - gọn */}
       {activeTab === "info" && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Card
@@ -485,38 +488,38 @@ export function CustomerProfilePage({
               </Button>
             }
           >
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between border-b border-gray-100 py-1.5">
-                <span className="text-gray-500">Họ và tên</span>
+            <div className="space-y-1 text-sm">
+              <div className="flex justify-between py-1 border-b border-gray-100">
+                <span className="text-gray-500">Họ tên</span>
                 <span className="font-medium text-gray-900">
                   {customer.full_name || customer.name}
                 </span>
               </div>
-              <div className="flex justify-between border-b border-gray-100 py-1.5">
-                <span className="text-gray-500">Số điện thoại</span>
+              <div className="flex justify-between py-1 border-b border-gray-100">
+                <span className="text-gray-500">SĐT</span>
                 <span className="font-medium text-gray-900">
                   {maskPhone(customer.phone || "", isAdmin)}
                 </span>
               </div>
-              <div className="flex justify-between border-b border-gray-100 py-1.5">
+              <div className="flex justify-between py-1 border-b border-gray-100">
                 <span className="text-gray-500">Email</span>
-                <span className="font-medium text-gray-900">{customer.email || "—"}</span>
-              </div>
-              <div className="flex justify-between border-b border-gray-100 py-1.5">
-                <span className="text-gray-500">Giới tính</span>
-                <span className="font-medium text-gray-900">{customer.gender || "—"}</span>
-              </div>
-              <div className="flex justify-between border-b border-gray-100 py-1.5">
-                <span className="text-gray-500">Ngày sinh</span>
                 <span className="font-medium text-gray-900">
-                  {customer.birth_date || "—"}
+                  {customer.email || "—"}
                 </span>
               </div>
-              <div className="flex justify-between border-b border-gray-100 py-1.5">
-                <span className="text-gray-500">Địa chỉ</span>
-                <span className="font-medium text-gray-900">{customer.address || "—"}</span>
+              <div className="flex justify-between py-1 border-b border-gray-100">
+                <span className="text-gray-500">Giới tính / Ngày sinh</span>
+                <span className="font-medium text-gray-900">
+                  {customer.gender || "—"} / {customer.birthday || "—"}
+                </span>
               </div>
-              <div className="py-1.5">
+              <div className="flex justify-between py-1 border-b border-gray-100">
+                <span className="text-gray-500">Địa chỉ</span>
+                <span className="font-medium text-gray-900">
+                  {customer.address || "—"}
+                </span>
+              </div>
+              <div className="py-1">
                 <span className="text-gray-500 block mb-1">Ghi chú</span>
                 <p className="text-sm text-gray-700 bg-gray-50 p-2 rounded border border-gray-100">
                   {customer.notes || "Không có ghi chú"}
@@ -525,7 +528,7 @@ export function CustomerProfilePage({
             </div>
           </Card>
 
-          <Card title="Thống kê tổng quan">
+          <Card title="Thống kê">
             <div className="grid grid-cols-2 gap-3">
               <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
                 <p className="text-xs text-blue-600 font-medium">Tổng chi tiêu</p>
@@ -557,28 +560,55 @@ export function CustomerProfilePage({
                 <p className="text-xs text-gray-500 italic">Chưa có hóa đơn nào.</p>
               ) : (
                 <div className="space-y-2 max-h-60 overflow-y-auto">
-                  {invoices.slice(0, 5).map((inv) => (
-                    <div
-                      key={inv.id}
-                      onClick={() => setSelectedInvoice(inv)}
-                      className="flex justify-between items-center p-2 bg-gray-50 rounded-lg border border-gray-100 text-xs cursor-pointer hover:bg-gray-100 transition-colors"
-                    >
-                      <div>
-                        <p className="font-semibold text-gray-800">
-                          #{inv.invoice_code || inv.id.slice(0, 8)}
-                        </p>
-                        <p className="text-gray-500">
-                          {new Date(inv.created_at).toLocaleDateString("vi-VN")}
-                        </p>
+                  {invoices.slice(0, 5).map((inv) => {
+                    const paymentColor = {
+                      CASH: "bg-emerald-100 text-emerald-800",
+                      BANK_TRANSFER: "bg-blue-100 text-blue-800",
+                      GIFT: "bg-purple-100 text-purple-800",
+                      DEBT: "bg-amber-100 text-amber-800",
+                    }[inv.payment_method] || "bg-gray-100 text-gray-800";
+
+                    let ktvNames = "Chưa phân công";
+                    if (inv.items && inv.items.length > 0) {
+                      const ktvSet = new Set();
+                      inv.items.forEach((item: any) => {
+                        if (item.performing_staff_id) {
+                          ktvSet.add(item.performing_staff_id);
+                        }
+                      });
+                      if (ktvSet.size > 0) {
+                        ktvNames = Array.from(ktvSet).join(", ");
+                      }
+                    }
+
+                    return (
+                      <div
+                        key={inv.id}
+                        onClick={() => setSelectedInvoice(inv)}
+                        className="flex justify-between items-center p-2 bg-gray-50 rounded-lg border border-gray-100 text-xs cursor-pointer hover:bg-gray-100 transition-colors"
+                      >
+                        <div>
+                          <p className="font-semibold text-gray-800">
+                            #{inv.invoice_code || inv.id.slice(0, 8)}
+                          </p>
+                          <p className="text-gray-500">
+                            {new Date(inv.created_at).toLocaleDateString("vi-VN")}
+                          </p>
+                          <p className="text-[10px] text-gray-400 mt-0.5">
+                            KTV: {ktvNames}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold text-blue-600">
+                            {formatVND(inv.final_amount || inv.total_amount || 0)}
+                          </p>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full ${paymentColor}`}>
+                            {inv.payment_method}
+                          </span>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <p className="font-bold text-blue-600">
-                          {formatVND(inv.final_amount || inv.total_amount || 0)}
-                        </p>
-                        <Badge variant="info">{inv.payment_method}</Badge>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -605,7 +635,7 @@ export function CustomerProfilePage({
                   <option value="PROGRESS">PROGRESS</option>
                   <option value="AFTER">AFTER</option>
                 </Select>
-                <Button size="sm" onClick={() => setIsUploadModalOpen(true)}>
+                <Button size="sm" onClick={handleQuickUpload}>
                   📷 + Ảnh
                 </Button>
               </div>
@@ -619,9 +649,7 @@ export function CustomerProfilePage({
                 title="Chưa có hình ảnh"
                 description="Chụp hoặc tải ảnh điều trị để theo dõi tiến trình của khách."
                 action={
-                  <Button onClick={() => setIsUploadModalOpen(true)}>
-                    📷 Tải ảnh ngay
-                  </Button>
+                  <Button onClick={handleQuickUpload}>📷 Tải ảnh ngay</Button>
                 }
               />
             ) : (
@@ -751,8 +779,8 @@ export function CustomerProfilePage({
                       {pkg.items && pkg.items.length > 0 && (
                         <div className="p-3 bg-gray-50 space-y-2">
                           <p className="text-xs font-semibold text-gray-700">Dịch vụ trong gói:</p>
-                          {pkg.items.map((item) => {
-                            const serviceName = item.services?.name || "Dịch vụ";
+                          {pkg.items.map((item: any) => {
+                            const serviceName = item.services?.name || item.service_name || "Dịch vụ";
                             return (
                               <div
                                 key={item.id}
@@ -825,20 +853,10 @@ export function CustomerProfilePage({
                             <Badge variant={isPackage ? "info" : "neutral"}>
                               {isPackage ? "📦 Package" : "💰 Mua lẻ"}
                             </Badge>
-                            {item.invoice_id && (
-                              <Badge variant="outline" className="text-[10px]">
-                                HĐ: #{item.invoice_id.slice(0, 8)}
-                              </Badge>
-                            )}
                           </div>
                           <p className="text-xs text-gray-500 mt-1">
                             {new Date(item.performed_at || item.created_at).toLocaleString("vi-VN")}
                           </p>
-                          {item.staff && (
-                            <p className="text-xs text-gray-600 mt-0.5">
-                              KTV: {item.staff.full_name}
-                            </p>
-                          )}
                           {isPackage && item.package_id && (
                             <p className="text-xs text-blue-600 mt-0.5">
                               🎁 Gói: #{item.package_id.slice(0, 8)}
@@ -863,7 +881,7 @@ export function CustomerProfilePage({
         </Panel>
       )}
 
-      {/* ========== MODALS ========== */}
+      {/* ========== MODALS (giữ nguyên) ========== */}
 
       {/* MODAL: EDIT CUSTOMER INFO */}
       <Modal
@@ -912,13 +930,12 @@ export function CustomerProfilePage({
             <Input
               label="Ngày sinh"
               type="date"
-              value={editFormData.birth_date}
+              value={editFormData.birthday}
               onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                setEditFormData({ ...editFormData, birth_date: e.target.value })
+                setEditFormData({ ...editFormData, birthday: e.target.value })
               }
             />
           </div>
-          {/* Bỏ input địa chỉ để tránh lỗi */}
           <Textarea
             label="Ghi chú"
             value={editFormData.notes}
@@ -937,7 +954,7 @@ export function CustomerProfilePage({
         </form>
       </Modal>
 
-      {/* MODAL: UPLOAD PHOTO - SỬA LỖI INPUT FILE */}
+      {/* MODAL: UPLOAD PHOTO */}
       <Modal
         isOpen={isUploadModalOpen}
         onClose={() => {
@@ -955,8 +972,6 @@ export function CustomerProfilePage({
               ref={fileInputRef}
               type="file"
               accept="image/*"
-              // Không dùng capture để tránh lỗi trên desktop
-              // capture="environment" // bỏ đi
               required
               onChange={(e: ChangeEvent<HTMLInputElement>) => {
                 if (e.target.files && e.target.files[0]) {
@@ -968,7 +983,6 @@ export function CustomerProfilePage({
             <p className="text-[10px] text-gray-400 mt-1">
               📱 Chụp ảnh trực tiếp hoặc chọn từ thư viện
             </p>
-            {/* Nút chọn file dự phòng nếu input không hoạt động */}
             <Button
               type="button"
               variant="outline"
@@ -1104,6 +1118,11 @@ export function CustomerProfilePage({
                       <p className="text-gray-500">
                         {item.quantity} x {formatVND(item.unit_price || 0)}
                       </p>
+                      {item.performing_staff_id && (
+                        <p className="text-[10px] text-gray-400">
+                          KTV: {item.staff?.full_name || "Chưa xác định"}
+                        </p>
+                      )}
                     </div>
                     <span className="font-bold text-gray-800">
                       {formatVND(item.total_amount || 0)}
@@ -1207,14 +1226,15 @@ export function CustomerProfilePage({
 // ============================================================
 
 export function CustomersPage() {
-  const { isAdmin, role } = useUserRole();
+  const { isAdmin } = useUserRole();
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(
-    null,
-  );
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+  const [selectedTab, setSelectedTab] = useState<
+    "info" | "photos" | "packages" | "history"
+  >("info");
 
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
   const [formData, setFormData] = useState({
@@ -1223,7 +1243,7 @@ export function CustomersPage() {
     email: "",
     address: "",
     gender: "",
-    birth_date: "",
+    birthday: "",
     notes: "",
   });
   const [submitting, setSubmitting] = useState<boolean>(false);
@@ -1239,8 +1259,7 @@ export function CustomersPage() {
       const data = await fetchCustomers();
       setCustomers(data || []);
 
-      const badges: Record<string, { hasPackage: boolean; hasGift: boolean }> =
-        {};
+      const badges: Record<string, { hasPackage: boolean; hasGift: boolean }> = {};
       for (const c of data || []) {
         const pkgs = await fetchCustomerPackages(c.id);
         badges[c.id] = {
@@ -1288,7 +1307,7 @@ export function CustomersPage() {
       if (formData.email?.trim()) payload.email = formData.email.trim();
       if (formData.address?.trim()) payload.address = formData.address.trim();
       if (formData.gender?.trim()) payload.gender = formData.gender.trim();
-      if (formData.birth_date?.trim()) payload.birth_date = formData.birth_date.trim();
+      if (formData.birthday?.trim()) payload.birthday = formData.birthday.trim();
       if (formData.notes?.trim()) payload.notes = formData.notes.trim();
 
       await createCustomer(payload);
@@ -1299,7 +1318,7 @@ export function CustomersPage() {
         email: "",
         address: "",
         gender: "",
-        birth_date: "",
+        birthday: "",
         notes: "",
       });
       await loadData();
@@ -1310,6 +1329,16 @@ export function CustomersPage() {
     }
   };
 
+  const handleQuickPhoto = (customerId: string) => {
+    setSelectedCustomerId(customerId);
+    setSelectedTab("photos");
+  };
+
+  const handleQuickPackage = (customerId: string) => {
+    setSelectedCustomerId(customerId);
+    setSelectedTab("packages");
+  };
+
   const filteredCustomers = customers.filter((c) => {
     const q = searchQuery.toLowerCase().trim();
     if (!q) return true;
@@ -1318,11 +1347,13 @@ export function CustomersPage() {
     return nameStr.includes(q) || phoneStr.includes(q);
   });
 
+  // Nếu có customerId được chọn, render profile
   if (selectedCustomerId) {
     return (
       <CustomerProfilePage
         customerId={selectedCustomerId}
         onBack={() => setSelectedCustomerId(null)}
+        initialTab={selectedTab}
       />
     );
   }
@@ -1372,62 +1403,53 @@ export function CustomersPage() {
               {filteredCustomers.map((item) => {
                 const badges = customerBadges[item.id] || { hasPackage: false, hasGift: false };
                 return (
+                  // Container chính bắt sự kiện click
                   <div
                     key={item.id}
-                    onClick={() => setSelectedCustomerId(item.id)}
-                    className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm hover:shadow-md transition-all cursor-pointer"
+                    onClick={() => {
+                      setSelectedCustomerId(item.id);
+                      setSelectedTab("info");
+                    }}
+                    className="bg-white rounded-xl border border-gray-200 p-3 shadow-sm hover:shadow-md transition-all cursor-pointer"
                   >
-                    <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-sm shrink-0">
-                        {(item.full_name || item.name || "?").charAt(0).toUpperCase()}
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                        <User className="w-4 h-4" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-1">
-                          <p className="font-semibold text-gray-900 truncate">
+                          <p className="font-semibold text-gray-900 truncate text-sm">
                             {item.full_name || item.name}
                           </p>
                           <div className="flex items-center gap-1 shrink-0">
-                            {badges.hasPackage && <span className="text-blue-500 text-sm">📦</span>}
-                            {badges.hasGift && <span className="text-purple-500 text-sm">🎁</span>}
+                            {badges.hasPackage && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation(); // ngăn sự kiện lan ra thẻ cha
+                                  handleQuickPackage(item.id);
+                                }}
+                                className="text-blue-500 hover:text-blue-700 transition-colors"
+                                title="Xem gói dịch vụ"
+                              >
+                                <Package className="w-4 h-4" />
+                              </button>
+                            )}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation(); // ngăn sự kiện lan ra thẻ cha
+                                handleQuickPhoto(item.id);
+                              }}
+                              className="text-gray-400 hover:text-gray-600 transition-colors"
+                              title="Chụp ảnh nhanh"
+                            >
+                              <Camera className="w-4 h-4" />
+                            </button>
                           </div>
                         </div>
                         <p className="text-sm text-gray-500">
                           {maskPhone(item.phone || "", isAdmin)}
                         </p>
-                        <div className="mt-2 pt-2 border-t border-gray-100 flex justify-between text-xs text-gray-500">
-                          <span>
-                            Ghé:{" "}
-                            <span className="font-semibold text-gray-700">
-                              {item.total_visits || 0} lần
-                            </span>
-                          </span>
-                          <span>
-                            Chi tiêu:{" "}
-                            <span className="font-semibold text-blue-600">
-                              {formatVND(item.total_spend || 0)}
-                            </span>
-                          </span>
-                        </div>
                       </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedCustomerId(item.id);
-                          setTimeout(() => {
-                            const tabButtons = document.querySelectorAll(
-                              '[class*="flex overflow-x-auto"] button',
-                            );
-                            const photoTab = Array.from(tabButtons).find(
-                              (btn) => btn.textContent?.includes("📷 Ảnh")
-                            );
-                            if (photoTab) (photoTab as HTMLButtonElement).click();
-                          }, 100);
-                        }}
-                        className="shrink-0 w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-sm transition-colors"
-                        title="Chụp ảnh nhanh"
-                      >
-                        📷
-                      </button>
                     </div>
                   </div>
                 );
@@ -1496,9 +1518,9 @@ export function CustomersPage() {
             <Input
               label="Ngày sinh"
               type="date"
-              value={formData.birth_date}
+              value={formData.birthday}
               onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                setFormData({ ...formData, birth_date: e.target.value })
+                setFormData({ ...formData, birthday: e.target.value })
               }
             />
           </div>
