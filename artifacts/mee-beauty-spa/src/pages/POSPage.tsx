@@ -19,6 +19,9 @@ import { POSCatalogPicker } from "@/components/pos/POSCatalogPicker";
 import { POSCart } from "@/components/pos/POSCart";
 import { POSPaymentModal } from "@/components/pos/POSPaymentModal";
 import { QRCodeSettingsModal } from "@/components/pos/QRCodeSettingsModal";
+import { QRCodeModal } from '@/components/pos/QRCodeModal';
+import { bankConfig } from '@/config/bank';
+import { useAuth } from '@/context/AuthContext';
 
 export const POSPage: React.FC = () => {
   const [services, setServices] = useState<CatalogServiceItem[]>([]);

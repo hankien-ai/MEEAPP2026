@@ -1,3 +1,4 @@
+// src/components/app-shell.tsx
 import React from "react";
 import { BottomToolbar } from "@/components/bottom-toolbar";
 
@@ -6,8 +7,7 @@ interface AppShellProps {
   userRole?: string;
   activeTab?: string;
   onSelectTab?: (tab: string) => void;
-  activeRoute?: string;
-  onNavigate?: (route: string) => void;
+  visibleTabs?: string[];
 }
 
 export const AppShell: React.FC<AppShellProps> = ({
@@ -15,20 +15,17 @@ export const AppShell: React.FC<AppShellProps> = ({
   userRole,
   activeTab,
   onSelectTab,
-  activeRoute,
-  onNavigate,
+  visibleTabs = [],
 }) => {
-  const currentTab = activeTab || activeRoute || "dashboard";
-  const handleSelectTab = onSelectTab || onNavigate || (() => {});
-
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col relative">
       <main className="flex-1 w-full pb-24 md:pb-0">{children}</main>
 
       <BottomToolbar
         userRole={userRole}
-        activeTab={currentTab}
-        onSelectTab={handleSelectTab}
+        activeTab={activeTab || "dashboard"}
+        onSelectTab={onSelectTab || (() => {})}
+        visibleTabs={visibleTabs}
       />
     </div>
   );

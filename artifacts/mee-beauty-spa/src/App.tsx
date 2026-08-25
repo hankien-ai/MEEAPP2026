@@ -1,154 +1,112 @@
-import React, { useState } from "react";
+// src/App.tsx
+import React, { useState, useEffect } from "react";
+import { useAuth } from "@/context/AuthContext";
+import LoginPage from "@/pages/LoginPage";
 import DashboardPage from "./pages/dashboard";
 import CustomersPage, { CustomerProfilePage } from "./pages/customers";
 import CatalogPage from "./pages/catalog";
 import OperationsPage from "./pages/operations";
 import StaffPage from "./pages/staff";
+import SettingsPage from "./pages/SettingsPage";
 import NotFoundPage from "./pages/not-found";
 import POSPage from "./pages/POSPage";
 import { AppShell } from "./components/app-shell";
 
 export function App() {
+  const { role, isLoggedIn, visibility } = useAuth();
   const [activeTab, setActiveTab] = useState<string>("dashboard");
-  const [userRole, setUserRole] = useState<string>("owner");
+
+  // Reset tab khi role thay đổi
+  useEffect(() => {
+    setActiveTab("dashboard");
+  }, [role]);
+
+  if (!isLoggedIn) {
+    return <LoginPage />;
+  }
+
+  const isAdmin = role === 'admin';
+
+  // Xác định danh sách tab dựa trên role và visibility
+  const getVisibleTabs = (): string[] => {
+    const tabs: string[] = [];
+
+    if (visibility.dashboard) tabs.push("dashboard");
+    if (visibility.customers) tabs.push("customers");
+    if (visibility.pos) tabs.push("pos");
+    if (isAdmin && visibility.catalog) tabs.push("catalog");
+    if (visibility.operations) tabs.push("operations");
+    if (isAdmin && visibility.staff) tabs.push("staff");
+    if (isAdmin && visibility.settings) tabs.push("settings");
+
+    return tabs;
+  };
+
+  const visibleTabs = getVisibleTabs();
+
+  // Nếu tab hiện tại không có trong danh sách, chuyển về tab đầu tiên
+  const currentActiveTab = visibleTabs.includes(activeTab) ? activeTab : (visibleTabs.length > 0 ? visibleTabs[0] : "dashboard");
 
   const renderContent = () => {
-    switch (activeTab) {
+    switch (currentActiveTab) {
       case "dashboard":
-        return <DashboardPage userRole={userRole} onNavigate={setActiveTab} />;
+        return <DashboardPage userRole={role} onNavigate={setActiveTab} />;
       case "customers":
         return <CustomersPage />;
       case "catalog":
         return <CatalogPage />;
       case "operations":
-        return <OperationsPage />;
+        return <OperationsPage userRole={role} />;
       case "staff":
-        return <StaffPage userRole={userRole} />;
+        return <StaffPage userRole={role} />;
       case "pos":
         return <POSPage />;
+      case "settings":
+        return <SettingsPage />;
       default:
         return <NotFoundPage />;
     }
   };
 
+  // Header (giữ nguyên như cũ nhưng thêm nút đăng xuất)
+  const header = (
+    <header className="bg-white border-b border-gray-200 px-4 sm:px-6 py-3 flex items-center justify-between sticky top-0 z-30 shadow-xs">
+      <div className="flex items-center gap-3">
+        <div className="h-8 w-8 rounded-xl bg-pink-600 flex items-center justify-center text-white font-black text-sm shadow-md shadow-pink-600/20">
+          M
+        </div>
+        <div>
+          <h1 className="text-base font-bold text-gray-900 leading-tight">
+            Mee Beauty Spa
+          </h1>
+          <p className="text-[9px] text-gray-400 hidden sm:block">
+            {isAdmin ? 'Quản lý' : 'Nhân viên'}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => {
+            localStorage.removeItem('mee_role');
+            window.location.reload();
+          }}
+          className="text-xs text-slate-500 hover:text-slate-700 px-2 py-1 rounded-lg hover:bg-slate-100"
+        >
+          Đăng xuất
+        </button>
+      </div>
+    </header>
+  );
+
   return (
     <AppShell
-      activeTab={activeTab}
+      activeTab={currentActiveTab}
       onSelectTab={setActiveTab}
-      userRole={userRole}
+      userRole={role}
+      visibleTabs={visibleTabs}
     >
-      <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between sticky top-0 z-30 shadow-xs">
-        <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black text-lg shadow-md shadow-blue-600/20">
-            M
-          </div>
-          <div>
-            <h1 className="text-lg font-bold text-gray-900 leading-tight">
-              Mee Beauty Spa - Management
-            </h1>
-            <p className="text-[10px] text-gray-400 hidden sm:block">
-              Hệ thống quản lý vận hành Spa
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <div className="hidden sm:flex items-center bg-slate-100 p-1 rounded-xl text-xs">
-            <button
-              type="button"
-              onClick={() => setUserRole("owner")}
-              className={`px-3 py-1 rounded-lg font-semibold transition-all ${
-                userRole === "owner"
-                  ? "bg-white text-blue-600 shadow-xs"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              Quản lý
-            </button>
-            <button
-              type="button"
-              onClick={() => setUserRole("staff")}
-              className={`px-3 py-1 rounded-lg font-semibold transition-all ${
-                userRole === "staff"
-                  ? "bg-white text-blue-600 shadow-xs"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              Nhân viên
-            </button>
-          </div>
-
-          <nav className="hidden md:flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => setActiveTab("dashboard")}
-              className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                activeTab === "dashboard"
-                  ? "bg-blue-50 text-blue-600 font-bold"
-                  : "text-gray-600 hover:bg-gray-100"
-              }`}
-            >
-              Tổng quan
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("customers")}
-              className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                activeTab === "customers"
-                  ? "bg-blue-50 text-blue-600 font-bold"
-                  : "text-gray-600 hover:bg-gray-100"
-              }`}
-            >
-              Khách hàng
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("pos")}
-              className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                activeTab === "pos"
-                  ? "bg-blue-50 text-blue-600 font-bold"
-                  : "text-gray-600 hover:bg-gray-100"
-              }`}
-            >
-              POS
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("catalog")}
-              className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                activeTab === "catalog"
-                  ? "bg-blue-50 text-blue-600 font-bold"
-                  : "text-gray-600 hover:bg-gray-100"
-              }`}
-            >
-              Danh mục
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("operations")}
-              className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                activeTab === "operations"
-                  ? "bg-blue-50 text-blue-600 font-bold"
-                  : "text-gray-600 hover:bg-gray-100"
-              }`}
-            >
-              Vận hành
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("staff")}
-              className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                activeTab === "staff"
-                  ? "bg-blue-50 text-blue-600 font-bold"
-                  : "text-gray-600 hover:bg-gray-100"
-              }`}
-            >
-              Nhân viên
-            </button>
-          </nav>
-        </div>
-      </header>
-
+      {header}
       <div className="max-w-7xl w-full mx-auto p-4 sm:p-6">
         {renderContent()}
       </div>
