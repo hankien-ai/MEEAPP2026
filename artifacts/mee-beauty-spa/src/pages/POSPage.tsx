@@ -1,3 +1,4 @@
+// src/pages/POSPage.tsx
 import React, { useState, useEffect } from "react";
 import {
   Customer,
@@ -19,11 +20,15 @@ import { POSCatalogPicker } from "@/components/pos/POSCatalogPicker";
 import { POSCart } from "@/components/pos/POSCart";
 import { POSPaymentModal } from "@/components/pos/POSPaymentModal";
 import { QRCodeSettingsModal } from "@/components/pos/QRCodeSettingsModal";
-import { QRCodeModal } from '@/components/pos/QRCodeModal';
-import { bankConfig } from '@/config/bank';
-import { useAuth } from '@/context/AuthContext';
+import { QRCodeModal } from "@/components/pos/QRCodeModal";
+import { getBankConfig } from "@/config/bank";
+import { useAuth } from "@/context/AuthContext";
+import { X } from "lucide-react";
 
 export const POSPage: React.FC = () => {
+  const { role } = useAuth();
+  const isAdminUser = role === 'admin';
+
   const [services, setServices] = useState<CatalogServiceItem[]>([]);
   const [products, setProducts] = useState<CatalogProductItem[]>([]);
   const [packages, setPackages] = useState<CatalogPackageItem[]>([]);
@@ -44,7 +49,11 @@ export const POSPage: React.FC = () => {
     items: { package_item_id: string; service_id: string; service_name: string; remaining_quantity: number; total_quantity: number }[];
   } | null>(null);
 
+  const [isMethodSelectorOpen, setIsMethodSelectorOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isQRModalOpen, setIsQRModalOpen] = useState(false);
+  const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [notification, setNotification] = useState<{
@@ -53,9 +62,12 @@ export const POSPage: React.FC = () => {
   } | null>(null);
 
   const [qrCodeUrl, setQrCodeUrl] = useState<string | undefined>(undefined);
-  const [isQRModalOpen, setIsQRModalOpen] = useState(false);
+  const [isQRCodeSettingsOpen, setIsQRCodeSettingsOpen] = useState(false);
 
-  const isAdmin = loggedStaff?.role === 'admin';
+  const isAdmin = loggedStaff?.role === 'admin' || isAdminUser;
+
+  // Lấy cấu hình ngân hàng từ localStorage (hoặc mặc định)
+  const bankConfig = getBankConfig();
 
   useEffect(() => {
     loadData();
@@ -360,6 +372,8 @@ export const POSPage: React.FC = () => {
   };
 
   const handlePayDebt = () => {
+    setSelectedMethod('DEBT');
+    setIsMethodSelectorOpen(false);
     setIsPaymentModalOpen(true);
   };
 
@@ -445,7 +459,24 @@ export const POSPage: React.FC = () => {
       }
     }
 
-    setIsPaymentModalOpen(true);
+    // Mở method selector
+    setIsMethodSelectorOpen(true);
+  };
+
+  const handleSelectMethod = (method: PaymentMethod) => {
+    setSelectedMethod(method);
+    setIsMethodSelectorOpen(false);
+
+    if (method === 'BANK_TRANSFER') {
+      setIsQRModalOpen(true);
+    } else {
+      setIsPaymentModalOpen(true);
+    }
+  };
+
+  const handleQRConfirm = () => {
+    setIsQRModalOpen(false);
+    handleConfirmPayment('BANK_TRANSFER', finalTotal, 'Thanh toán qua QR');
   };
 
   const handleConfirmPayment = async (
@@ -494,6 +525,7 @@ export const POSPage: React.FC = () => {
 
     setIsSubmitting(false);
     setIsPaymentModalOpen(false);
+    setIsQRModalOpen(false);
 
     if (res.success) {
       showAlert(
@@ -576,7 +608,7 @@ export const POSPage: React.FC = () => {
 
           {isAdmin && (
             <button
-              onClick={() => setIsQRModalOpen(true)}
+              onClick={() => setIsQRCodeSettingsOpen(true)}
               className="px-2.5 py-1.5 bg-purple-100 text-purple-700 rounded-lg text-[10px] font-medium hover:bg-purple-200 transition-all"
             >
               📱 QR
@@ -694,17 +726,59 @@ export const POSPage: React.FC = () => {
         </div>
       )}
 
-      {packageUsageModal && (
-        <POSPackageUsageModal
-          isOpen={packageUsageModal.isOpen}
-          onClose={() => setPackageUsageModal(null)}
-          customerPackageId={packageUsageModal.customerPackageId}
-          packageItems={packageUsageModal.items}
-          onConfirm={handleConfirmPackageUsage}
-          isSubmitting={isSubmitting}
-        />
+      {/* ===== METHOD SELECTOR MODAL ===== */}
+      {isMethodSelectorOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full shadow-2xl p-5 space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="text-base font-bold text-slate-800">Chọn phương thức thanh toán</h3>
+              <button onClick={() => setIsMethodSelectorOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <button
+                onClick={() => handleSelectMethod('CASH')}
+                className="w-full py-3 px-4 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl text-sm font-semibold text-emerald-800 flex items-center justify-center gap-2"
+              >
+                💵 Tiền mặt
+              </button>
+              <button
+                onClick={() => handleSelectMethod('BANK_TRANSFER')}
+                className="w-full py-3 px-4 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl text-sm font-semibold text-blue-800 flex items-center justify-center gap-2"
+              >
+                🏦 Chuyển khoản
+              </button>
+              <button
+                onClick={() => handleSelectMethod('GIFT')}
+                className="w-full py-3 px-4 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl text-sm font-semibold text-purple-800 flex items-center justify-center gap-2"
+              >
+                🎁 Quà tặng
+              </button>
+              <button
+                onClick={() => handleSelectMethod('DEBT')}
+                className="w-full py-3 px-4 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl text-sm font-semibold text-amber-800 flex items-center justify-center gap-2"
+              >
+                📝 Ghi nợ
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
+      {/* ===== QR CODE MODAL ===== */}
+      <QRCodeModal
+        isOpen={isQRModalOpen}
+        onClose={() => setIsQRModalOpen(false)}
+        amount={finalTotal}
+        invoiceCode={customer?.id?.slice(0, 6) || 'POS'}
+        bankName={bankConfig.bankName}
+        accountNumber={bankConfig.accountNumber}
+        accountName={bankConfig.accountName}
+        onConfirm={handleQRConfirm}
+      />
+
+      {/* ===== POS PAYMENT MODAL (cho các method khác) ===== */}
       <POSPaymentModal
         isOpen={isPaymentModalOpen}
         onClose={() => setIsPaymentModalOpen(false)}
@@ -719,12 +793,25 @@ export const POSPage: React.FC = () => {
         qrCodeUrl={qrCodeUrl}
       />
 
+      {/* ===== QR CODE SETTINGS ===== */}
       <QRCodeSettingsModal
-        isOpen={isQRModalOpen}
-        onClose={() => setIsQRModalOpen(false)}
+        isOpen={isQRCodeSettingsOpen}
+        onClose={() => setIsQRCodeSettingsOpen(false)}
         currentQrUrl={qrCodeUrl}
         onSave={handleSaveQrCode}
       />
+
+      {/* ===== PACKAGE USAGE MODAL ===== */}
+      {packageUsageModal && (
+        <POSPackageUsageModal
+          isOpen={packageUsageModal.isOpen}
+          onClose={() => setPackageUsageModal(null)}
+          customerPackageId={packageUsageModal.customerPackageId}
+          packageItems={packageUsageModal.items}
+          onConfirm={handleConfirmPackageUsage}
+          isSubmitting={isSubmitting}
+        />
+      )}
     </div>
   );
 };

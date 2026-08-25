@@ -1,13 +1,11 @@
+// src/pages/dashboard.tsx
 import React, { useState, useEffect, useCallback } from "react";
 import { supabase, DEFAULT_ORG_ID, DEFAULT_BRANCH_ID } from "../services/supabase";
 import { Button, Card, Badge, Spinner } from "../components/primitives";
 import { attendanceService } from "../services/attendance.service";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
-
-// ============================================================
-// HELPERS
-// ============================================================
+import { useAuth } from "@/context/AuthContext";
 
 const formatVND = (val: number) =>
   new Intl.NumberFormat("vi-VN").format(val) + " đ";
@@ -24,29 +22,22 @@ const formatDateFull = (dateStr: string) => {
   return format(d, "EEEE, dd/MM/yyyy", { locale: vi });
 };
 
-// ============================================================
-// DASHBOARD PROPS
-// ============================================================
-
 interface DashboardPageProps {
-  userRole?: string; // 'owner' hoặc 'staff'
+  userRole?: string;
   onNavigate?: (tab: string) => void;
 }
 
-// ============================================================
-// MAIN COMPONENT
-// ============================================================
-
 export const DashboardPage: React.FC<DashboardPageProps> = ({ 
-  userRole = "owner",
+  userRole = "staff",
   onNavigate 
 }) => {
-  const isAdmin = userRole === "owner";
+  const { role } = useAuth();
+  const isAdmin = role === 'admin' || userRole === 'owner';
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // Staff hiện tại (tạm lấy staff đầu tiên, sau này thay bằng auth)
   const [currentStaffId, setCurrentStaffId] = useState<string | null>(null);
 
   // ---- Data states ----
@@ -71,7 +62,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   const [currentService, setCurrentService] = useState<any>(null);
   const [staffList, setStaffList] = useState<any[]>([]);
 
-  // ---- Fetch data ----
   const loadDashboard = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -148,7 +138,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
       if (staffErr) throw staffErr;
       setStaffList(staffData || []);
 
-      // Set current staff id (lần đầu)
       if (staffData && staffData.length > 0 && !currentStaffId) {
         setCurrentStaffId(staffData[0].id);
       }
@@ -258,8 +247,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
     loadDashboard();
   }, [loadDashboard]);
 
-  // ========== HANDLERS ==========
-
   const handleCheckIn = async () => {
     const staffId = currentStaffId || staffList[0]?.id;
     if (!staffId) {
@@ -269,10 +256,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
     setSubmitting(true);
     try {
       const result = await attendanceService.checkIn(staffId);
-      // Cập nhật state ngay lập tức
       setTodayAttendance(result);
       alert("✅ Check-in thành công!");
-      // Vẫn gọi loadDashboard để cập nhật thống kê staff khác
       loadDashboard();
     } catch (err: any) {
       alert(err.message || "Lỗi check-in");
@@ -308,9 +293,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
     if (onNavigate) onNavigate("customers");
   };
 
-  // ============================================================
-  // RENDER
-  // ============================================================
+  const handleGoToOperations = () => {
+    if (onNavigate) onNavigate("operations");
+  };
 
   if (loading) {
     return (
@@ -336,7 +321,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
     );
   }
 
-  // ------ MANAGER DASHBOARD ------
+  // ============================================================
+  // ADMIN DASHBOARD
+  // ============================================================
   if (isAdmin) {
     return (
       <div className="min-h-screen bg-slate-50 p-4 md:p-6 max-w-7xl mx-auto space-y-6">
@@ -491,19 +478,24 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
         </section>
 
         {/* Quick Actions */}
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 md:static md:translate-x-0 flex gap-3 bg-white p-3 rounded-2xl shadow-lg border border-slate-200 md:shadow-none md:border-0 md:bg-transparent md:p-0">
+        <div className="flex gap-3 bg-white p-3 rounded-2xl shadow-lg border border-slate-200 md:shadow-none md:border-0 md:bg-transparent md:p-0">
           <Button variant="primary" className="flex-1 md:flex-none" onClick={handleGoToCustomers}>
             + Thêm khách
           </Button>
           <Button variant="secondary" className="flex-1 md:flex-none" onClick={handleGoToPOS}>
             🛒 POS
           </Button>
+          <Button variant="outline" className="flex-1 md:flex-none" onClick={handleGoToOperations}>
+            ⚙️ Vận hành
+          </Button>
         </div>
       </div>
     );
   }
 
-  // ------ STAFF DASHBOARD ------
+  // ============================================================
+  // STAFF DASHBOARD
+  // ============================================================
   const currentStaffName = staffList.find(s => s.id === currentStaffId)?.full_name || "Nhân viên";
 
   return (

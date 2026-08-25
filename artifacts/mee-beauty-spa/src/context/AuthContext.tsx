@@ -16,6 +16,7 @@ export interface VisibilitySettings {
   settings: boolean;
 }
 
+// Mặc định: staff chỉ thấy dashboard, customers, pos, operations
 const defaultVisibility: VisibilitySettings = {
   dashboard: true,
   pos: true,
@@ -27,6 +28,20 @@ const defaultVisibility: VisibilitySettings = {
   payroll: false,
   expenses: false,
   settings: false,
+};
+
+// Visibility mặc định cho admin: tất cả đều true
+const adminVisibility: VisibilitySettings = {
+  dashboard: true,
+  pos: true,
+  customers: true,
+  operations: true,
+  catalog: true,
+  inventory: true,
+  staff: true,
+  payroll: true,
+  expenses: true,
+  settings: true,
 };
 
 interface AuthContextType {
@@ -47,18 +62,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
-    // Load from localStorage
+    // Load từ localStorage
     const savedRole = localStorage.getItem('mee_role') as UserRole | null;
     const savedVisibility = localStorage.getItem('mee_visibility');
+
     if (savedRole) {
       setRole(savedRole);
       setIsLoggedIn(true);
-    }
-    if (savedVisibility) {
-      try {
-        setVisibility(JSON.parse(savedVisibility));
-      } catch (e) {
-        // ignore
+      // Nếu có visibility lưu, dùng nó, nếu không dùng mặc định theo role
+      if (savedVisibility) {
+        try {
+          setVisibility(JSON.parse(savedVisibility));
+        } catch (e) {
+          // Nếu parse lỗi, set mặc định theo role
+          setVisibility(savedRole === 'admin' ? adminVisibility : defaultVisibility);
+        }
+      } else {
+        // Chưa có visibility, set mặc định theo role
+        setVisibility(savedRole === 'admin' ? adminVisibility : defaultVisibility);
       }
     }
   }, []);
@@ -67,12 +88,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setRole(newRole);
     setIsLoggedIn(true);
     localStorage.setItem('mee_role', newRole);
+
+    // Khi login, set visibility mặc định theo role
+    const newVisibility = newRole === 'admin' ? adminVisibility : defaultVisibility;
+    setVisibility(newVisibility);
+    localStorage.setItem('mee_visibility', JSON.stringify(newVisibility));
   };
 
   const logout = () => {
     setIsLoggedIn(false);
     localStorage.removeItem('mee_role');
-    // không xóa visibility để giữ cài đặt
+    // Không xóa visibility để giữ cài đặt
   };
 
   const handleSetVisibility = (settings: VisibilitySettings) => {

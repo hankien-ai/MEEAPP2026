@@ -1,8 +1,6 @@
 // src/components/pos/QRCodeModal.tsx
 import React, { useState } from 'react';
-import QRCode from 'qrcode.react';
 import { X, Copy, Check } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 
 interface QRCodeModalProps {
   isOpen: boolean;
@@ -32,7 +30,8 @@ export const QRCodeModal: React.FC<QRCodeModalProps> = ({
   const formatVND = (val: number) => new Intl.NumberFormat('vi-VN').format(val) + ' đ';
   const transactionId = invoiceCode ? `MEE${invoiceCode.slice(0,6)}` : `MEE${Date.now().toString().slice(-6)}`;
 
-  const qrContent = `https://img.vietqr.io/image/VCB-${accountNumber}-compact.png?amount=${amount}&addInfo=${transactionId}`;
+  // Tạo QR từ API (không cần thư viện)
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=MEE%20${accountNumber}%20${transactionId}%20${amount}`;
 
   const handleCopy = () => {
     navigator.clipboard?.writeText(accountNumber);
@@ -52,7 +51,7 @@ export const QRCodeModal: React.FC<QRCodeModalProps> = ({
 
         <div className="flex flex-col items-center">
           <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-            <QRCode value={qrContent} size={180} level="H" includeMargin />
+            <img src={qrUrl} alt="Mã QR thanh toán" width={200} height={200} className="w-48 h-48" />
           </div>
 
           <div className="w-full mt-4 space-y-2 text-sm">
@@ -85,8 +84,18 @@ export const QRCodeModal: React.FC<QRCodeModalProps> = ({
         </div>
 
         <div className="flex gap-2 pt-3 border-t border-slate-100">
-          <Button variant="outline" onClick={onClose} className="flex-1">Hủy</Button>
-          <Button variant="secondary" onClick={onConfirm} className="flex-1">✅ Xác nhận đã thanh toán</Button>
+          <button
+            onClick={onClose}
+            className="flex-1 py-2.5 border border-slate-300 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+          >
+            Hủy
+          </button>
+          <button
+            onClick={onConfirm}
+            className="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 shadow-md transition-colors"
+          >
+            ✅ Xác nhận đã thanh toán
+          </button>
         </div>
       </div>
     </div>

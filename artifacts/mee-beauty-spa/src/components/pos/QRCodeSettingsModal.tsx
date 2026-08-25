@@ -1,5 +1,7 @@
-import React, { useState } from "react";
-import { X, QrCode, Lock, Save } from "lucide-react";
+// src/components/pos/QRCodeSettingsModal.tsx
+import React, { useState, useEffect } from "react";
+import { X, QrCode, Lock, Save, Building, User, CreditCard } from "lucide-react";
+import { getBankConfig } from "@/config/bank";
 
 interface Props {
   isOpen: boolean;
@@ -19,8 +21,22 @@ export const QRCodeSettingsModal: React.FC<Props> = ({
   const [qrUrl, setQrUrl] = useState(currentQrUrl);
   const [pinError, setPinError] = useState("");
 
-  // Mặc định pin là 1234 (có thể thay đổi sau)
+  // Bank config state
+  const [bankName, setBankName] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
+  const [accountName, setAccountName] = useState("");
+
   const DEFAULT_PIN = "1234";
+
+  // Load config khi mở modal
+  useEffect(() => {
+    if (isOpen) {
+      const config = getBankConfig();
+      setBankName(config.bankName);
+      setAccountNumber(config.accountNumber);
+      setAccountName(config.accountName);
+    }
+  }, [isOpen]);
 
   const handleVerifyPin = () => {
     if (pin === DEFAULT_PIN) {
@@ -31,7 +47,14 @@ export const QRCodeSettingsModal: React.FC<Props> = ({
     }
   };
 
-  const handleSave = () => {
+  const handleSaveBankConfig = () => {
+    const config = {
+      bankName,
+      accountNumber,
+      accountName,
+    };
+    localStorage.setItem('mee_bank_config', JSON.stringify(config));
+    // Cập nhật lại QR URL nếu có
     onSave(qrUrl);
     onClose();
     setPin("");
@@ -79,13 +102,52 @@ export const QRCodeSettingsModal: React.FC<Props> = ({
             </button>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-4">
             <div className="text-xs text-emerald-600 bg-emerald-50 p-2 rounded-lg">
-              ✅ Đã xác nhận PIN. Bạn có thể cập nhật mã QR.
+              ✅ Đã xác nhận PIN. Bạn có thể cập nhật thông tin ngân hàng và QR.
             </div>
+
+            {/* Bank Config */}
+            <div className="space-y-3 bg-slate-50 p-3 rounded-lg border border-slate-200">
+              <h4 className="text-xs font-bold text-slate-700 uppercase">Thông tin ngân hàng</h4>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
+                  <Building className="w-3.5 h-3.5" /> Tên ngân hàng
+                </label>
+                <input
+                  type="text"
+                  value={bankName}
+                  onChange={(e) => setBankName(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
+                  <CreditCard className="w-3.5 h-3.5" /> Số tài khoản
+                </label>
+                <input
+                  type="text"
+                  value={accountNumber}
+                  onChange={(e) => setAccountNumber(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
+                  <User className="w-3.5 h-3.5" /> Chủ tài khoản
+                </label>
+                <input
+                  type="text"
+                  value={accountName}
+                  onChange={(e) => setAccountName(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+            </div>
+
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                URL mã QR (ví dụ: https://img.vietqr.io/image/...)
+                URL mã QR (tùy chọn, để trống sẽ tự tạo)
               </label>
               <input
                 type="text"
@@ -96,8 +158,10 @@ export const QRCodeSettingsModal: React.FC<Props> = ({
               />
               <p className="text-[10px] text-slate-400 mt-1">
                 Nhập đường dẫn đến ảnh mã QR để hiển thị khi thanh toán chuyển khoản.
+                Để trống sẽ tự tạo QR từ thông tin ngân hàng.
               </p>
             </div>
+
             <div className="flex gap-3 pt-2">
               <button
                 onClick={() => { setPin(""); setIsPinVerified(false); }}
@@ -106,7 +170,7 @@ export const QRCodeSettingsModal: React.FC<Props> = ({
                 Quay lại
               </button>
               <button
-                onClick={handleSave}
+                onClick={handleSaveBankConfig}
                 className="flex-1 py-2.5 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700 flex items-center justify-center gap-1"
               >
                 <Save className="w-4 h-4" />
