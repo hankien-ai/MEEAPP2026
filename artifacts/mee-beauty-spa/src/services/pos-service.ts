@@ -247,6 +247,8 @@ export class POSService {
       }
 
       const commissionLogs: any[] = [];
+      // Map lưu invoice_item_id theo package_id để dùng khi tạo commission cho buổi đầu
+      const packageInvoiceItemMap = new Map<string, string>();
 
       // LOG cart items
       console.log("📦 CART ITEMS:", cartItems.map(i => ({
@@ -282,6 +284,11 @@ export class POSService {
           .single();
         if (itemErr) {
           return { success: false, error: itemErr.message };
+        }
+
+        // Lưu invoice_item_id nếu là package
+        if (item.item_type === "PACKAGE" && item.package_id) {
+          packageInvoiceItemMap.set(item.package_id, invItem.id);
         }
 
         // ============ MULTI KTV ============
@@ -361,7 +368,7 @@ export class POSService {
           }
         }
 
-        // ============ PACKAGE USAGE ============
+        // ============ PACKAGE USAGE (nếu có item.use_package) ============
         if (item.use_package && item.customer_package_id && item.package_item_id && item.actual_service_id) {
           try {
             console.log("📦 Gọi RPC use_package_session_v2 với ID:", item.package_item_id);
@@ -539,7 +546,6 @@ export class POSService {
           const quantity = quantityPerService * totalQuantity;
           console.log(`📦 Service ${serviceId}: quantityPerService=${quantityPerService}, totalQuantity=${totalQuantity}, quantity=${quantity}`);
 
-          // Kiểm tra xem trigger đã tạo chưa
           const { data: existing } = await supabase
             .from("customer_package_items")
             .select("id, total_quantity")
@@ -548,7 +554,6 @@ export class POSService {
             .maybeSingle();
 
           if (existing) {
-            // Nếu đã có, gán đè total_quantity thành quantity mong muốn
             if (existing.total_quantity !== quantity) {
               await supabase
                 .from("customer_package_items")
@@ -559,7 +564,6 @@ export class POSService {
               console.log(`✅ total_quantity đã đúng ${quantity}, không cần thay đổi`);
             }
           } else {
-            // Chưa có, insert mới
             const { error: insertErr } = await supabase
               .from("customer_package_items")
               .insert({
@@ -578,7 +582,7 @@ export class POSService {
           }
         }
 
-        // ============ SỬ DỤNG BUỔI ĐẦU ============
+        // ============ SỬ DỤNG BUỔI ĐẦU & TẠO PERFORMANCE COMMISSION ============
         const hasUseNow = items.some(it => it.use_now === true);
         if (hasUseNow && firstItem.actual_service_id) {
           try {
@@ -598,6 +602,75 @@ export class POSService {
               );
               if (result && result.success) {
                 console.log("✅ Đã sử dụng buổi đầu thành công");
+
+                // ============ TẠO PERFORMANCE COMMISSION CHO BUỔI ĐẦU ============
+                const serviceId = firstItem.actual_service_id;
+                const { data: serviceDetail, error: serviceErr } = await supabase
+                  .from("services")
+                  .select("performance_commission_type, performance_commission_value, catalog_item_id")
+                  .eq("id", serviceId)
+                  .single();
+
+                if (serviceErr || !serviceDetail) {
+                  console.warn("⚠️ Không tìm thấy service để tính commission:", serviceErr);
+                } else {
+                  const { data: catalogItem } = await supabase
+                    .from("catalog_items")
+                    .select("price")
+                    .eq("id", serviceDetail.catalog_item_id)
+                    .single();
+
+                  const servicePrice = catalogItem?.price || 0;
+                  const perfType = serviceDetail.performance_commission_type || "PERCENT";
+                  const perfValue = Number(serviceDetail.performance_commission_value || 0);
+
+                  let totalPerformanceComm = 0;
+                  if (perfType === "PERCENT") {
+                    const pct = Math.min(100, Math.max(0, perfValue));
+                    totalPerformanceComm = Math.round((servicePrice * pct) / 100);
+                  } else if (perfType === "FIXED") {
+                    totalPerformanceComm = perfValue;
+                  }
+
+                  if (totalPerformanceComm > 0) {
+                    let splits = firstItem.ktv_splits;
+                    if ((!splits || splits.length === 0) && firstItem.performing_staff_id) {
+                      splits = [{ staff_id: firstItem.performing_staff_id, share_percent: 100 }];
+                    }
+
+                    if (splits && splits.length > 0) {
+                      const invoiceItemId = packageInvoiceItemMap.get(packageId);
+                      if (!invoiceItemId) {
+                        console.warn("⚠️ Không tìm thấy invoice_item_id cho package, không tạo commission");
+                      } else {
+                        const packageCommissionLogs = splits.map(split => {
+                          const commAmount = Math.round((totalPerformanceComm * split.share_percent) / 100);
+                          return {
+                            organization_id: DEFAULT_ORG_ID,
+                            branch_id: DEFAULT_BRANCH_ID,
+                            staff_id: split.staff_id,
+                            invoice_item_id: invoiceItemId,
+                            commission_type: "PERFORMANCE",
+                            amount: commAmount,
+                          };
+                        }).filter(log => log.amount > 0);
+
+                        if (packageCommissionLogs.length > 0) {
+                          const { error: commErr } = await supabase
+                            .from("staff_commissions")
+                            .insert(packageCommissionLogs);
+                          if (commErr) {
+                            console.error("❌ Lỗi lưu performance commission cho buổi đầu:", commErr);
+                          } else {
+                            console.log(`✅ Package performance commission saved: ${packageCommissionLogs.length} record(s)`);
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                // ============ KẾT THÚC TẠO COMMISSION ============
+
               } else {
                 console.warn("⚠️ Lỗi sử dụng buổi đầu:", result?.message);
               }
