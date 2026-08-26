@@ -1,3 +1,4 @@
+// src/components/primitives.tsx
 import React, {
   ReactNode,
   ButtonHTMLAttributes,
@@ -78,18 +79,18 @@ export function Button({
   );
 }
 
-// --- CARD ---
-export interface CardProps {
+// --- CARD (FIXED: truyền toàn bộ props xuống div) ---
+export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   title?: ReactNode;
   action?: ReactNode;
   children: ReactNode;
-  className?: string;
 }
 
-export function Card({ title, action, children, className = "" }: CardProps) {
+export function Card({ title, action, children, className = "", ...props }: CardProps) {
   return (
     <div
       className={`bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden ${className}`}
+      {...props} // 🔥 Truyền toàn bộ props (onClick, onMouseEnter, ...) xuống div
     >
       {(title || action) && (
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
@@ -185,9 +186,10 @@ export function PageHeader({
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
+  helperText?: string;
 }
 
-export function Input({ label, error, className = "", ...props }: InputProps) {
+export function Input({ label, error, helperText, className = "", ...props }: InputProps) {
   return (
     <div className="w-full">
       {label && (
@@ -202,6 +204,7 @@ export function Input({ label, error, className = "", ...props }: InputProps) {
         {...props}
       />
       {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+      {helperText && !error && <p className="text-xs text-gray-400 mt-1">{helperText}</p>}
     </div>
   );
 }

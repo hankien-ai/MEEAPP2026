@@ -1,3 +1,4 @@
+// src/pages/staff.tsx
 import React, { useState, useEffect, useCallback } from "react";
 import {
   fetchStaff,
@@ -10,6 +11,7 @@ import { StaffMemberDomain, CreateStaffInput } from "../types/domain";
 import { attendanceService } from "../services/attendance.service";
 import { payrollService } from "../services/payroll.service";
 import { Button, Card, Badge, Spinner, Input } from "../components/primitives";
+import { StaffDetailPage } from "./StaffDetailPage";
 
 // ============================================================
 // HELPER COMPONENTS & ICONS
@@ -45,7 +47,7 @@ interface StaffPageProps {
 // SUB-COMPONENTS
 // ============================================================
 
-// ---- Staff List ----
+// ---- Staff List (sửa lại để dùng div thay vì Card) ----
 const StaffList: React.FC<{
   staffList: StaffMemberDomain[];
   loading: boolean;
@@ -56,6 +58,7 @@ const StaffList: React.FC<{
   onArchive: (id: string, name: string) => void;
   onRefresh: () => void;
   isAdmin: boolean;
+  onSelectStaff: (staffId: string) => void;
 }> = ({
   staffList,
   loading,
@@ -66,6 +69,7 @@ const StaffList: React.FC<{
   onArchive,
   onRefresh,
   isAdmin,
+  onSelectStaff,
 }) => {
   const formatVND = (val: number) => new Intl.NumberFormat("vi-VN").format(val) + " đ";
 
@@ -93,9 +97,11 @@ const StaffList: React.FC<{
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {staffList.map((staff) => (
-            <Card
+            // 🔥 SỬA: Dùng div thay vì Card để onClick hoạt động
+            <div
               key={staff.id}
-              className="p-4 rounded-2xl border border-slate-100 bg-white shadow-xs hover:shadow-md transition-all flex flex-col justify-between"
+              className="p-4 rounded-2xl border border-slate-100 bg-white shadow-xs hover:shadow-md transition-all flex flex-col justify-between cursor-pointer"
+              onClick={() => onSelectStaff(staff.id)}
             >
               <div>
                 <div className="flex items-start justify-between gap-3">
@@ -141,7 +147,7 @@ const StaffList: React.FC<{
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => onEdit(staff)}
+                    onClick={(e) => { e.stopPropagation(); onEdit(staff); }}
                     className="w-full text-xs rounded-xl h-9 font-medium"
                   >
                     ✏️ Sửa
@@ -149,7 +155,7 @@ const StaffList: React.FC<{
                   <Button
                     size="sm"
                     variant={staff.status === "ACTIVE" ? "outline" : "secondary"}
-                    onClick={() => onToggleStatus(staff.id, staff.status)}
+                    onClick={(e) => { e.stopPropagation(); onToggleStatus(staff.id, staff.status); }}
                     className="w-full text-xs rounded-xl h-9 font-medium"
                   >
                     {staff.status === "ACTIVE" ? "⏸ Tạm ngưng" : "▶️ Bật"}
@@ -157,14 +163,14 @@ const StaffList: React.FC<{
                   <Button
                     size="sm"
                     variant="danger"
-                    onClick={() => onArchive(staff.id, staff.full_name)}
+                    onClick={(e) => { e.stopPropagation(); onArchive(staff.id, staff.full_name); }}
                     className="w-full text-xs rounded-xl h-9 font-medium"
                   >
                     🗑 Lưu trữ
                   </Button>
                 </div>
               )}
-            </Card>
+            </div>
           ))}
         </div>
       )}
@@ -665,6 +671,9 @@ export const StaffPage: React.FC<StaffPageProps> = ({ userRole = "staff" }) => {
   // For attendance/payroll selection
   const [selectedStaffId, setSelectedStaffId] = useState<string>("");
 
+  // For detail view
+  const [selectedDetailStaffId, setSelectedDetailStaffId] = useState<string | null>(null);
+
   // Predefined roles
   const roles = ["Admin", "Cửa hàng trưởng", "Kỹ thuật viên", "Trưởng ca"];
 
@@ -767,6 +776,15 @@ export const StaffPage: React.FC<StaffPageProps> = ({ userRole = "staff" }) => {
     }
   };
 
+  const handleSelectStaff = (staffId: string) => {
+    setSelectedDetailStaffId(staffId);
+  };
+
+  const handleBackFromDetail = () => {
+    setSelectedDetailStaffId(null);
+    loadData();
+  };
+
   useEffect(() => {
     if (staffList.length > 0 && !selectedStaffId) {
       setSelectedStaffId(staffList[0].id);
@@ -784,6 +802,11 @@ export const StaffPage: React.FC<StaffPageProps> = ({ userRole = "staff" }) => {
       setActiveSubTab(availableTabs[0] as any);
     }
   }, [isAdmin]);
+
+  // If detail view is active, render StaffDetailPage
+  if (selectedDetailStaffId) {
+    return <StaffDetailPage staffId={selectedDetailStaffId} onBack={handleBackFromDetail} />;
+  }
 
   return (
     <div className="min-h-screen bg-slate-50/60 pb-12">
@@ -884,6 +907,7 @@ export const StaffPage: React.FC<StaffPageProps> = ({ userRole = "staff" }) => {
                 onArchive={handleArchive}
                 onRefresh={loadData}
                 isAdmin={isAdmin}
+                onSelectStaff={handleSelectStaff}
               />
             </div>
           )}
