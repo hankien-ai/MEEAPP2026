@@ -144,6 +144,7 @@ export interface StaffCommissionItem {
   description: string;
   created_at: string;
   customer_name: string;
+  total_amount?: number;
 }
 
 /**
@@ -211,16 +212,19 @@ export const getStaffDetailStats = async (
   const totalInvoices = uniqueInvoices.length;
   const totalServiceRevenue = uniqueInvoices.reduce((sum, inv) => sum + (inv.total_amount || 0), 0);
 
-  // 4. Commission logs
+  // 4. Commission logs (sửa: dùng staff_commissions)
   const { data: commissions, error: commErr } = await supabase
-    .from("commission_logs")
-    .select("*")
+    .from("staff_commissions")
+    .select("amount")
     .eq("staff_id", staffId)
     .gte("created_at", startTimestamp)
     .lte("created_at", endTimestamp);
   if (commErr) throw commErr;
 
-  const totalCommission = (commissions || []).reduce((sum, c) => sum + (c.amount || 0), 0);
+  const totalCommission = (commissions || []).reduce(
+    (sum, c) => sum + Number(c.amount || 0),
+    0
+  );
 
   return {
     total_working_days: workingDays,
@@ -316,15 +320,24 @@ export const getStaffInvoices = async (
   let commissionsMap = new Map<string, number>();
   if (invoiceIds.length > 0) {
     const { data: commData } = await supabase
-      .from("commission_logs")
-      .select("invoice_id, amount")
+      .from("staff_commissions")
+      .select(`
+        amount,
+        invoice_items!inner ( invoice_id )
+      `)
       .eq("staff_id", staffId)
-      .in("invoice_id", invoiceIds)
-      .eq("commission_type", "PERFORMANCE");
-    (commData || []).forEach((c: any) => {
-      const current = commissionsMap.get(c.invoice_id) || 0;
-      commissionsMap.set(c.invoice_id, current + (c.amount || 0));
-    });
+      .eq("commission_type", "PERFORMANCE")
+      .in("invoice_items.invoice_id", invoiceIds);
+
+    if (commData) {
+      commData.forEach((c: any) => {
+        const invoiceId = c.invoice_items?.invoice_id;
+        if (invoiceId) {
+          const current = commissionsMap.get(invoiceId) || 0;
+          commissionsMap.set(invoiceId, current + Number(c.amount || 0));
+        }
+      });
+    }
   }
 
   const result = (items || []).map((item: any) => {
@@ -356,49 +369,66 @@ export const getStaffCommissions = async (
   const startTimestamp = new Date(year, month - 1, 1).toISOString();
   const endTimestamp = new Date(year, month, 0, 23, 59, 59).toISOString();
 
-  // Lấy commission logs trước
+  // 1. Lấy danh sách commission
   const { data: comms, error } = await supabase
-    .from("commission_logs")
-    .select("*")
+    .from("staff_commissions")
+    .select("id, invoice_item_id, commission_type, amount, created_at")
     .eq("staff_id", staffId)
     .gte("created_at", startTimestamp)
     .lte("created_at", endTimestamp)
     .order("created_at", { ascending: false });
 
-  if (error) {
-    console.error("Lỗi getStaffCommissions:", error);
+  if (error || !comms || comms.length === 0) {
+    console.log("No commission found", error);
     return [];
   }
 
-  if (!comms || comms.length === 0) return [];
+  // 2. Lấy invoice_item_ids để query invoice_items và invoices
+  const invoiceItemIds = comms.map(c => c.invoice_item_id).filter(Boolean);
+  if (invoiceItemIds.length === 0) return [];
 
-  // Lấy thông tin invoice cho từng commission
-  const invoiceIds = comms.map(c => c.invoice_id).filter(Boolean);
-  let invoiceMap = new Map<string, any>();
-  if (invoiceIds.length > 0) {
-    const { data: invoices } = await supabase
-      .from("invoices")
-      .select(`
+  const { data: items, error: itemsErr } = await supabase
+    .from("invoice_items")
+    .select(`
+      id,
+      invoice_id,
+      total_amount,
+      invoices (
         id,
-        customers:customer_id (full_name)
-      `)
-      .in("id", invoiceIds);
-    (invoices || []).forEach((inv: any) => {
-      invoiceMap.set(inv.id, inv);
-    });
+        customers ( full_name )
+      )
+    `)
+    .in("id", invoiceItemIds);
+
+  if (itemsErr) {
+    console.error("Lỗi lấy invoice_items:", itemsErr);
+    return [];
   }
 
+  // Tạo map invoice_item_id -> invoice data
+  const itemMap = new Map();
+  items?.forEach((item: any) => {
+    itemMap.set(item.id, {
+      invoice_id: item.invoice_id,
+      total_amount: item.total_amount,
+      invoice: item.invoices,
+    });
+  });
+
+  // 3. Ghép dữ liệu
   return comms.map((c: any) => {
-    const inv = invoiceMap.get(c.invoice_id);
+    const itemInfo = itemMap.get(c.invoice_item_id);
+    const inv = itemInfo?.invoice;
     return {
       id: c.id,
-      invoice_id: c.invoice_id,
-      invoice_code: c.invoice_id?.slice(0, 8).toUpperCase() || "N/A",
+      invoice_id: inv?.id || null,
+      invoice_code: inv?.id?.slice(0, 8).toUpperCase() || "N/A",
       commission_type: c.commission_type || "PERFORMANCE",
-      amount: c.amount || 0,
-      description: c.description || "",
+      amount: Number(c.amount) || 0,
+      description: c.commission_type === "SALE" ? "Hoa hồng bán hàng" : "Hoa hồng thực hiện dịch vụ",
       created_at: c.created_at,
       customer_name: inv?.customers?.full_name || "Khách vãng lai",
+      total_amount: Number(itemInfo?.total_amount || 0),
     };
   });
 };
