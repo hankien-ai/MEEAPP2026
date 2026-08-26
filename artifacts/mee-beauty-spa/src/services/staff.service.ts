@@ -5,7 +5,7 @@ import {
   CreateStaffInput,
   UpdateStaffInput,
 } from "../types/domain";
-import { format, startOfMonth, endOfMonth, eachDayOfInterval } from "date-fns";
+import { format, eachDayOfInterval } from "date-fns";
 
 export const fetchStaff = async (
   searchQuery?: string,
@@ -147,9 +147,6 @@ export interface StaffCommissionItem {
   total_amount?: number;
 }
 
-/**
- * Lấy thống kê của nhân viên trong tháng
- */
 export const getStaffDetailStats = async (
   staffId: string,
   month: number,
@@ -162,7 +159,7 @@ export const getStaffDetailStats = async (
   const startTimestamp = startDate.toISOString();
   const endTimestamp = endDate.toISOString();
 
-  // 1. Attendance
+  // Attendance
   const { data: attendances, error: attErr } = await supabase
     .from("attendance")
     .select("*")
@@ -170,11 +167,10 @@ export const getStaffDetailStats = async (
     .gte("work_date", startStr)
     .lte("work_date", endStr);
   if (attErr) throw attErr;
-
   const workingDays = (attendances || []).filter(a => a.check_in !== null).length;
   const leaveDays = (attendances || []).filter(a => a.check_in === null).length;
 
-  // 2. Service sessions
+  // Service sessions
   const { data: sessions, error: sessErr } = await supabase
     .from("service_sessions")
     .select("*")
@@ -184,7 +180,7 @@ export const getStaffDetailStats = async (
   if (sessErr) throw sessErr;
   const totalServices = (sessions || []).length;
 
-  // 3. Invoices via invoice_items (performing_staff_id)
+  // Invoices
   const { data: invoiceItems, error: invErr } = await supabase
     .from("invoice_items")
     .select(`
@@ -196,7 +192,6 @@ export const getStaffDetailStats = async (
     .gte("created_at", startTimestamp)
     .lte("created_at", endTimestamp);
   if (invErr) throw invErr;
-
   const invoicesMap = new Map();
   (invoiceItems || []).forEach((item: any) => {
     const inv = item.invoices;
@@ -212,7 +207,7 @@ export const getStaffDetailStats = async (
   const totalInvoices = uniqueInvoices.length;
   const totalServiceRevenue = uniqueInvoices.reduce((sum, inv) => sum + (inv.total_amount || 0), 0);
 
-  // 4. Commission logs (sửa: dùng staff_commissions)
+  // Commission
   const { data: commissions, error: commErr } = await supabase
     .from("staff_commissions")
     .select("amount")
@@ -220,11 +215,7 @@ export const getStaffDetailStats = async (
     .gte("created_at", startTimestamp)
     .lte("created_at", endTimestamp);
   if (commErr) throw commErr;
-
-  const totalCommission = (commissions || []).reduce(
-    (sum, c) => sum + Number(c.amount || 0),
-    0
-  );
+  const totalCommission = (commissions || []).reduce((sum, c) => sum + Number(c.amount || 0), 0);
 
   return {
     total_working_days: workingDays,
@@ -238,9 +229,6 @@ export const getStaffDetailStats = async (
   };
 };
 
-/**
- * Lấy lịch chấm công của nhân viên trong tháng (từng ngày)
- */
 export const getStaffAttendanceCalendar = async (
   staffId: string,
   month: number,
@@ -259,12 +247,8 @@ export const getStaffAttendanceCalendar = async (
     .lte("work_date", endStr)
     .order("work_date", { ascending: true });
   if (error) throw error;
-
   const attMap = new Map<string, any>();
-  (data || []).forEach((att: any) => {
-    attMap.set(att.work_date, att);
-  });
-
+  (data || []).forEach((att: any) => attMap.set(att.work_date, att));
   const days = eachDayOfInterval({ start: startDate, end: endDate });
   return days.map((day) => {
     const dateStr = format(day, "yyyy-MM-dd");
@@ -279,9 +263,6 @@ export const getStaffAttendanceCalendar = async (
   });
 };
 
-/**
- * Lấy danh sách hóa đơn của nhân viên trong tháng (với chi tiết)
- */
 export const getStaffInvoices = async (
   staffId: string,
   month: number,
@@ -290,27 +271,17 @@ export const getStaffInvoices = async (
   const startTimestamp = new Date(year, month - 1, 1).toISOString();
   const endTimestamp = new Date(year, month, 0, 23, 59, 59).toISOString();
 
-  // Lấy invoice_items
   const { data: items, error } = await supabase
     .from("invoice_items")
     .select(`
       invoice_id,
       total_amount,
-      invoices:invoice_id (
-        id,
-        created_at,
-        customer_id,
-        total_amount,
-        payment_method,
-        status,
-        customers:customer_id (full_name)
-      )
+      invoices:invoice_id (id, created_at, customer_id, total_amount, payment_method, status, customers:customer_id (full_name))
     `)
     .eq("performing_staff_id", staffId)
     .gte("created_at", startTimestamp)
     .lte("created_at", endTimestamp)
     .order("created_at", { ascending: false });
-
   if (error) {
     console.error("Lỗi getStaffInvoices:", error);
     return [];
@@ -340,27 +311,24 @@ export const getStaffInvoices = async (
     }
   }
 
-  const result = (items || []).map((item: any) => {
-    const inv = item.invoices;
-    if (!inv) return null;
-    return {
-      id: inv.id,
-      invoice_code: inv.id.slice(0, 8).toUpperCase(),
-      customer_name: inv.customers?.full_name || "Khách vãng lai",
-      created_at: inv.created_at,
-      total_amount: inv.total_amount || 0,
-      payment_method: inv.payment_method || "CASH",
-      status: inv.status || "PAID",
-      commission_amount: commissionsMap.get(inv.id) || 0,
-    };
-  }).filter(Boolean) as StaffInvoiceItem[];
-
-  return result;
+  return (items || [])
+    .map((item: any) => {
+      const inv = item.invoices;
+      if (!inv) return null;
+      return {
+        id: inv.id,
+        invoice_code: inv.id.slice(0, 8).toUpperCase(),
+        customer_name: inv.customers?.full_name || "Khách vãng lai",
+        created_at: inv.created_at,
+        total_amount: inv.total_amount || 0,
+        payment_method: inv.payment_method || "CASH",
+        status: inv.status || "PAID",
+        commission_amount: commissionsMap.get(inv.id) || 0,
+      };
+    })
+    .filter(Boolean) as StaffInvoiceItem[];
 };
 
-/**
- * Lấy danh sách hoa hồng của nhân viên trong tháng
- */
 export const getStaffCommissions = async (
   staffId: string,
   month: number,
@@ -369,7 +337,6 @@ export const getStaffCommissions = async (
   const startTimestamp = new Date(year, month - 1, 1).toISOString();
   const endTimestamp = new Date(year, month, 0, 23, 59, 59).toISOString();
 
-  // 1. Lấy danh sách commission
   const { data: comms, error } = await supabase
     .from("staff_commissions")
     .select("id, invoice_item_id, commission_type, amount, created_at")
@@ -383,7 +350,6 @@ export const getStaffCommissions = async (
     return [];
   }
 
-  // 2. Lấy invoice_item_ids để query invoice_items và invoices
   const invoiceItemIds = comms.map(c => c.invoice_item_id).filter(Boolean);
   if (invoiceItemIds.length === 0) return [];
 
@@ -405,7 +371,6 @@ export const getStaffCommissions = async (
     return [];
   }
 
-  // Tạo map invoice_item_id -> invoice data
   const itemMap = new Map();
   items?.forEach((item: any) => {
     itemMap.set(item.id, {
@@ -415,17 +380,22 @@ export const getStaffCommissions = async (
     });
   });
 
-  // 3. Ghép dữ liệu
   return comms.map((c: any) => {
     const itemInfo = itemMap.get(c.invoice_item_id);
     const inv = itemInfo?.invoice;
+    const type = c.commission_type || "PERFORMANCE";
+    let description = "";
+    if (type === "SALES") description = "Hoa hồng bán hàng";
+    else if (type === "PERFORMANCE") description = "Hoa hồng thực hiện dịch vụ";
+    else description = "Hoa hồng";
+
     return {
       id: c.id,
       invoice_id: inv?.id || null,
       invoice_code: inv?.id?.slice(0, 8).toUpperCase() || "N/A",
-      commission_type: c.commission_type || "PERFORMANCE",
+      commission_type: type,
       amount: Number(c.amount) || 0,
-      description: c.commission_type === "SALE" ? "Hoa hồng bán hàng" : "Hoa hồng thực hiện dịch vụ",
+      description: description,
       created_at: c.created_at,
       customer_name: inv?.customers?.full_name || "Khách vãng lai",
       total_amount: Number(itemInfo?.total_amount || 0),
@@ -433,13 +403,10 @@ export const getStaffCommissions = async (
   });
 };
 
-/**
- * Lấy hoạt động gần đây của nhân viên (tối đa 20)
- */
 export const getStaffRecentActivity = async (staffId: string, limit: number = 20) => {
   const activities: any[] = [];
 
-  // Lấy service sessions
+  // Service sessions
   const { data: sessions } = await supabase
     .from("service_sessions")
     .select(`
@@ -464,7 +431,7 @@ export const getStaffRecentActivity = async (staffId: string, limit: number = 20
     });
   }
 
-  // Lấy check-in/out
+  // Check-in/out
   const { data: attendances } = await supabase
     .from("attendance")
     .select("work_date, check_in, check_out")
