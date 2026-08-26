@@ -1,13 +1,8 @@
-============================================================
-MEE BEAUTY SPA - PROJECT EXPORT
-Generated: Tue Aug 25 02:53:57 PM UTC 2026
-============================================================
-
-==================== FILE TREE ====================
+===== FILE TREE =====
 ./components.json
 ./.env.example
 ./index.html
-./MEE_BEauty_SPA_FULL_PROJECT.txt
+./mee-beauty-spa-source.txt
 ./package.json
 ./public/favicon.svg
 ./public/robots.txt
@@ -110,6 +105,7 @@ Generated: Tue Aug 25 02:53:57 PM UTC 2026
 ./src/pages/QRBankSettings.tsx
 ./src/pages/SalarySettingsPage.tsx
 ./src/pages/SettingsPage.tsx
+./src/pages/StaffDetailPage.tsx
 ./src/pages/staff.tsx
 ./src/services/attendance.service.ts
 ./src/services/catalog-service.ts
@@ -131,7 +127,7 @@ Generated: Tue Aug 25 02:53:57 PM UTC 2026
 ./tsconfig.tsbuildinfo
 ./vite.config.ts
 
-==================== SOURCE CODE ====================
+===== SOURCE CODE =====
 
 ============================================================
 FILE: ./components.json
@@ -156,7 +152,6 @@ FILE: ./components.json
       "hooks": "@/hooks"
     }
 }
-
 ============================================================
 FILE: ./index.html
 ============================================================
@@ -184,7 +179,6 @@ FILE: ./index.html
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-
 
 ============================================================
 FILE: ./package.json
@@ -269,70 +263,6 @@ FILE: ./package.json
     "@supabase/supabase-js": "^2.112.3"
   }
 }
-
-
-============================================================
-FILE: ./README.md
-============================================================
-# MEE BEAUTY SPA
-
-MEE BEAUTY SPA is a responsive spa-management application shell for daily branch operations. The first version is intentionally an empty, polished foundation: all major modules are reachable and visually functional, while business rules and production persistence are introduced progressively.
-
-## Tech stack
-
-- React + Vite + TypeScript
-- Tailwind CSS and shadcn/ui primitives
-- Wouter for route navigation
-- Supabase-ready client boundary for PostgreSQL, Storage, and Realtime
-- Vercel-compatible static build
-
-## Folder structure
-
-```text
-src/
-├── components/       shared shell, primitives, and UI components
-├── data/             clearly separated Vietnamese demo data
-├── pages/            dashboard, customers, catalog, and operations pages
-├── services/         demo reads and Supabase boundary
-└── types/            domain types for future data access
-```
-
-## Routes
-
-`/dashboard`, `/customers`, `/customers/:id`, `/catalog`, `/catalog/services`, `/catalog/products`, `/packages`, `/pos`, `/staff`, `/staff/commissions`, `/attendance`, `/loyalty`, `/reports`, `/booking`, `/expenses`, and `/settings`.
-
-The root route `/` opens the dashboard. Development mode uses a visible `DEV ADMIN` context and bypasses authentication; no production authentication is implemented yet.
-
-## Install and run
-
-```bash
-pnpm install
-pnpm --filter @workspace/mee-beauty-spa run dev
-```
-
-## Environment variables
-
-Copy `.env.example` to `.env.local` and provide:
-
-```text
-VITE_SUPABASE_URL=
-VITE_SUPABASE_ANON_KEY=
-```
-
-The Supabase client is created lazily by `src/services/supabase.ts`. The shell remains usable with empty values because current screens intentionally use local demo data.
-
-## Build and deploy
-
-```bash
-pnpm --filter @workspace/mee-beauty-spa run typecheck
-pnpm --filter @workspace/mee-beauty-spa run build
-```
-
-The output is a Vite static build suitable for Vercel. Configure the two `VITE_SUPABASE_*` variables in the Vercel project when real Supabase-backed modules are introduced.
-
-## Roadmap
-
-Implement customers first, then service/product catalog, packages, POS, staff and commissions, attendance, loyalty, reports, booking, authentication, permissions, and Supabase RLS. Keep domain rules in module services/hooks rather than presentation components.
 
 ============================================================
 FILE: ./src/App.tsx
@@ -454,7 +384,6 @@ export function App() {
 }
 
 export default App;
-
 ============================================================
 FILE: ./src/components/app-shell.tsx
 ============================================================
@@ -490,7 +419,6 @@ export const AppShell: React.FC<AppShellProps> = ({
     </div>
   );
 };
-
 ============================================================
 FILE: ./src/components/bottom-toolbar.tsx
 ============================================================
@@ -830,7 +758,6 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
     </>
   );
 };
-
 ============================================================
 FILE: ./src/components/catalog/CatalogModule.tsx
 ============================================================
@@ -1350,7 +1277,6 @@ export const CatalogModule: React.FC<CatalogModuleProps> = ({ tenant }) => {
   );
 };
 
-
 ============================================================
 FILE: ./src/components/catalog/CategoryManagerModal.tsx
 ============================================================
@@ -1491,7 +1417,6 @@ export const CategoryManagerModal: React.FC<CategoryManagerModalProps> = ({
     </div>
   );
 };
-
 ============================================================
 FILE: ./src/components/catalog/PackageModal.tsx
 ============================================================
@@ -1919,7 +1844,6 @@ export const PackageModal: React.FC<PackageModalProps> = ({
   );
 };
 
-
 ============================================================
 FILE: ./src/components/CustomerPackageUsage.tsx
 ============================================================
@@ -2204,7 +2128,6 @@ export const CustomerPackageUsage: React.FC<Props> = ({
   );
 };
 
-
 ============================================================
 FILE: ./src/components/error-boundary.tsx
 ============================================================
@@ -2314,7 +2237,6 @@ export class ErrorBoundary extends Component<
     return <Fallback error={error} resetError={this.resetError} />;
   }
 }
-
 
 ============================================================
 FILE: ./src/components/InventoryModal.tsx
@@ -2634,7 +2556,6 @@ export default function InventoryModal({
   );
 }
 
-
 ============================================================
 FILE: ./src/components/pos/POSCart.tsx
 ============================================================
@@ -2652,8 +2573,9 @@ interface Props {
   onOverallDiscountChange?: (type: 'percent' | 'fixed', value: number) => void;
   overallDiscountType?: 'percent' | 'fixed';
   overallDiscountValue?: number;
-  isAdmin?: boolean; // true nếu là admin, false nếu nhân viên thường
-  loggedStaffName?: string; // tên nhân viên đang đăng nhập để hiển thị
+  isAdmin?: boolean;
+  loggedStaffName?: string;
+  onUpdateUseNow?: (cartItemId: string, useNow: boolean) => void; // 🔥 Mới
 }
 
 export const POSCart: React.FC<Props> = ({
@@ -2669,6 +2591,7 @@ export const POSCart: React.FC<Props> = ({
   overallDiscountValue = 0,
   isAdmin = false,
   loggedStaffName,
+  onUpdateUseNow,
 }) => {
   const formatVND = (val: number) => new Intl.NumberFormat('vi-VN').format(val) + ' đ';
 
@@ -2693,7 +2616,7 @@ export const POSCart: React.FC<Props> = ({
 
       {/* Discount tổng đơn */}
       {onOverallDiscountChange && (
-        <div className="p-3 bg-slate-50/50 border-b border-slate-200 flex items-center gap-3 text-xs">
+        <div className="p-3 bg-slate-50/50 border-b border-slate-200 flex items-center gap-3 text-xs flex-wrap">
           <span className="font-medium text-slate-700">Giảm giá tổng đơn:</span>
           <div className="flex items-center gap-1">
             <button
@@ -2792,6 +2715,28 @@ export const POSCart: React.FC<Props> = ({
                       </div>
                     )}
                   </div>
+
+                  {/* 🔥 Checkbox cho package: Sử dụng buổi đầu */}
+                  {isPackage && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <input
+                        type="checkbox"
+                        checked={item.use_now !== false}
+                        onChange={(e) => {
+                          if (onUpdateUseNow) {
+                            onUpdateUseNow(item.cart_item_id, e.target.checked);
+                          }
+                        }}
+                        className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500"
+                      />
+                      <span className="text-xs text-slate-600">Sử dụng buổi đầu ngay</span>
+                      {item.use_now && item.actual_service_name && (
+                        <span className="text-[10px] text-emerald-600 font-medium">
+                          ({item.actual_service_name})
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="text-right">
@@ -2876,7 +2821,6 @@ export const POSCart: React.FC<Props> = ({
     </div>
   );
 };
-
 ============================================================
 FILE: ./src/components/pos/POSCatalogPicker.tsx
 ============================================================
@@ -3189,7 +3133,6 @@ export const POSCatalogPicker: React.FC<Props> = ({
     </div>
   );
 };
-
 ============================================================
 FILE: ./src/components/pos/POSCustomerBenefits.tsx
 ============================================================
@@ -3418,7 +3361,6 @@ export const POSCustomerBenefits: React.FC<Props> = ({
     </div>
   );
 };
-
 ============================================================
 FILE: ./src/components/pos/POSCustomerSelect.tsx
 ============================================================
@@ -3652,7 +3594,6 @@ export const POSCustomerSelect: React.FC<Props> = ({
     </div>
   );
 };
-
 ============================================================
 FILE: ./src/components/pos/POSKTVSelector.tsx
 ============================================================
@@ -3876,7 +3817,6 @@ export const POSKTVSelector: React.FC<Props> = ({
     </div>
   );
 };
-
 ============================================================
 FILE: ./src/components/pos/POSMultiKTVSelector.tsx
 ============================================================
@@ -4065,7 +4005,6 @@ export const POSMultiKTVSelector: React.FC<Props> = ({
     </div>
   );
 };
-
 ============================================================
 FILE: ./src/components/pos/POSPackageUsageModal.tsx
 ============================================================
@@ -4186,7 +4125,6 @@ export const POSPackageUsageModal: React.FC<Props> = ({
     </div>
   );
 };
-
 ============================================================
 FILE: ./src/components/pos/POSPaymentModal.tsx
 ============================================================
@@ -4474,7 +4412,6 @@ export const POSPaymentModal: React.FC<Props> = ({
     </div>
   );
 };
-
 ============================================================
 FILE: ./src/components/pos/QRCodeModal.tsx
 ============================================================
@@ -4581,7 +4518,6 @@ export const QRCodeModal: React.FC<QRCodeModalProps> = ({
     </div>
   );
 };
-
 ============================================================
 FILE: ./src/components/pos/QRCodeSettingsModal.tsx
 ============================================================
@@ -4770,10 +4706,10 @@ export const QRCodeSettingsModal: React.FC<Props> = ({
     </div>
   );
 };
-
 ============================================================
 FILE: ./src/components/primitives.tsx
 ============================================================
+// src/components/primitives.tsx
 import React, {
   ReactNode,
   ButtonHTMLAttributes,
@@ -4854,18 +4790,18 @@ export function Button({
   );
 }
 
-// --- CARD ---
-export interface CardProps {
+// --- CARD (FIXED: truyền toàn bộ props xuống div) ---
+export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   title?: ReactNode;
   action?: ReactNode;
   children: ReactNode;
-  className?: string;
 }
 
-export function Card({ title, action, children, className = "" }: CardProps) {
+export function Card({ title, action, children, className = "", ...props }: CardProps) {
   return (
     <div
       className={`bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden ${className}`}
+      {...props} // 🔥 Truyền toàn bộ props (onClick, onMouseEnter, ...) xuống div
     >
       {(title || action) && (
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
@@ -4961,9 +4897,10 @@ export function PageHeader({
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
+  helperText?: string;
 }
 
-export function Input({ label, error, className = "", ...props }: InputProps) {
+export function Input({ label, error, helperText, className = "", ...props }: InputProps) {
   return (
     <div className="w-full">
       {label && (
@@ -4978,6 +4915,7 @@ export function Input({ label, error, className = "", ...props }: InputProps) {
         {...props}
       />
       {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+      {helperText && !error && <p className="text-xs text-gray-400 mt-1">{helperText}</p>}
     </div>
   );
 }
@@ -5179,8 +5117,6 @@ export function EmptyState({
     </div>
   );
 }
-
-
 ============================================================
 FILE: ./src/components/ui/accordion.tsx
 ============================================================
@@ -5238,7 +5174,6 @@ const AccordionContent = React.forwardRef<
 AccordionContent.displayName = AccordionPrimitive.Content.displayName;
 
 export { Accordion, AccordionItem, AccordionTrigger, AccordionContent };
-
 
 ============================================================
 FILE: ./src/components/ui/alert-dialog.tsx
@@ -5382,7 +5317,6 @@ export {
   AlertDialogCancel,
 };
 
-
 ============================================================
 FILE: ./src/components/ui/alert.tsx
 ============================================================
@@ -5445,7 +5379,6 @@ AlertDescription.displayName = 'AlertDescription';
 
 export { Alert, AlertTitle, AlertDescription };
 
-
 ============================================================
 FILE: ./src/components/ui/aspect-ratio.tsx
 ============================================================
@@ -5454,7 +5387,6 @@ import * as AspectRatioPrimitive from '@radix-ui/react-aspect-ratio';
 const AspectRatio = AspectRatioPrimitive.Root;
 
 export { AspectRatio };
-
 
 ============================================================
 FILE: ./src/components/ui/avatar.tsx
@@ -5509,7 +5441,6 @@ AvatarFallback.displayName = AvatarPrimitive.Fallback.displayName;
 
 export { Avatar, AvatarImage, AvatarFallback };
 
-
 ============================================================
 FILE: ./src/components/ui/badge.tsx
 ============================================================
@@ -5555,7 +5486,6 @@ function Badge({ className, variant, ...props }: BadgeProps) {
 }
 
 export { Badge, badgeVariants };
-
 
 ============================================================
 FILE: ./src/components/ui/breadcrumb.tsx
@@ -5675,7 +5605,6 @@ export {
   BreadcrumbEllipsis,
 };
 
-
 ============================================================
 FILE: ./src/components/ui/button-group.tsx
 ============================================================
@@ -5762,7 +5691,6 @@ export {
   buttonGroupVariants,
 };
 
-
 ============================================================
 FILE: ./src/components/ui/button.tsx
 ============================================================
@@ -5830,7 +5758,6 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 Button.displayName = 'Button';
 
 export { Button, buttonVariants };
-
 
 ============================================================
 FILE: ./src/components/ui/calendar.tsx
@@ -6048,7 +5975,6 @@ function CalendarDayButton({
 
 export { Calendar, CalendarDayButton };
 
-
 ============================================================
 FILE: ./src/components/ui/card.tsx
 ============================================================
@@ -6134,7 +6060,6 @@ export {
   CardDescription,
   CardContent,
 };
-
 
 ============================================================
 FILE: ./src/components/ui/carousel.tsx
@@ -6398,7 +6323,6 @@ export {
   CarouselPrevious,
   CarouselNext,
 };
-
 
 ============================================================
 FILE: ./src/components/ui/chart.tsx
@@ -6770,7 +6694,6 @@ export {
   ChartStyle,
 };
 
-
 ============================================================
 FILE: ./src/components/ui/checkbox.tsx
 ============================================================
@@ -6802,7 +6725,6 @@ Checkbox.displayName = CheckboxPrimitive.Root.displayName;
 
 export { Checkbox };
 
-
 ============================================================
 FILE: ./src/components/ui/collapsible.tsx
 ============================================================
@@ -6817,7 +6739,6 @@ const CollapsibleTrigger = CollapsiblePrimitive.CollapsibleTrigger;
 const CollapsibleContent = CollapsiblePrimitive.CollapsibleContent;
 
 export { Collapsible, CollapsibleTrigger, CollapsibleContent };
-
 
 ============================================================
 FILE: ./src/components/ui/command.tsx
@@ -6974,7 +6895,6 @@ export {
   CommandShortcut,
   CommandSeparator,
 };
-
 
 ============================================================
 FILE: ./src/components/ui/context-menu.tsx
@@ -7177,7 +7097,6 @@ export {
   ContextMenuRadioGroup,
 };
 
-
 ============================================================
 FILE: ./src/components/ui/dialog.tsx
 ============================================================
@@ -7301,7 +7220,6 @@ export {
   DialogDescription,
 };
 
-
 ============================================================
 FILE: ./src/components/ui/drawer.tsx
 ============================================================
@@ -7420,7 +7338,6 @@ export {
   DrawerTitle,
   DrawerDescription,
 };
-
 
 ============================================================
 FILE: ./src/components/ui/dropdown-menu.tsx
@@ -7626,7 +7543,6 @@ export {
   DropdownMenuRadioGroup,
 };
 
-
 ============================================================
 FILE: ./src/components/ui/empty.tsx
 ============================================================
@@ -7733,7 +7649,6 @@ export {
   EmptyContent,
   EmptyMedia,
 };
-
 
 ============================================================
 FILE: ./src/components/ui/field.tsx
@@ -7982,7 +7897,6 @@ export {
   FieldTitle,
 };
 
-
 ============================================================
 FILE: ./src/components/ui/form.tsx
 ============================================================
@@ -8165,7 +8079,6 @@ export {
   FormField,
 };
 
-
 ============================================================
 FILE: ./src/components/ui/hover-card.tsx
 ============================================================
@@ -8195,7 +8108,6 @@ const HoverCardContent = React.forwardRef<
 HoverCardContent.displayName = HoverCardPrimitive.Content.displayName;
 
 export { HoverCard, HoverCardTrigger, HoverCardContent };
-
 
 ============================================================
 FILE: ./src/components/ui/input-group.tsx
@@ -8368,7 +8280,6 @@ export {
   InputGroupTextarea,
 };
 
-
 ============================================================
 FILE: ./src/components/ui/input-otp.tsx
 ============================================================
@@ -8441,7 +8352,6 @@ InputOTPSeparator.displayName = 'InputOTPSeparator';
 
 export { InputOTP, InputOTPGroup, InputOTPSlot, InputOTPSeparator };
 
-
 ============================================================
 FILE: ./src/components/ui/input.tsx
 ============================================================
@@ -8466,7 +8376,6 @@ const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<'input'>>(
 Input.displayName = 'Input';
 
 export { Input };
-
 
 ============================================================
 FILE: ./src/components/ui/item.tsx
@@ -8664,7 +8573,6 @@ export {
   ItemFooter,
 };
 
-
 ============================================================
 FILE: ./src/components/ui/kbd.tsx
 ============================================================
@@ -8697,7 +8605,6 @@ function KbdGroup({ className, ...props }: React.ComponentProps<'div'>) {
 
 export { Kbd, KbdGroup };
 
-
 ============================================================
 FILE: ./src/components/ui/label.tsx
 ============================================================
@@ -8726,7 +8633,6 @@ const Label = React.forwardRef<
 Label.displayName = LabelPrimitive.Root.displayName;
 
 export { Label };
-
 
 ============================================================
 FILE: ./src/components/ui/menubar.tsx
@@ -8985,7 +8891,6 @@ export {
   MenubarShortcut,
 };
 
-
 ============================================================
 FILE: ./src/components/ui/navigation-menu.tsx
 ============================================================
@@ -9117,7 +9022,6 @@ export {
   NavigationMenuViewport,
 };
 
-
 ============================================================
 FILE: ./src/components/ui/pagination.tsx
 ============================================================
@@ -9238,7 +9142,6 @@ export {
   PaginationEllipsis,
 };
 
-
 ============================================================
 FILE: ./src/components/ui/popover.tsx
 ============================================================
@@ -9273,7 +9176,6 @@ PopoverContent.displayName = PopoverPrimitive.Content.displayName;
 
 export { Popover, PopoverTrigger, PopoverContent, PopoverAnchor };
 
-
 ============================================================
 FILE: ./src/components/ui/progress.tsx
 ============================================================
@@ -9304,7 +9206,6 @@ const Progress = React.forwardRef<
 Progress.displayName = ProgressPrimitive.Root.displayName;
 
 export { Progress };
-
 
 ============================================================
 FILE: ./src/components/ui/radio-group.tsx
@@ -9350,7 +9251,6 @@ const RadioGroupItem = React.forwardRef<
 RadioGroupItem.displayName = RadioGroupPrimitive.Item.displayName;
 
 export { RadioGroup, RadioGroupItem };
-
 
 ============================================================
 FILE: ./src/components/ui/resizable.tsx
@@ -9400,7 +9300,6 @@ const ResizableHandle = ({
 
 export { ResizablePanelGroup, ResizablePanel, ResizableHandle };
 
-
 ============================================================
 FILE: ./src/components/ui/scroll-area.tsx
 ============================================================
@@ -9449,7 +9348,6 @@ const ScrollBar = React.forwardRef<
 ScrollBar.displayName = ScrollAreaPrimitive.ScrollAreaScrollbar.displayName;
 
 export { ScrollArea, ScrollBar };
-
 
 ============================================================
 FILE: ./src/components/ui/select.tsx
@@ -9613,7 +9511,6 @@ export {
   SelectScrollDownButton,
 };
 
-
 ============================================================
 FILE: ./src/components/ui/separator.tsx
 ============================================================
@@ -9645,7 +9542,6 @@ const Separator = React.forwardRef<
 Separator.displayName = SeparatorPrimitive.Root.displayName;
 
 export { Separator };
-
 
 ============================================================
 FILE: ./src/components/ui/sheet.tsx
@@ -9789,7 +9685,6 @@ export {
   SheetTitle,
   SheetDescription,
 };
-
 
 ============================================================
 FILE: ./src/components/ui/sidebar.tsx
@@ -10521,7 +10416,6 @@ export {
   useSidebar,
 };
 
-
 ============================================================
 FILE: ./src/components/ui/skeleton.tsx
 ============================================================
@@ -10540,7 +10434,6 @@ function Skeleton({
 }
 
 export { Skeleton };
-
 
 ============================================================
 FILE: ./src/components/ui/slider.tsx
@@ -10570,7 +10463,6 @@ const Slider = React.forwardRef<
 Slider.displayName = SliderPrimitive.Root.displayName;
 
 export { Slider };
-
 
 ============================================================
 FILE: ./src/components/ui/sonner.tsx
@@ -10607,7 +10499,6 @@ const Toaster = ({ ...props }: ToasterProps) => {
 
 export { Toaster };
 
-
 ============================================================
 FILE: ./src/components/ui/spinner.tsx
 ============================================================
@@ -10626,7 +10517,6 @@ function Spinner({ className, ...props }: React.ComponentProps<'svg'>) {
 }
 
 export { Spinner };
-
 
 ============================================================
 FILE: ./src/components/ui/switch.tsx
@@ -10657,7 +10547,6 @@ const Switch = React.forwardRef<
 Switch.displayName = SwitchPrimitives.Root.displayName;
 
 export { Switch };
-
 
 ============================================================
 FILE: ./src/components/ui/table.tsx
@@ -10782,7 +10671,6 @@ export {
   TableCaption,
 };
 
-
 ============================================================
 FILE: ./src/components/ui/tabs.tsx
 ============================================================
@@ -10839,7 +10727,6 @@ TabsContent.displayName = TabsPrimitive.Content.displayName;
 
 export { Tabs, TabsList, TabsTrigger, TabsContent };
 
-
 ============================================================
 FILE: ./src/components/ui/textarea.tsx
 ============================================================
@@ -10864,7 +10751,6 @@ const Textarea = React.forwardRef<
 Textarea.displayName = 'Textarea';
 
 export { Textarea };
-
 
 ============================================================
 FILE: ./src/components/ui/toaster.tsx
@@ -10902,7 +10788,6 @@ export function Toaster() {
     </ToastProvider>
   );
 }
-
 
 ============================================================
 FILE: ./src/components/ui/toast.tsx
@@ -11034,7 +10919,6 @@ export {
   ToastAction,
 };
 
-
 ============================================================
 FILE: ./src/components/ui/toggle-group.tsx
 ============================================================
@@ -11099,7 +10983,6 @@ ToggleGroupItem.displayName = ToggleGroupPrimitive.Item.displayName;
 
 export { ToggleGroup, ToggleGroupItem };
 
-
 ============================================================
 FILE: ./src/components/ui/toggle.tsx
 ============================================================
@@ -11146,7 +11029,6 @@ Toggle.displayName = TogglePrimitive.Root.displayName;
 
 export { Toggle, toggleVariants };
 
-
 ============================================================
 FILE: ./src/components/ui/tooltip.tsx
 ============================================================
@@ -11182,7 +11064,6 @@ TooltipContent.displayName = TooltipPrimitive.Content.displayName;
 
 export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider };
 
-
 ============================================================
 FILE: ./src/config/bank.ts
 ============================================================
@@ -11194,7 +11075,6 @@ const bankConfig = {
 };
 
 export default bankConfig;
-
 ============================================================
 FILE: ./src/context/AuthContext.tsx
 ============================================================
@@ -11328,7 +11208,6 @@ export const useAuth = () => {
   if (!context) throw new Error('useAuth must be used within AuthProvider');
   return context;
 };
-
 ============================================================
 FILE: ./src/data/demo.ts
 ============================================================
@@ -11378,7 +11257,6 @@ export const demoExpenses: Expense[] = [
 export const formatVnd = (value: number) => new Intl.NumberFormat('vi-VN').format(value) + ' ₫';
 export const initials = (name: string) => name.split(' ').slice(-2).map((part) => part[0]).join('').toUpperCase();
 export const formatDate = (value: string) => new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(value));
-
 ============================================================
 FILE: ./src/hooks/use-mobile.tsx
 ============================================================
@@ -11403,7 +11281,6 @@ export function useIsMobile() {
 
   return !!isMobile;
 }
-
 
 ============================================================
 FILE: ./src/hooks/use-toast.ts
@@ -11595,7 +11472,6 @@ function useToast() {
 }
 
 export { useToast, toast };
-
 
 ============================================================
 FILE: ./src/index.css
@@ -11842,7 +11718,6 @@ FILE: ./src/index.css
   .panel-header { align-items: flex-start; flex-wrap: wrap; }
   .data-table { min-width: 590px; }
 }
-
 ============================================================
 FILE: ./src/lib/utils.ts
 ============================================================
@@ -11853,7 +11728,6 @@ import { clsx, type ClassValue } from 'clsx';
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
-
 
 ============================================================
 FILE: ./src/main.tsx
@@ -11876,7 +11750,6 @@ createRoot(document.getElementById('root')!, {
     </AuthProvider>
   </ErrorBoundary>
 );
-
 ============================================================
 FILE: ./src/pages/AttendancePage.tsx
 ============================================================
@@ -12011,7 +11884,6 @@ export const AttendancePage: React.FC<Props> = ({ staffId: propStaffId }) => {
 };
 
 export default AttendancePage;
-
 ============================================================
 FILE: ./src/pages/catalog.tsx
 ============================================================
@@ -15094,7 +14966,6 @@ function PackageFormModal({
     </div>
   );
 }
-
 ============================================================
 FILE: ./src/pages/customers.tsx
 ============================================================
@@ -16661,7 +16532,6 @@ export function CustomersPage() {
 }
 
 export default CustomersPage;
-
 ============================================================
 FILE: ./src/pages/dashboard.tsx
 ============================================================
@@ -17254,7 +17124,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
 };
 
 export default DashboardPage;
-
 ============================================================
 FILE: ./src/pages/InvoicesPage.tsx
 ============================================================
@@ -17452,7 +17321,6 @@ export const InvoicesPage: React.FC = () => {
     </div>
   );
 };
-
 ============================================================
 FILE: ./src/pages/LoginPage.tsx
 ============================================================
@@ -17548,7 +17416,6 @@ export const LoginPage: React.FC = () => {
 };
 
 export default LoginPage;
-
 ============================================================
 FILE: ./src/pages/not-found.tsx
 ============================================================
@@ -17575,7 +17442,6 @@ export default function NotFound() {
     </div>
   );
 }
-
 
 ============================================================
 FILE: ./src/pages/operations.tsx
@@ -18188,7 +18054,6 @@ export const SettingsPage = OperationsPage;
 export const StaffPage = OperationsPage;
 
 export default OperationsPage;
-
 ============================================================
 FILE: ./src/pages/PayrollDetailPage.tsx
 ============================================================
@@ -18308,7 +18173,6 @@ export const PayrollDetailPage: React.FC = () => {
 };
 
 export default PayrollDetailPage;
-
 ============================================================
 FILE: ./src/pages/PayrollPage.tsx
 ============================================================
@@ -18424,7 +18288,6 @@ export const PayrollPage: React.FC = () => {
 };
 
 export default PayrollPage;
-
 ============================================================
 FILE: ./src/pages/POSPage.tsx
 ============================================================
@@ -18594,6 +18457,8 @@ export const POSPage: React.FC = () => {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isQRModalOpen, setIsQRModalOpen] = useState(false);
   const [isInvoiceHistoryOpen, setIsInvoiceHistoryOpen] = useState(false);
+  const [isServiceSelectorOpen, setIsServiceSelectorOpen] = useState(false);
+  const [pendingPackage, setPendingPackage] = useState<CatalogPackageItem | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -18664,7 +18529,7 @@ export const POSPage: React.FC = () => {
   const hasPackageInCart = cartItems.some((it) => it.item_type === "PACKAGE");
   const getDefaultSellerId = () => selectedSellerId || loggedStaff?.id || undefined;
 
-  // ========== ADD ITEMS TO CART (toggle) ==========
+  // ========== ADD ITEMS TO CART ==========
   const toggleCartItem = (item: any, type: 'SERVICE' | 'PRODUCT' | 'PACKAGE') => {
     let id: string | undefined;
     if (type === 'SERVICE') id = item.catalog_item_id;
@@ -18692,22 +18557,105 @@ export const POSPage: React.FC = () => {
       } else if (type === 'PRODUCT') {
         handleAddProduct(item);
       } else if (type === 'PACKAGE') {
-        // 🔥 MỚI: Khi thêm PACKAGE, kiểm tra nếu có customer thì hỏi có muốn sử dụng buổi đầu không
-        if (customer) {
-          // Nếu đã chọn customer, hiển thị confirm
-          if (window.confirm(`Bạn có muốn sử dụng buổi đầu của gói "${item.name}" ngay không?`)) {
-            handleAddPackage(item, true);
-          } else {
-            handleAddPackage(item, false);
-          }
-        } else {
-          // Chưa chọn customer, mặc định không trừ buổi đầu
-          handleAddPackage(item, false);
-        }
+        // Kiểm tra nếu package có nhiều service và còn buổi
+        handleAddPackageWithServiceSelect(item);
       }
     }
   };
 
+  // 🔥 MỚI: Xử lý thêm package với service selector
+  const handleAddPackageWithServiceSelect = (pkg: CatalogPackageItem) => {
+    // Nếu chưa có customer, không hỏi use_now
+    if (!customer) {
+      handleAddPackage(pkg, false);
+      return;
+    }
+
+    // Nếu chỉ có 1 service, không cần hỏi
+    if (pkg.items.length === 1) {
+      const shouldUseNow = window.confirm(`Bạn có muốn sử dụng buổi đầu của gói "${pkg.name}" ngay không?`);
+      handleAddPackage(pkg, shouldUseNow, pkg.items[0].service_id);
+      return;
+    }
+
+    // Nếu có nhiều service, mở modal chọn service và use_now
+    setPendingPackage(pkg);
+    setIsServiceSelectorOpen(true);
+  };
+
+  // 🔥 MỚI: Xác định service nào còn buổi để hiển thị
+  const getAvailableServices = (pkg: CatalogPackageItem) => {
+    // Lọc các service có remaining > 0 (nếu có dữ liệu từ customer)
+    // Nếu chưa có customer_package_items, tất cả service đều có buổi
+    return pkg.items.map(item => ({
+      ...item,
+      available: true // Mặc định true, khi có dữ liệu thực tế sẽ lọc
+    }));
+  };
+
+  const handleAddPackage = (pkg: CatalogPackageItem, useNow: boolean = false, selectedServiceId?: string) => {
+    // Nếu useNow nhưng chưa có service, báo lỗi
+    if (useNow && pkg.items.length > 1 && !selectedServiceId) {
+      showAlert("error", "Vui lòng chọn dịch vụ sử dụng buổi đầu");
+      return;
+    }
+
+    setCartItems((prev) => {
+      const existing = prev.find(
+        (it) => it.item_type === "PACKAGE" && it.package_id === pkg.id,
+      );
+      if (existing) {
+        const nextQty = existing.quantity + 1;
+        return prev.map((it) =>
+          it.cart_item_id === existing.cart_item_id
+            ? {
+                ...it,
+                quantity: nextQty,
+                total_amount: Math.round(
+                  nextQty * it.unit_price - it.discount_amount,
+                ),
+              }
+            : it,
+        );
+      }
+
+      const selectedStaffId = getDefaultSellerId();
+
+      // Nếu useNow và có selectedServiceId, tìm service tương ứng
+      const actualService = selectedServiceId 
+        ? pkg.items.find(item => item.service_id === selectedServiceId)
+        : (pkg.items.length === 1 ? pkg.items[0] : null);
+
+      const newItem: CartItem = {
+        cart_item_id: `pkg_${Date.now()}_${Math.random()}`,
+        item_type: "PACKAGE",
+        package_id: pkg.id,
+        name: pkg.name,
+        quantity: 1,
+        unit_price: pkg.price,
+        discount_amount: 0,
+        total_amount: pkg.price,
+        package_items: pkg.items,
+        seller_staff_id: selectedStaffId,
+        sales_commission_type: pkg.sales_commission_type,
+        sales_commission_value: pkg.sales_commission_value,
+        use_package: false,
+        use_now: useNow,
+        actual_service_id: actualService?.service_id || null,
+        actual_service_name: actualService?.service_name || null,
+        ktv_splits: selectedStaffId ? [{ staff_id: selectedStaffId, staff_name: loggedStaff?.full_name || "KTV", share_percent: 100 }] : [],
+        performing_staff_id: selectedStaffId,
+      };
+      return [...prev, newItem];
+    });
+
+    const msg = useNow 
+      ? `Đã thêm gói "${pkg.name}" vào giỏ (sẽ sử dụng ${pkg.items.find(i => i.service_id === selectedServiceId)?.service_name || 'dịch vụ'} ngay)`
+      : `Đã thêm gói "${pkg.name}" vào giỏ`;
+    showAlert("info", msg);
+  };
+
+  // ========== HANDLERS ==========
   const handleAddService = (service: CatalogServiceItem) => {
     setCartItems((prev) => {
       const existing = prev.find(
@@ -18805,50 +18753,6 @@ export const POSPage: React.FC = () => {
       };
       return [...prev, newItem];
     });
-  };
-
-  // 🔥 SỬA: Thêm tham số useNow để kiểm soát trừ buổi đầu
-  const handleAddPackage = (pkg: CatalogPackageItem, useNow: boolean = false) => {
-    setCartItems((prev) => {
-      const existing = prev.find(
-        (it) => it.item_type === "PACKAGE" && it.package_id === pkg.id,
-      );
-      if (existing) {
-        const nextQty = existing.quantity + 1;
-        return prev.map((it) =>
-          it.cart_item_id === existing.cart_item_id
-            ? {
-                ...it,
-                quantity: nextQty,
-                total_amount: Math.round(
-                  nextQty * it.unit_price - it.discount_amount,
-                ),
-              }
-            : it,
-        );
-      }
-
-      const selectedStaffId = getDefaultSellerId();
-      const newItem: CartItem = {
-        cart_item_id: `pkg_${Date.now()}_${Math.random()}`,
-        item_type: "PACKAGE",
-        package_id: pkg.id,
-        name: pkg.name,
-        quantity: 1,
-        unit_price: pkg.price,
-        discount_amount: 0,
-        total_amount: pkg.price,
-        package_items: pkg.items,
-        seller_staff_id: selectedStaffId,
-        sales_commission_type: pkg.sales_commission_type,
-        sales_commission_value: pkg.sales_commission_value,
-        use_package: false,
-        // 🔥 Lưu flag để biết có trừ buổi đầu không (sẽ xử lý khi checkout)
-        use_now: useNow,
-      };
-      return [...prev, newItem];
-    });
-    showAlert("info", `Đã thêm gói "${pkg.name}" vào giỏ${useNow ? ' (sẽ trừ buổi đầu)' : ''}`);
   };
 
   // ========== PACKAGE USAGE (thêm vào giỏ, không thu tiền) ==========
@@ -18979,6 +18883,16 @@ export const POSPage: React.FC = () => {
     );
   };
 
+  const handleUpdateUseNow = (cartItemId: string, useNow: boolean) => {
+    setCartItems(prev =>
+      prev.map(item =>
+        item.cart_item_id === cartItemId
+          ? { ...item, use_now: useNow }
+          : item
+      )
+    );
+  };
+
   const handleRemoveItem = (cartItemId: string) => {
     setCartItems((prev) => prev.filter((it) => it.cart_item_id !== cartItemId));
   };
@@ -19040,7 +18954,8 @@ export const POSPage: React.FC = () => {
         customer_package_id: it.customer_package_id,
         package_item_id: it.package_item_id,
         ktv_splits: it.ktv_splits,
-        use_now: it.use_now || false, // 🔥 Truyền flag này xuống pos-service
+        use_now: it.use_now || false,
+        actual_service_id: it.actual_service_id || null,
       })),
     };
 
@@ -19079,6 +18994,7 @@ export const POSPage: React.FC = () => {
       }
     }
 
+    // Nếu chỉ có package usage (total=0), bỏ qua payment modal
     const hasOnlyPackageUsage = cartItems.length > 0 && cartItems.every(item => item.use_package === true);
     if (hasOnlyPackageUsage && finalTotal === 0) {
       handleConfirmPayment('CASH', 0, 'Sử dụng gói');
@@ -19128,6 +19044,7 @@ export const POSPage: React.FC = () => {
         package_item_id: it.package_item_id,
         ktv_splits: it.ktv_splits,
         use_now: it.use_now || false,
+        actual_service_id: it.actual_service_id || null,
       })),
     };
 
@@ -19164,7 +19081,6 @@ export const POSPage: React.FC = () => {
   // ========== RENDER ==========
   return (
     <div className="min-h-screen bg-slate-100 p-3 sm:p-4 font-sans text-slate-800">
-      {/* ... (phần render giữ nguyên, không thay đổi) */}
       {notification && (
         <div
           className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 p-3 rounded-xl shadow-2xl border text-sm font-semibold flex items-center gap-2 transition-all max-w-[90%] ${
@@ -19274,6 +19190,7 @@ export const POSPage: React.FC = () => {
               overallDiscountValue={overallDiscountValue}
               isAdmin={isAdmin}
               loggedStaffName={loggedStaff?.full_name}
+              onUpdateUseNow={handleUpdateUseNow}
             />
 
             {cartItems
@@ -19342,6 +19259,57 @@ export const POSPage: React.FC = () => {
         </div>
       )}
 
+      {/* ===== SERVICE SELECTOR MODAL ===== */}
+      {isServiceSelectorOpen && pendingPackage && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full max-h-[80vh] overflow-y-auto shadow-2xl border border-slate-100 p-5 space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="text-base font-bold text-slate-800">
+                Chọn dịch vụ sử dụng buổi đầu
+              </h3>
+              <button onClick={() => { setIsServiceSelectorOpen(false); setPendingPackage(null); }} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="text-xs text-slate-500">Gói: <strong>{pendingPackage.name}</strong></div>
+
+            <div className="space-y-2">
+              {pendingPackage.items.map((item) => (
+                <button
+                  key={item.service_id}
+                  onClick={() => {
+                    const shouldUseNow = window.confirm(`Sử dụng "${item.service_name}" ngay?`);
+                    handleAddPackage(pendingPackage, shouldUseNow, item.service_id);
+                    setIsServiceSelectorOpen(false);
+                    setPendingPackage(null);
+                  }}
+                  className="w-full p-3 rounded-xl border-2 border-slate-200 hover:border-emerald-500 transition-all text-left flex items-center justify-between"
+                >
+                  <div>
+                    <div className="font-semibold text-sm text-slate-800">{item.service_name}</div>
+                    <div className="text-xs text-slate-500">
+                      {item.quantity} buổi trong gói
+                    </div>
+                  </div>
+                  <button className="text-emerald-600 text-xs font-medium bg-emerald-50 px-3 py-1 rounded-full">
+                    Chọn
+                  </button>
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={() => { setIsServiceSelectorOpen(false); setPendingPackage(null); }}
+              className="w-full py-2.5 border border-slate-300 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+            >
+              Hủy
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ===== POS PAYMENT MODAL ===== */}
       <POSPaymentModal
         isOpen={isPaymentModalOpen}
         onClose={() => setIsPaymentModalOpen(false)}
@@ -19356,6 +19324,7 @@ export const POSPage: React.FC = () => {
         qrCodeUrl={undefined}
       />
 
+      {/* ===== INVOICE HISTORY MODAL ===== */}
       <InvoiceHistoryModal
         isOpen={isInvoiceHistoryOpen}
         onClose={() => setIsInvoiceHistoryOpen(false)}
@@ -19366,7 +19335,6 @@ export const POSPage: React.FC = () => {
 };
 
 export default POSPage;
-
 ============================================================
 FILE: ./src/pages/QRBankSettings.tsx
 ============================================================
@@ -19536,7 +19504,6 @@ export const QRBankSettingsPage: React.FC = () => {
 };
 
 export default QRBankSettingsPage;
-
 ============================================================
 FILE: ./src/pages/SalarySettingsPage.tsx
 ============================================================
@@ -19628,7 +19595,6 @@ export const SalarySettingsPage: React.FC = () => {
 };
 
 export default SalarySettingsPage;
-
 ============================================================
 FILE: ./src/pages/SettingsPage.tsx
 ============================================================
@@ -19915,10 +19881,475 @@ export const SettingsPage: React.FC = () => {
 };
 
 export default SettingsPage;
+============================================================
+FILE: ./src/pages/StaffDetailPage.tsx
+============================================================
+// src/pages/StaffDetailPage.tsx
+import React, { useState, useEffect } from "react";
+import {
+  getStaffById,
+  getStaffDetailStats,
+  getStaffAttendanceCalendar,
+  getStaffInvoices,
+  getStaffCommissions,
+  getStaffRecentActivity,
+  updateStaff,
+} from "../services/staff.service";
+import { Button, Spinner, Badge } from "../components/primitives";
+import { format, parseISO, differenceInHours, differenceInMinutes } from "date-fns";
+import { vi } from "date-fns/locale";
+import { ArrowLeft, Calendar, FileText, DollarSign, Settings, Clock } from "lucide-react";
+import { supabase } from "../services/supabase";
 
+interface Props {
+  staffId: string;
+  onBack: () => void;
+}
+
+export const StaffDetailPage: React.FC<Props> = ({ staffId, onBack }) => {
+  const [staff, setStaff] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [stats, setStats] = useState<any>(null);
+  const [calendar, setCalendar] = useState<any[]>([]);
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [commissions, setCommissions] = useState<any[]>([]);
+  const [activities, setActivities] = useState<any[]>([]);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null);
+  const [selectedCommission, setSelectedCommission] = useState<any | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [editForm, setEditForm] = useState({
+    full_name: "",
+    role: "",
+    phone: "",
+    base_salary: 0,
+    status: "",
+  });
+  const [updating, setUpdating] = useState(false);
+
+  useEffect(() => {
+    if (staffId) {
+      loadData();
+    }
+  }, [staffId, selectedMonth, selectedYear]);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [staffData, statsData, calData, invData, commData, actData] = await Promise.all([
+        getStaffById(staffId),
+        getStaffDetailStats(staffId, selectedMonth, selectedYear),
+        getStaffAttendanceCalendar(staffId, selectedMonth, selectedYear),
+        getStaffInvoices(staffId, selectedMonth, selectedYear),
+        getStaffCommissions(staffId, selectedMonth, selectedYear),
+        getStaffRecentActivity(staffId),
+      ]);
+      setStaff(staffData);
+      setStats(statsData);
+      setCalendar(calData);
+      setInvoices(invData);
+      setCommissions(commData);
+      setActivities(actData);
+      setEditForm({
+        full_name: staffData.full_name,
+        role: staffData.role,
+        phone: staffData.phone,
+        base_salary: staffData.base_salary || 0,
+        status: staffData.status,
+      });
+    } catch (err) {
+      console.error("Lỗi tải dữ liệu nhân viên:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePrevMonth = () => {
+    if (selectedMonth === 1) { setSelectedMonth(12); setSelectedYear(selectedYear - 1); }
+    else setSelectedMonth(selectedMonth - 1);
+  };
+
+  const handleNextMonth = () => {
+    if (selectedMonth === 12) { setSelectedMonth(1); setSelectedYear(selectedYear + 1); }
+    else setSelectedMonth(selectedMonth + 1);
+  };
+
+  const handleUpdateStaff = async () => {
+    setUpdating(true);
+    try {
+      const { error } = await supabase
+        .from("staff")
+        .update({
+          full_name: editForm.full_name,
+          role: editForm.role,
+          phone: editForm.phone,
+          base_salary: editForm.base_salary,
+          status: editForm.status,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", staffId);
+      if (error) throw error;
+      setShowSettings(false);
+      await loadData();
+    } catch (err: any) {
+      alert(err.message || "Lỗi cập nhật thông tin");
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const formatVND = (amount: number) => new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(amount || 0);
+
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return "";
+    const d = parseISO(dateStr);
+    return format(d, "dd/MM/yyyy", { locale: vi });
+  };
+
+  const formatTime = (dateStr: string) => {
+    if (!dateStr) return "";
+    const d = parseISO(dateStr);
+    return format(d, "HH:mm", { locale: vi });
+  };
+
+  const formatDateTime = (dateStr: string) => {
+    if (!dateStr) return "";
+    const d = parseISO(dateStr);
+    return format(d, "HH:mm dd/MM/yyyy", { locale: vi });
+  };
+
+  const getStatusToday = () => {
+    const today = new Date().toISOString().split("T")[0];
+    const todayAtt = calendar.find(c => c.date === today);
+    if (!todayAtt) return { label: "Chưa chấm công", color: "text-amber-600", bg: "bg-amber-50" };
+    if (todayAtt.check_in && !todayAtt.check_out) return { label: "🟢 Đang làm", color: "text-emerald-600", bg: "bg-emerald-50" };
+    if (todayAtt.check_in && todayAtt.check_out) return { label: "✅ Đã về", color: "text-blue-600", bg: "bg-blue-50" };
+    return { label: "⚪ Vắng", color: "text-slate-500", bg: "bg-slate-100" };
+  };
+
+  if (loading) {
+    return <Spinner className="py-12" />;
+  }
+
+  if (!staff) {
+    return (
+      <div className="p-4 text-center">
+        <p className="text-slate-500">Không tìm thấy nhân viên</p>
+        <Button onClick={onBack} className="mt-4">Quay lại</Button>
+      </div>
+    );
+  }
+
+  const statusToday = getStatusToday();
+  const isActive = staff.status === "ACTIVE";
+
+  return (
+    <div className="max-w-6xl mx-auto p-4 space-y-4">
+      {/* Header */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-lg">
+            {staff.full_name.charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">{staff.full_name}</h2>
+            <p className="text-sm text-slate-500">{staff.role}</p>
+            <div className="flex items-center gap-2 mt-1 text-xs">
+              <Badge variant={isActive ? "success" : "neutral"}>{isActive ? "Hoạt động" : "Không hoạt động"}</Badge>
+              <span className={`px-2 py-0.5 rounded-full ${statusToday.color} ${statusToday.bg}`}>
+                {statusToday.label}
+              </span>
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={() => setShowSettings(!showSettings)}>
+            <Settings className="w-4 h-4" /> Thiết lập
+          </Button>
+        </div>
+      </div>
+
+      {/* Settings Form */}
+      {showSettings && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-4">
+          <h3 className="font-bold text-slate-900">Thiết lập nhân viên</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Họ tên</label>
+              <input
+                type="text"
+                value={editForm.full_name}
+                onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })}
+                className="w-full px-3 py-2 border rounded-lg text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Chức danh</label>
+              <input
+                type="text"
+                value={editForm.role}
+                onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
+                className="w-full px-3 py-2 border rounded-lg text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Số điện thoại</label>
+              <input
+                type="text"
+                value={editForm.phone}
+                onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                className="w-full px-3 py-2 border rounded-lg text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Lương cơ bản</label>
+              <input
+                type="number"
+                value={editForm.base_salary}
+                onChange={(e) => setEditForm({ ...editForm, base_salary: Number(e.target.value) })}
+                className="w-full px-3 py-2 border rounded-lg text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Trạng thái</label>
+              <select
+                value={editForm.status}
+                onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
+                className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
+              >
+                <option value="ACTIVE">Hoạt động</option>
+                <option value="INACTIVE">Không hoạt động</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setShowSettings(false)}>Hủy</Button>
+            <Button onClick={handleUpdateStaff} isLoading={updating}>Lưu thay đổi</Button>
+          </div>
+        </div>
+      )}
+
+      {/* Month Selector */}
+      <div className="flex items-center justify-between bg-white rounded-xl border border-slate-200 shadow-sm p-3">
+        <button onClick={handlePrevMonth} className="p-2 hover:bg-slate-100 rounded-lg">
+          ‹
+        </button>
+        <span className="font-semibold text-slate-800">
+          Tháng {selectedMonth}/{selectedYear}
+        </span>
+        <button onClick={handleNextMonth} className="p-2 hover:bg-slate-100 rounded-lg">
+          ›
+        </button>
+      </div>
+
+      {/* Stats Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm text-center hover:shadow-md transition-shadow cursor-pointer" onClick={() => setSelectedDate(null)}>
+          <div className="text-2xl font-bold text-emerald-600">{stats?.total_working_days || 0}</div>
+          <div className="text-xs text-slate-500">Ngày đi làm</div>
+        </div>
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm text-center">
+          <div className="text-2xl font-bold text-rose-500">{stats?.total_leave_days || 0}</div>
+          <div className="text-xs text-slate-500">Ngày nghỉ</div>
+        </div>
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm text-center">
+          <div className="text-2xl font-bold text-blue-600">{stats?.total_invoices || 0}</div>
+          <div className="text-xs text-slate-500">Hóa đơn</div>
+        </div>
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm text-center">
+          <div className="text-2xl font-bold text-purple-600">{formatVND(stats?.total_commission || 0)}</div>
+          <div className="text-xs text-slate-500">Hoa hồng</div>
+        </div>
+      </div>
+
+      {/* Calendar */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+        <h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2">
+          <Calendar className="w-4 h-4" /> Lịch chấm công
+        </h3>
+        <div className="grid grid-cols-7 gap-1 text-xs">
+          {["T2", "T3", "T4", "T5", "T6", "T7", "CN"].map((day) => (
+            <div key={day} className="text-center font-semibold text-slate-400 py-1">{day}</div>
+          ))}
+          {calendar.map((day, idx) => {
+            const isWorking = day.check_in !== null;
+            const isLeave = day.status === "ABSENT" || day.status === "LEAVE";
+            let bgColor = "bg-white hover:bg-slate-50";
+            if (isWorking) bgColor = "bg-emerald-100 hover:bg-emerald-200";
+            if (isLeave) bgColor = "bg-rose-100 hover:bg-rose-200";
+            const dayNum = new Date(day.date).getDate();
+            return (
+              <button
+                key={idx}
+                onClick={() => setSelectedDate(selectedDate === day.date ? null : day.date)}
+                className={`p-2 rounded-lg text-center transition-colors ${bgColor} ${selectedDate === day.date ? 'ring-2 ring-blue-500' : ''}`}
+              >
+                <div className="font-medium text-slate-700">{dayNum}</div>
+                {isWorking && <div className="text-[8px] text-emerald-600">✓</div>}
+                {isLeave && <div className="text-[8px] text-rose-600">✕</div>}
+              </button>
+            );
+          })}
+        </div>
+        {selectedDate && (
+          <div className="mt-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
+            <div className="font-semibold text-sm">{formatDate(selectedDate)}</div>
+            {(() => {
+              const day = calendar.find(c => c.date === selectedDate);
+              if (!day) return <div className="text-xs text-slate-500">Không có dữ liệu</div>;
+              if (day.check_in) {
+                const hours = day.check_out ? differenceInHours(parseISO(day.check_out), parseISO(day.check_in)) : 0;
+                const mins = day.check_out ? differenceInMinutes(parseISO(day.check_out), parseISO(day.check_in)) % 60 : 0;
+                return (
+                  <div className="text-xs space-y-1 mt-1">
+                    <div>Check-in: {formatTime(day.check_in)}</div>
+                    {day.check_out && <div>Check-out: {formatTime(day.check_out)}</div>}
+                    {day.check_out && <div className="text-emerald-600 font-medium">Tổng: {hours}h{mins}m</div>}
+                    {day.notes && <div className="text-slate-400">Ghi chú: {day.notes}</div>}
+                  </div>
+                );
+              }
+              if (day.status === "ABSENT") return <div className="text-xs text-rose-600">Nghỉ</div>;
+              return <div className="text-xs text-slate-500">Chưa có dữ liệu</div>;
+            })()}
+          </div>
+        )}
+      </div>
+
+      {/* Invoices */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-bold text-slate-800 flex items-center gap-2">
+            <FileText className="w-4 h-4" /> Hóa đơn ({invoices.length})
+          </h3>
+          {invoices.length > 0 && <span className="text-xs text-slate-400">Bấm để xem chi tiết</span>}
+        </div>
+        {invoices.length === 0 ? (
+          <div className="text-center text-slate-400 py-4 text-sm">Chưa có hóa đơn trong tháng</div>
+        ) : (
+          <div className="divide-y divide-slate-100 max-h-60 overflow-y-auto">
+            {invoices.slice(0, 10).map((inv) => (
+              <div
+                key={inv.id}
+                onClick={() => setSelectedInvoice(selectedInvoice?.id === inv.id ? null : inv)}
+                className="py-2 px-1 hover:bg-slate-50 cursor-pointer transition-colors flex items-center justify-between"
+              >
+                <div>
+                  <div className="font-medium text-sm text-slate-800">{inv.invoice_code}</div>
+                  <div className="text-xs text-slate-500">{inv.customer_name} • {formatDateTime(inv.created_at)}</div>
+                </div>
+                <div className="text-right">
+                  <div className="font-bold text-emerald-700">{formatVND(inv.total_amount)}</div>
+                  {inv.commission_amount > 0 && (
+                    <div className="text-xs text-blue-600">HH: {formatVND(inv.commission_amount)}</div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {selectedInvoice && (
+          <div className="mt-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
+            <h4 className="font-bold text-sm mb-2">Chi tiết hóa đơn #{selectedInvoice.invoice_code}</h4>
+            <div className="text-xs space-y-1">
+              <div>Khách: {selectedInvoice.customer_name}</div>
+              <div>Ngày: {formatDateTime(selectedInvoice.created_at)}</div>
+              <div>Phương thức: {selectedInvoice.payment_method}</div>
+              <div>Trạng thái: {selectedInvoice.status}</div>
+              <div className="font-bold text-emerald-700">Tổng: {formatVND(selectedInvoice.total_amount)}</div>
+              {selectedInvoice.commission_amount > 0 && (
+                <div className="text-blue-600">Hoa hồng: {formatVND(selectedInvoice.commission_amount)}</div>
+              )}
+            </div>
+            <Button size="sm" variant="outline" className="mt-2" onClick={() => setSelectedInvoice(null)}>Đóng</Button>
+          </div>
+        )}
+      </div>
+
+      {/* Commissions */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-bold text-slate-800 flex items-center gap-2">
+            <DollarSign className="w-4 h-4" /> Hoa hồng ({commissions.length})
+          </h3>
+          <span className="text-xs font-bold text-emerald-600">
+            Tổng: {formatVND(stats?.total_commission || 0)}
+          </span>
+        </div>
+        {commissions.length === 0 ? (
+          <div className="text-center text-slate-400 py-4 text-sm">Chưa có hoa hồng trong tháng</div>
+        ) : (
+          <div className="divide-y divide-slate-100 max-h-60 overflow-y-auto">
+            {commissions.map((comm) => (
+              <div
+                key={comm.id}
+                onClick={() => setSelectedCommission(selectedCommission?.id === comm.id ? null : comm)}
+                className="py-2 px-1 hover:bg-slate-50 cursor-pointer transition-colors flex items-center justify-between"
+              >
+                <div>
+                  <div className="font-medium text-sm text-slate-800">
+                    {comm.commission_type === "PERFORMANCE" ? "💆 KTV" : "💼 Sale"}
+                  </div>
+                  <div className="text-xs text-slate-500">{comm.description || comm.invoice_code}</div>
+                  <div className="text-xs text-slate-400">{formatDateTime(comm.created_at)}</div>
+                </div>
+                <div className="font-bold text-emerald-700">+{formatVND(comm.amount)}</div>
+              </div>
+            ))}
+          </div>
+        )}
+        {selectedCommission && (
+          <div className="mt-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
+            <h4 className="font-bold text-sm mb-2">Chi tiết hoa hồng</h4>
+            <div className="text-xs space-y-1">
+              <div>Mã hóa đơn: {selectedCommission.invoice_code}</div>
+              <div>Khách: {selectedCommission.customer_name}</div>
+              <div>Loại: {selectedCommission.commission_type === "PERFORMANCE" ? "KTV" : "Sale"}</div>
+              <div>Mô tả: {selectedCommission.description || "—"}</div>
+              <div>Ngày: {formatDateTime(selectedCommission.created_at)}</div>
+              <div className="font-bold text-emerald-700">Số tiền: {formatVND(selectedCommission.amount)}</div>
+            </div>
+            <Button size="sm" variant="outline" className="mt-2" onClick={() => setSelectedCommission(null)}>Đóng</Button>
+          </div>
+        )}
+      </div>
+
+      {/* Recent Activity */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+        <h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2">
+          <Clock className="w-4 h-4" /> Hoạt động gần đây
+        </h3>
+        {activities.length === 0 ? (
+          <div className="text-center text-slate-400 py-4 text-sm">Chưa có hoạt động</div>
+        ) : (
+          <div className="space-y-2 max-h-48 overflow-y-auto">
+            {activities.slice(0, 15).map((act, idx) => (
+              <div key={idx} className="flex items-center gap-3 text-xs border-b border-slate-100 pb-2 last:border-0">
+                <span className="text-lg">{act.icon}</span>
+                <div className="flex-1">
+                  <div className="font-medium text-slate-800">{act.title}</div>
+                  <div className="text-slate-500">{act.description}</div>
+                </div>
+                <div className="text-slate-400 text-[10px]">{formatDateTime(act.time)}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default StaffDetailPage;
 ============================================================
 FILE: ./src/pages/staff.tsx
 ============================================================
+// src/pages/staff.tsx
 import React, { useState, useEffect, useCallback } from "react";
 import {
   fetchStaff,
@@ -19931,6 +20362,29 @@ import { StaffMemberDomain, CreateStaffInput } from "../types/domain";
 import { attendanceService } from "../services/attendance.service";
 import { payrollService } from "../services/payroll.service";
 import { Button, Card, Badge, Spinner, Input } from "../components/primitives";
+import { StaffDetailPage } from "./StaffDetailPage";
+
+// ============================================================
+// HELPER COMPONENTS & ICONS
+// ============================================================
+
+const Avatar: React.FC<{ name: string; className?: string }> = ({ name, className = "" }) => {
+  const initials = name
+    .split(" ")
+    .filter(Boolean)
+    .map((n) => n[0])
+    .join("")
+    .slice(-2)
+    .toUpperCase();
+
+  return (
+    <div
+      className={`w-11 h-11 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-bold text-sm flex items-center justify-center shrink-0 shadow-sm ${className}`}
+    >
+      {initials || "NV"}
+    </div>
+  );
+};
 
 // ============================================================
 // PROPS
@@ -19944,7 +20398,7 @@ interface StaffPageProps {
 // SUB-COMPONENTS
 // ============================================================
 
-// ---- Staff List ----
+// ---- Staff List (sửa lại để dùng div thay vì Card) ----
 const StaffList: React.FC<{
   staffList: StaffMemberDomain[];
   loading: boolean;
@@ -19955,6 +20409,7 @@ const StaffList: React.FC<{
   onArchive: (id: string, name: string) => void;
   onRefresh: () => void;
   isAdmin: boolean;
+  onSelectStaff: (staffId: string) => void;
 }> = ({
   staffList,
   loading,
@@ -19965,58 +20420,108 @@ const StaffList: React.FC<{
   onArchive,
   onRefresh,
   isAdmin,
+  onSelectStaff,
 }) => {
   const formatVND = (val: number) => new Intl.NumberFormat("vi-VN").format(val) + " đ";
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {errorMessage && (
-        <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg">{errorMessage}</div>
+        <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-2xl flex items-center gap-2">
+          <span>⚠️</span> {errorMessage}
+        </div>
       )}
       {successMessage && (
-        <div className="p-3 bg-green-50 text-green-700 text-sm rounded-lg">{successMessage}</div>
+        <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm rounded-2xl flex items-center gap-2">
+          <span>✅</span> {successMessage}
+        </div>
       )}
 
       {loading ? (
-        <Spinner className="py-8" />
+        <div className="py-12 flex justify-center">
+          <Spinner />
+        </div>
       ) : staffList.length === 0 ? (
-        <div className="text-center py-8 text-gray-500">Không tìm thấy nhân viên.</div>
+        <div className="text-center py-12 text-slate-400 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+          <p className="text-sm font-medium">Không tìm thấy nhân viên nào.</p>
+        </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {staffList.map((staff) => (
-            <Card key={staff.id} className="p-4">
-              <div className="flex justify-between items-start">
-                <div>
-                  <div className="font-semibold text-lg">{staff.full_name}</div>
-                  <div className="text-sm text-gray-500">{staff.role}</div>
-                  <div className="text-sm text-gray-500">{staff.phone}</div>
-                  <div className="text-xs text-gray-400 mt-1">
-                    Lương: {staff.base_salary ? formatVND(staff.base_salary) : "Chưa thiết lập"}
+            // 🔥 SỬA: Dùng div thay vì Card để onClick hoạt động
+            <div
+              key={staff.id}
+              className="p-4 rounded-2xl border border-slate-100 bg-white shadow-xs hover:shadow-md transition-all flex flex-col justify-between cursor-pointer"
+              onClick={() => onSelectStaff(staff.id)}
+            >
+              <div>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <Avatar name={staff.full_name} />
+                    <div>
+                      <h3 className="font-semibold text-slate-900 text-base leading-tight">
+                        {staff.full_name}
+                      </h3>
+                      <p className="text-xs font-medium text-slate-500 mt-0.5">{staff.role}</p>
+                    </div>
                   </div>
-                  <div className="text-xs text-gray-400">Bắt đầu: {staff.started_on || "N/A"}</div>
+                  <Badge
+                    variant={staff.status === "ACTIVE" ? "success" : "warning"}
+                    className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold"
+                  >
+                    {staff.status === "ACTIVE" ? "Hoạt động" : "Tạm ngưng"}
+                  </Badge>
                 </div>
-                <Badge variant={staff.status === "ACTIVE" ? "success" : "warning"}>
-                  {staff.status}
-                </Badge>
+
+                <div className="mt-3.5 pt-3 border-t border-slate-100 space-y-1.5 text-xs text-slate-600">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Số điện thoại:</span>
+                    <a href={`tel:${staff.phone}`} className="font-medium text-blue-600 active:opacity-75">
+                      {staff.phone}
+                    </a>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Lương cơ bản:</span>
+                    <span className="font-semibold text-slate-800">
+                      {staff.base_salary ? formatVND(staff.base_salary) : "Chưa thiết lập"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Ngày bắt đầu:</span>
+                    <span className="font-medium text-slate-700">{staff.started_on || "N/A"}</span>
+                  </div>
+                </div>
               </div>
+
               {isAdmin && (
-                <div className="mt-3 pt-3 border-t flex flex-wrap gap-2">
-                  <Button size="sm" variant="outline" onClick={() => onEdit(staff)}>
+                <div className="mt-4 pt-3 border-t border-slate-100 grid grid-cols-3 gap-1.5">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={(e) => { e.stopPropagation(); onEdit(staff); }}
+                    className="w-full text-xs rounded-xl h-9 font-medium"
+                  >
                     ✏️ Sửa
                   </Button>
                   <Button
                     size="sm"
                     variant={staff.status === "ACTIVE" ? "outline" : "secondary"}
-                    onClick={() => onToggleStatus(staff.id, staff.status)}
+                    onClick={(e) => { e.stopPropagation(); onToggleStatus(staff.id, staff.status); }}
+                    className="w-full text-xs rounded-xl h-9 font-medium"
                   >
-                    {staff.status === "ACTIVE" ? "Tạm ngưng" : "Kích hoạt"}
+                    {staff.status === "ACTIVE" ? "⏸ Tạm ngưng" : "▶️ Bật"}
                   </Button>
-                  <Button size="sm" variant="danger" onClick={() => onArchive(staff.id, staff.full_name)}>
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    onClick={(e) => { e.stopPropagation(); onArchive(staff.id, staff.full_name); }}
+                    className="w-full text-xs rounded-xl h-9 font-medium"
+                  >
                     🗑 Lưu trữ
                   </Button>
                 </div>
               )}
-            </Card>
+            </div>
           ))}
         </div>
       )}
@@ -20059,7 +20564,7 @@ const AttendanceCheck: React.FC<{
     try {
       const result = await attendanceService.checkIn(staffId);
       setToday(result);
-      setMessage({ type: "success", text: "✅ Check-in thành công!" });
+      setMessage({ type: "success", text: "Check-in thành công!" });
       onRefresh();
     } catch (err: any) {
       setMessage({ type: "error", text: err.message || "Lỗi check-in" });
@@ -20074,7 +20579,7 @@ const AttendanceCheck: React.FC<{
     try {
       const result = await attendanceService.checkOut(staffId);
       setToday(result);
-      setMessage({ type: "success", text: "✅ Check-out thành công!" });
+      setMessage({ type: "success", text: "Check-out thành công!" });
       onRefresh();
     } catch (err: any) {
       setMessage({ type: "error", text: err.message || "Lỗi check-out" });
@@ -20083,19 +20588,19 @@ const AttendanceCheck: React.FC<{
     }
   };
 
-  // Admin: xoá check-in/out hôm nay (bỏ)
   const handleClearAttendance = async () => {
     if (!window.confirm(`Bạn có chắc muốn xoá chấm công hôm nay của ${staffName}?`)) return;
     setSubmitting(true);
     setMessage(null);
     try {
-      // Xoá bản ghi attendance hôm nay
-      if (today) {
-        await supabase.from("attendance").delete().eq("id", today.id);
-        setToday(null);
-        setMessage({ type: "success", text: "✅ Đã xoá chấm công hôm nay." });
-        onRefresh();
+      if (today && typeof (attendanceService as any).deleteAttendance === "function") {
+        await (attendanceService as any).deleteAttendance(today.id);
+      } else if (today && typeof (attendanceService as any).deleteTodayAttendance === "function") {
+        await (attendanceService as any).deleteTodayAttendance(staffId);
       }
+      setToday(null);
+      setMessage({ type: "success", text: "Đã xoá chấm công hôm nay." });
+      onRefresh();
     } catch (err: any) {
       setMessage({ type: "error", text: err.message || "Lỗi xoá chấm công" });
     } finally {
@@ -20103,72 +20608,109 @@ const AttendanceCheck: React.FC<{
     }
   };
 
-  if (loading) return <Spinner className="py-4" />;
+  if (loading) return <Spinner className="py-8" />;
 
   const isCheckedIn = today?.check_in !== null && today?.check_in !== undefined;
   const isCheckedOut = today?.check_out !== null && today?.check_out !== undefined;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 max-w-lg mx-auto">
       {message && (
         <div
-          className={`p-3 rounded-lg text-sm ${
-            message.type === "success" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
+          className={`p-3.5 rounded-2xl text-sm font-medium flex items-center gap-2 ${
+            message.type === "success"
+              ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+              : "bg-rose-50 text-rose-800 border border-rose-200"
           }`}
         >
-          {message.text}
+          <span>{message.type === "success" ? "✅" : "⚠️"}</span> {message.text}
         </div>
       )}
 
-      <Card>
-        <div className="space-y-3">
-          <div className="flex justify-between items-center">
-            <span className="text-sm font-medium">Hôm nay - {staffName}</span>
-            <Badge variant={isCheckedOut ? "success" : isCheckedIn ? "warning" : "neutral"}>
-              {isCheckedOut ? "Đã hoàn tất" : isCheckedIn ? "Đã check-in" : "Chưa check-in"}
-            </Badge>
+      <Card className="p-5 rounded-3xl border border-slate-100 bg-white shadow-sm space-y-4">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+          <div>
+            <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Hôm nay</p>
+            <h3 className="text-base font-bold text-slate-800">{staffName}</h3>
           </div>
+          <Badge
+            variant={isCheckedOut ? "success" : isCheckedIn ? "warning" : "neutral"}
+            className="px-3 py-1 text-xs rounded-full font-semibold"
+          >
+            {isCheckedOut ? "Hoàn tất" : isCheckedIn ? "Đang trong ca" : "Chưa chấm công"}
+          </Badge>
+        </div>
 
-          {isCheckedIn && (
-            <div className="text-xs text-gray-500">
-              Check-in: {new Date(today.check_in).toLocaleTimeString()}
+        {(isCheckedIn || isCheckedOut) && (
+          <div className="grid grid-cols-2 gap-2 bg-slate-50 p-3 rounded-2xl text-xs">
+            <div className="text-center p-2 bg-white rounded-xl shadow-2xs">
+              <span className="text-slate-400 block mb-0.5">Vào ca</span>
+              <span className="font-bold text-slate-800 text-sm">
+                {isCheckedIn ? new Date(today.check_in).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "--:--"}
+              </span>
             </div>
+            <div className="text-center p-2 bg-white rounded-xl shadow-2xs">
+              <span className="text-slate-400 block mb-0.5">Ra ca</span>
+              <span className="font-bold text-slate-800 text-sm">
+                {isCheckedOut ? new Date(today.check_out).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "--:--"}
+              </span>
+            </div>
+          </div>
+        )}
+
+        <div className="pt-2">
+          {!isCheckedIn && (
+            <Button
+              variant="primary"
+              onClick={handleCheckIn}
+              disabled={submitting}
+              className="w-full h-12 rounded-2xl text-base font-bold shadow-md shadow-blue-500/20 active:scale-[0.98] transition-transform"
+            >
+              🟢 Check-in Vào Ca
+            </Button>
           )}
+
+          {isCheckedIn && !isCheckedOut && (
+            <Button
+              variant="secondary"
+              onClick={handleCheckOut}
+              disabled={submitting}
+              className="w-full h-12 rounded-2xl text-base font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-md shadow-amber-500/20 active:scale-[0.98] transition-transform"
+            >
+              🔴 Check-out Ra Ca
+            </Button>
+          )}
+
           {isCheckedOut && (
-            <div className="text-xs text-gray-500">
-              Check-out: {new Date(today.check_out).toLocaleTimeString()}
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-3 pt-2">
-            {!isCheckedIn && (
-              <Button variant="primary" onClick={handleCheckIn} disabled={submitting} className="py-3">
-                🟢 Check-in
-              </Button>
-            )}
-            {isCheckedIn && !isCheckedOut && (
-              <Button variant="secondary" onClick={handleCheckOut} disabled={submitting} className="py-3">
-                🔴 Check-out
-              </Button>
-            )}
-            {isCheckedOut && (
-              <div className="col-span-2 text-center text-sm text-gray-500">✅ Đã hoàn tất chấm công hôm nay</div>
-            )}
-          </div>
-
-          {isAdmin && (isCheckedIn || isCheckedOut) && (
-            <div className="pt-2 border-t text-center">
-              <Button variant="outline" size="sm" onClick={handleClearAttendance} disabled={submitting}>
-                🗑 Bỏ chấm công hôm nay
-              </Button>
+            <div className="p-4 text-center rounded-2xl bg-emerald-50 text-emerald-700 text-sm font-semibold border border-emerald-100">
+              🎉 Bạn đã hoàn tất ca làm việc hôm nay!
             </div>
           )}
         </div>
+
+        {isAdmin && (isCheckedIn || isCheckedOut) && (
+          <div className="pt-3 border-t border-slate-100 text-center">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleClearAttendance}
+              disabled={submitting}
+              className="text-xs text-rose-600 hover:bg-rose-50 border-rose-200 rounded-xl"
+            >
+              🗑 Xoá chấm công hôm nay
+            </Button>
+          </div>
+        )}
       </Card>
 
-      <button onClick={loadToday} className="text-xs text-blue-600 hover:underline">
-        🔄 Làm mới
-      </button>
+      <div className="text-center">
+        <button
+          onClick={loadToday}
+          className="text-xs font-semibold text-blue-600 hover:underline py-2 px-3 rounded-full hover:bg-blue-50 active:bg-blue-100 transition-colors inline-flex items-center gap-1"
+        >
+          🔄 Làm mới dữ liệu
+        </button>
+      </div>
     </div>
   );
 };
@@ -20185,6 +20727,10 @@ const PayrollList: React.FC<{
   const [error, setError] = useState<string | null>(null);
   const [calculating, setCalculating] = useState(false);
   const [selectedStaff, setSelectedStaff] = useState(staffId || null);
+
+  useEffect(() => {
+    setSelectedStaff(staffId || null);
+  }, [staffId]);
 
   useEffect(() => {
     loadPayroll();
@@ -20216,8 +20762,8 @@ const PayrollList: React.FC<{
         await payrollService.calculateMonthlySalary(selectedStaff, month, year);
         await loadPayroll();
       } else {
-        const { data: staffs } = await supabase.from("staff").select("id");
-        if (staffs) {
+        const staffs = await fetchStaff("", true);
+        if (staffs && staffs.length > 0) {
           for (const staff of staffs) {
             await payrollService.calculateMonthlySalary(staff.id, month, year);
           }
@@ -20232,52 +20778,96 @@ const PayrollList: React.FC<{
   };
 
   const handlePrevMonth = () => {
-    if (month === 1) { setMonth(12); setYear(year - 1); } else setMonth(month - 1);
+    if (month === 1) {
+      setMonth(12);
+      setYear(year - 1);
+    } else setMonth(month - 1);
   };
   const handleNextMonth = () => {
-    if (month === 12) { setMonth(1); setYear(year + 1); } else setMonth(month + 1);
+    if (month === 12) {
+      setMonth(1);
+      setYear(year + 1);
+    } else setMonth(month + 1);
   };
 
   const formatVND = (val: number) => new Intl.NumberFormat("vi-VN").format(val) + " đ";
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 p-2.5 rounded-2xl border border-slate-200/60">
         <div className="flex items-center gap-2">
-          <button onClick={handlePrevMonth} className="p-1 border rounded px-2">‹</button>
-          <span className="text-sm font-semibold">Tháng {month}/{year}</span>
-          <button onClick={handleNextMonth} className="p-1 border rounded px-2">›</button>
+          <button
+            onClick={handlePrevMonth}
+            className="w-8 h-8 rounded-xl bg-white border border-slate-200 shadow-2xs flex items-center justify-center text-slate-700 font-bold active:scale-95 transition-transform"
+          >
+            ‹
+          </button>
+          <span className="text-sm font-bold text-slate-800 px-1">
+            Tháng {month}/{year}
+          </span>
+          <button
+            onClick={handleNextMonth}
+            className="w-8 h-8 rounded-xl bg-white border border-slate-200 shadow-2xs flex items-center justify-center text-slate-700 font-bold active:scale-95 transition-transform"
+          >
+            ›
+          </button>
         </div>
+
         {isAdmin && (
-          <Button size="sm" onClick={handleCalculateAll} isLoading={calculating}>
-            Tính lương
+          <Button
+            size="sm"
+            onClick={handleCalculateAll}
+            isLoading={calculating}
+            className="rounded-xl text-xs font-semibold px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+          >
+            🧮 Tính lương
           </Button>
         )}
       </div>
 
-      {error && <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg">{error}</div>}
+      {error && (
+        <div className="p-3 bg-rose-50 text-rose-700 text-sm rounded-2xl border border-rose-200">
+          ⚠️ {error}
+        </div>
+      )}
 
       {loading ? (
-        <Spinner className="py-4" />
+        <div className="py-8 text-center">
+          <Spinner />
+        </div>
       ) : payrollList.length === 0 ? (
-        <div className="text-center py-4 text-gray-500">Chưa có dữ liệu lương cho tháng này.</div>
+        <div className="text-center py-10 text-slate-400 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 text-sm">
+          Chưa có dữ liệu bảng lương cho tháng này.
+        </div>
       ) : (
         <div className="space-y-3">
           {payrollList.map((p) => (
-            <Card key={p.id} className="p-4">
-              <div className="flex justify-between items-start">
-                <div>
-                  <div className="font-semibold">{p.staff?.full_name || p.staff_id}</div>
-                  <div className="text-xs text-gray-500">
-                    Lương cơ bản: {formatVND(p.base_salary)}
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    Đi làm: {p.actual_working_days}/{p.total_working_days} ngày · Nghỉ: {p.leave_days_taken} ngày
-                  </div>
+            <Card
+              key={p.id}
+              className="p-4 rounded-2xl border border-slate-100 bg-white shadow-xs hover:shadow-md transition-shadow"
+            >
+              <div className="flex justify-between items-start gap-3">
+                <div className="space-y-1">
+                  <h4 className="font-bold text-slate-900 text-base">
+                    {p.staff?.full_name || p.staff_id}
+                  </h4>
+                  <p className="text-xs text-slate-500">
+                    Lương cơ bản: <span className="font-medium text-slate-700">{formatVND(p.base_salary)}</span>
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Đi làm: <span className="font-semibold text-slate-800">{p.actual_working_days}/{p.total_working_days}</span> ngày · Nghỉ: <span className="font-semibold text-amber-600">{p.leave_days_taken}</span> ngày
+                  </p>
                 </div>
-                <div className="text-right">
-                  <div className="font-bold text-emerald-700">{formatVND(p.net_salary)}</div>
-                  <Badge variant={p.status === "LOCKED" ? "success" : "neutral"}>{p.status}</Badge>
+
+                <div className="text-right shrink-0">
+                  <div className="text-xs text-slate-400 mb-0.5">Thực nhận</div>
+                  <div className="font-black text-emerald-600 text-base">{formatVND(p.net_salary)}</div>
+                  <Badge
+                    variant={p.status === "LOCKED" ? "success" : "neutral"}
+                    className="mt-1 text-[10px] rounded-full px-2 py-0.5"
+                  >
+                    {p.status === "LOCKED" ? "Đã khóa" : "Tạm tính"}
+                  </Badge>
                 </div>
               </div>
             </Card>
@@ -20332,51 +20922,69 @@ const SalarySettings: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
   };
 
   if (!isAdmin) {
-    return <div className="text-center py-8 text-gray-500">Bạn không có quyền truy cập cài đặt lương.</div>;
+    return (
+      <div className="text-center py-12 text-slate-400 font-medium text-sm">
+        🔒 Bạn không có quyền truy cập cài đặt lương.
+      </div>
+    );
   }
 
-  if (loading) return <Spinner className="py-4" />;
+  if (loading) return <Spinner className="py-8" />;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 max-w-lg mx-auto">
       {message && (
         <div
-          className={`p-3 rounded-lg text-sm ${
-            message.type === "success" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
+          className={`p-3.5 rounded-2xl text-sm font-medium flex items-center gap-2 ${
+            message.type === "success"
+              ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+              : "bg-rose-50 text-rose-800 border border-rose-200"
           }`}
         >
-          {message.text}
+          <span>{message.type === "success" ? "✅" : "⚠️"}</span> {message.text}
         </div>
       )}
 
-      <Card>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium">Số ngày nghỉ được phép (mỗi tháng)</label>
-            <Input
-              type="number"
-              value={allowedLeaveDays}
-              onChange={(e) => setAllowedLeaveDays(Number(e.target.value))}
-              min={0}
-              className="mt-1"
-            />
-            <p className="text-xs text-gray-500 mt-1">Mặc định: 2 ngày</p>
-          </div>
+      <Card className="p-5 rounded-3xl border border-slate-100 bg-white shadow-xs space-y-5">
+        <h3 className="font-bold text-slate-800 text-base border-b border-slate-100 pb-3">
+          ⚙️ Cấu hình Lương & Chấm công
+        </h3>
 
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">Bật chấm công</span>
-            <input
-              type="checkbox"
-              checked={attendanceEnabled}
-              onChange={(e) => setAttendanceEnabled(e.target.checked)}
-              className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-            />
-          </div>
-
-          <Button variant="primary" onClick={handleSave} isLoading={saving} className="w-full">
-            Lưu cài đặt
-          </Button>
+        <div>
+          <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wider">
+            Số ngày nghỉ phép có lương (mỗi tháng)
+          </label>
+          <Input
+            type="number"
+            value={allowedLeaveDays}
+            onChange={(e) => setAllowedLeaveDays(Number(e.target.value))}
+            min={0}
+            className="w-full rounded-2xl border-slate-200 focus:border-blue-500 h-11"
+          />
+          <p className="text-xs text-slate-400 mt-1.5">Số ngày nghỉ phép mặc định mỗi tháng không bị trừ lương.</p>
         </div>
+
+        <div className="flex items-center justify-between p-3.5 bg-slate-50 rounded-2xl border border-slate-100">
+          <div>
+            <span className="text-sm font-semibold text-slate-800 block">Kích hoạt chấm công</span>
+            <span className="text-xs text-slate-400 block">Cho phép nhân viên tự check-in/out hằng ngày</span>
+          </div>
+          <input
+            type="checkbox"
+            checked={attendanceEnabled}
+            onChange={(e) => setAttendanceEnabled(e.target.checked)}
+            className="w-6 h-6 rounded-lg border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer accent-blue-600"
+          />
+        </div>
+
+        <Button
+          variant="primary"
+          onClick={handleSave}
+          isLoading={saving}
+          className="w-full h-11 rounded-2xl font-bold shadow-md shadow-blue-500/20 active:scale-[0.98] transition-transform"
+        >
+          Lưu cài đặt
+        </Button>
       </Card>
     </div>
   );
@@ -20414,6 +21022,9 @@ export const StaffPage: React.FC<StaffPageProps> = ({ userRole = "staff" }) => {
   // For attendance/payroll selection
   const [selectedStaffId, setSelectedStaffId] = useState<string>("");
 
+  // For detail view
+  const [selectedDetailStaffId, setSelectedDetailStaffId] = useState<string | null>(null);
+
   // Predefined roles
   const roles = ["Admin", "Cửa hàng trưởng", "Kỹ thuật viên", "Trưởng ca"];
 
@@ -20424,11 +21035,10 @@ export const StaffPage: React.FC<StaffPageProps> = ({ userRole = "staff" }) => {
       const data = await fetchStaff(search, includeInactive);
       setStaffList(data);
       if (data.length > 0 && !selectedStaffId) {
-        // If staff, set to their own ID if not admin? For now just pick first
         setSelectedStaffId(data[0].id);
       }
     } catch (err: any) {
-      setErrorMessage(err.message || "Lỗi khi kết nối tới hệ thống Supabase");
+      setErrorMessage(err.message || "Lỗi khi kết nối tới hệ thống");
     } finally {
       setLoading(false);
     }
@@ -20517,198 +21127,253 @@ export const StaffPage: React.FC<StaffPageProps> = ({ userRole = "staff" }) => {
     }
   };
 
-  // Update selected staff when list changes or staffId changes
+  const handleSelectStaff = (staffId: string) => {
+    setSelectedDetailStaffId(staffId);
+  };
+
+  const handleBackFromDetail = () => {
+    setSelectedDetailStaffId(null);
+    loadData();
+  };
+
   useEffect(() => {
     if (staffList.length > 0 && !selectedStaffId) {
-      // If not admin, try to find logged-in staff (but we don't have auth, default first)
       setSelectedStaffId(staffList[0].id);
     }
   }, [staffList]);
 
-  // Admin-only tabs
+  // Admin-only tabs vs Staff tabs
   const adminTabs = ["list", "attendance", "payroll", "settings"];
-  const staffTabs = ["list", "attendance"]; // staff only sees list and attendance (their own)
+  const staffTabs = ["list", "attendance"];
 
   const availableTabs = isAdmin ? adminTabs : staffTabs;
 
-  // If current tab not available, switch to first available
   useEffect(() => {
     if (!availableTabs.includes(activeSubTab)) {
       setActiveSubTab(availableTabs[0] as any);
     }
   }, [isAdmin]);
 
+  // If detail view is active, render StaffDetailPage
+  if (selectedDetailStaffId) {
+    return <StaffDetailPage staffId={selectedDetailStaffId} onBack={handleBackFromDetail} />;
+  }
+
   return (
-    <div className="p-4 max-w-6xl mx-auto">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <div>
-          <h1 className="text-xl font-bold">Quản lý Nhân viên</h1>
-          <p className="text-sm text-gray-500">
-            {isAdmin ? "Quản lý toàn bộ nhân viên" : "Xem thông tin của bạn"}
-          </p>
-        </div>
-        {activeSubTab === "list" && isAdmin && (
-          <Button onClick={() => handleOpenModal()}>+ Thêm nhân viên</Button>
-        )}
-      </div>
-
-      {/* Sub-tabs (Admin có 4 tab, Staff chỉ có 2) */}
-      <div className="flex overflow-x-auto gap-1 bg-white rounded-xl border p-1 mb-4 shadow-sm">
-        {availableTabs.map((key) => {
-          const labels: Record<string, string> = {
-            list: "📋 Danh sách",
-            attendance: "⏰ Chấm công",
-            payroll: "💰 Bảng lương",
-            settings: "⚙️ Cài đặt",
-          };
-          return (
-            <button
-              key={key}
-              onClick={() => setActiveSubTab(key as any)}
-              className={`flex-1 py-2 px-3 text-xs font-semibold rounded-lg transition-all whitespace-nowrap ${
-                activeSubTab === key
-                  ? "bg-blue-600 text-white shadow-sm"
-                  : "text-gray-600 hover:bg-gray-100"
-              }`}
+    <div className="min-h-screen bg-slate-50/60 pb-12">
+      {/* Sticky iPhone Header Bar */}
+      <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-200/80 px-4 py-3">
+        <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
+          <div>
+            <h1 className="text-lg font-bold text-slate-900 leading-tight">Quản lý Nhân viên</h1>
+            <p className="text-xs text-slate-400 font-medium">
+              {isAdmin ? "Quyền Quản lý (Owner)" : "Quyền Nhân viên (Staff)"}
+            </p>
+          </div>
+          {activeSubTab === "list" && isAdmin && (
+            <Button
+              onClick={() => handleOpenModal()}
+              className="rounded-2xl text-xs font-bold px-3.5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20 active:scale-95 transition-transform"
             >
-              {labels[key]}
-            </button>
-          );
-        })}
-      </div>
+              + Thêm mới
+            </Button>
+          )}
+        </div>
+      </header>
 
-      {/* Content */}
-      <div className="bg-white rounded-xl border p-4 shadow-sm">
-        {activeSubTab === "list" && (
-          <>
-            {/* Search & Filter */}
-            <div className="flex flex-wrap items-center gap-3 mb-4">
-              <input
-                type="text"
-                placeholder="Tìm theo tên, SĐT, chức danh..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="flex-1 min-w-[180px] px-3 py-2 border rounded text-sm"
-              />
-              {isAdmin && (
-                <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+      <main className="max-w-5xl mx-auto p-4 space-y-4">
+        {/* iOS Style Segmented Control Tab Navigation */}
+        <nav className="flex p-1 bg-slate-200/70 backdrop-blur-sm rounded-2xl overflow-x-auto scrollbar-none shadow-inner">
+          {availableTabs.map((key) => {
+            const labels: Record<string, string> = {
+              list: "📋 Danh sách",
+              attendance: "⏰ Chấm công",
+              payroll: "💰 Bảng lương",
+              settings: "⚙️ Cài đặt",
+            };
+            const isActive = activeSubTab === key;
+            return (
+              <button
+                key={key}
+                onClick={() => setActiveSubTab(key as any)}
+                className={`flex-1 min-w-[90px] py-2 px-3 text-xs font-bold rounded-xl transition-all whitespace-nowrap text-center ${
+                  isActive
+                    ? "bg-white text-blue-600 shadow-xs scale-[1.02]"
+                    : "text-slate-600 hover:text-slate-900 active:opacity-70"
+                }`}
+              >
+                {labels[key]}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Content Section */}
+        <div className="bg-white rounded-3xl border border-slate-200/70 p-4 sm:p-6 shadow-2xs">
+          {activeSubTab === "list" && (
+            <div className="space-y-4">
+              {/* iPhone Style Search & Filter Bar */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-2.5 rounded-2xl border border-slate-100">
+                <div className="relative flex-1">
+                  <span className="absolute inset-y-0 left-3 flex items-center text-slate-400 text-sm">🔍</span>
                   <input
-                    type="checkbox"
-                    checked={includeInactive}
-                    onChange={(e) => setIncludeInactive(e.target.checked)}
-                    className="rounded"
+                    type="text"
+                    placeholder="Tìm theo tên, SĐT, vị trí..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 bg-white rounded-xl border border-slate-200 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-400"
                   />
-                  Hiển thị cả nhân viên tạm ngưng
-                </label>
+                </div>
+
+                <div className="flex items-center justify-between sm:justify-end gap-3 px-1">
+                  {isAdmin && (
+                    <label className="flex items-center gap-2 text-xs font-medium text-slate-600 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={includeInactive}
+                        onChange={(e) => setIncludeInactive(e.target.checked)}
+                        className="rounded-md border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4 accent-blue-600"
+                      />
+                      <span>Hiện tạm ngưng</span>
+                    </label>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={loadData}
+                    className="rounded-xl text-xs font-semibold h-8 px-2.5 border-slate-200 hover:bg-slate-100"
+                  >
+                    🔄
+                  </Button>
+                </div>
+              </div>
+
+              <StaffList
+                staffList={staffList}
+                loading={loading}
+                errorMessage={errorMessage}
+                successMessage={successMessage}
+                onEdit={handleOpenModal}
+                onToggleStatus={handleToggleStatus}
+                onArchive={handleArchive}
+                onRefresh={loadData}
+                isAdmin={isAdmin}
+                onSelectStaff={handleSelectStaff}
+              />
+            </div>
+          )}
+
+          {activeSubTab === "attendance" && (
+            <div className="space-y-4">
+              {isAdmin ? (
+                <div className="max-w-lg mx-auto bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                  <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">
+                    Chọn nhân viên chấm công
+                  </label>
+                  <select
+                    value={selectedStaffId}
+                    onChange={(e) => setSelectedStaffId(e.target.value)}
+                    className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  >
+                    {staffList.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.full_name} ({s.role})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div className="text-center py-1 text-xs font-medium text-slate-400">
+                  Thông tin chấm công cá nhân
+                </div>
               )}
-              <Button size="sm" variant="outline" onClick={loadData}>
-                🔄 Làm mới
-              </Button>
+
+              {selectedStaffId && (
+                <AttendanceCheck
+                  staffId={selectedStaffId}
+                  staffName={staffList.find((s) => s.id === selectedStaffId)?.full_name || "Nhân viên"}
+                  isAdmin={isAdmin}
+                  onRefresh={loadData}
+                />
+              )}
+            </div>
+          )}
+
+          {activeSubTab === "payroll" && (
+            <div className="space-y-4">
+              {isAdmin ? (
+                <div className="max-w-lg mx-auto bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                  <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">
+                    Lọc theo nhân viên
+                  </label>
+                  <select
+                    value={selectedStaffId || ""}
+                    onChange={(e) => setSelectedStaffId(e.target.value || "")}
+                    className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  >
+                    <option value="">-- Tất cả nhân viên --</option>
+                    {staffList.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.full_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div className="text-center py-1 text-xs font-medium text-slate-400">
+                  Bảng lương cá nhân của bạn
+                </div>
+              )}
+
+              <PayrollList
+                staffId={isAdmin ? selectedStaffId : staffList[0]?.id || undefined}
+                isAdmin={isAdmin}
+              />
+            </div>
+          )}
+
+          {activeSubTab === "settings" && <SalarySettings isAdmin={isAdmin} />}
+        </div>
+      </main>
+
+      {/* iOS Bottom Sheet / Hybrid Modal Add & Edit Staff */}
+      {isAdmin && isModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 transition-opacity animate-in fade-in">
+          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto space-y-4 border border-slate-100">
+            {/* Modal Header */}
+            <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+              <h2 className="text-lg font-bold text-slate-900">
+                {editingStaff ? "✏️ Cập nhật thông tin" : "➕ Thêm nhân viên mới"}
+              </h2>
+              <button
+                onClick={handleCloseModal}
+                className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold hover:bg-slate-200 transition-colors"
+              >
+                ✕
+              </button>
             </div>
 
-            <StaffList
-              staffList={staffList}
-              loading={loading}
-              errorMessage={errorMessage}
-              successMessage={successMessage}
-              onEdit={handleOpenModal}
-              onToggleStatus={handleToggleStatus}
-              onArchive={handleArchive}
-              onRefresh={loadData}
-              isAdmin={isAdmin}
-            />
-          </>
-        )}
-
-        {activeSubTab === "attendance" && (
-          <div>
-            {isAdmin ? (
-              <div className="mb-4">
-                <label className="block text-sm font-medium mb-1">Chọn nhân viên để chấm công</label>
-                <select
-                  value={selectedStaffId}
-                  onChange={(e) => setSelectedStaffId(e.target.value)}
-                  className="w-full max-w-xs px-3 py-2 border rounded text-sm"
-                >
-                  {staffList.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.full_name} ({s.role})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ) : (
-              // Staff only sees their own (tạm thời lấy nhân viên đầu tiên, sau này tích hợp auth)
-              <div className="mb-4">
-                <p className="text-sm text-gray-500">Chấm công của bạn</p>
-              </div>
-            )}
-            {selectedStaffId && (
-              <AttendanceCheck
-                staffId={selectedStaffId}
-                staffName={staffList.find((s) => s.id === selectedStaffId)?.full_name || "Nhân viên"}
-                isAdmin={isAdmin}
-                onRefresh={loadData}
-              />
-            )}
-          </div>
-        )}
-
-        {activeSubTab === "payroll" && (
-          <div>
-            {isAdmin ? (
-              <div className="mb-4">
-                <label className="block text-sm font-medium mb-1">Chọn nhân viên (bỏ trống để xem tất cả)</label>
-                <select
-                  value={selectedStaffId || ""}
-                  onChange={(e) => setSelectedStaffId(e.target.value || "")}
-                  className="w-full max-w-xs px-3 py-2 border rounded text-sm"
-                >
-                  <option value="">-- Tất cả nhân viên --</option>
-                  {staffList.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.full_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ) : (
-              <div className="mb-4">
-                <p className="text-sm text-gray-500">Bảng lương của bạn</p>
-              </div>
-            )}
-            <PayrollList staffId={isAdmin ? selectedStaffId : (staffList[0]?.id || undefined)} isAdmin={isAdmin} />
-          </div>
-        )}
-
-        {activeSubTab === "settings" && <SalarySettings isAdmin={isAdmin} />}
-      </div>
-
-      {/* Modal Add/Edit Staff (only admin) */}
-      {isAdmin && isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-xl max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold mb-4">
-              {editingStaff ? "Cập nhật nhân viên" : "Thêm nhân viên mới"}
-            </h2>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-3.5">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Họ và tên *</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  Họ và tên <span className="text-rose-500">*</span>
+                </label>
                 <input
                   type="text"
                   required
+                  placeholder="Nguyễn Văn A"
                   value={formData.full_name}
                   onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                  className="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                 />
               </div>
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Chức danh</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Chức danh</label>
                 <select
                   value={formData.role}
                   onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                  className="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                 >
                   {roles.map((r) => (
                     <option key={r} value={r}>
@@ -20717,50 +21382,71 @@ export const StaffPage: React.FC<StaffPageProps> = ({ userRole = "staff" }) => {
                   ))}
                 </select>
               </div>
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Số điện thoại *</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  Số điện thoại <span className="text-rose-500">*</span>
+                </label>
                 <input
-                  type="text"
+                  type="tel"
                   required
+                  placeholder="0901234567"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                 />
               </div>
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Lương cơ bản (VNĐ)</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Lương cơ bản (VNĐ)</label>
                 <input
                   type="number"
+                  placeholder="0"
                   value={formData.base_salary}
                   onChange={(e) => setFormData({ ...formData, base_salary: Number(e.target.value) })}
-                  className="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Ngày bắt đầu</label>
-                <input
-                  type="date"
-                  value={formData.started_on}
-                  onChange={(e) => setFormData({ ...formData, started_on: e.target.value })}
-                  className="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500"
-                />
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">Ngày bắt đầu</label>
+                  <input
+                    type="date"
+                    value={formData.started_on}
+                    onChange={(e) => setFormData({ ...formData, started_on: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">Trạng thái</label>
+                  <select
+                    value={formData.status}
+                    onChange={(e) =>
+                      setFormData({ ...formData, status: e.target.value as "ACTIVE" | "INACTIVE" })
+                    }
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  >
+                    <option value="ACTIVE">Hoạt động</option>
+                    <option value="INACTIVE">Tạm ngưng</option>
+                  </select>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Trạng thái</label>
-                <select
-                  value={formData.status}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value as "ACTIVE" | "INACTIVE" })}
-                  className="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500"
+
+              {/* Action Buttons */}
+              <div className="flex gap-2.5 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={handleCloseModal}
+                  className="flex-1 py-3 bg-slate-100 text-slate-600 font-bold rounded-2xl text-xs hover:bg-slate-200 transition-colors"
                 >
-                  <option value="ACTIVE">ACTIVE (Hoạt động)</option>
-                  <option value="INACTIVE">INACTIVE (Tạm ngưng)</option>
-                </select>
-              </div>
-              <div className="flex justify-end gap-3 pt-4 border-t">
-                <button type="button" onClick={handleCloseModal} className="px-4 py-2 text-gray-600 bg-gray-100 rounded hover:bg-gray-200">
                   Hủy
                 </button>
-                <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                <button
+                  type="submit"
+                  className="flex-1 py-3 bg-blue-600 text-white font-bold rounded-2xl text-xs shadow-md shadow-blue-500/20 hover:bg-blue-700 active:scale-95 transition-all"
+                >
                   {editingStaff ? "Cập nhật" : "Thêm mới"}
                 </button>
               </div>
@@ -20773,7 +21459,6 @@ export const StaffPage: React.FC<StaffPageProps> = ({ userRole = "staff" }) => {
 };
 
 export default StaffPage;
-
 ============================================================
 FILE: ./src/services/attendance.service.ts
 ============================================================
@@ -20906,7 +21591,6 @@ export const attendanceService = {
     return data || [];
   },
 };
-
 ============================================================
 FILE: ./src/services/catalog-service.ts
 ============================================================
@@ -21694,7 +22378,6 @@ export const catalogService = {
   deletePackage,
   togglePackageStatus,
 };
-
 ============================================================
 FILE: ./src/services/customer.service.ts
 ============================================================
@@ -22037,6 +22720,8 @@ export async function usePackageSessionV2(
   notes?: string
 ): Promise<{ success: boolean; message: string; remaining_quantity: number }> {
   try {
+    console.log("📦 Gọi RPC use_package_session_v2 với ID:", customerPackageItemId);
+
     const { data, error } = await supabase.rpc("use_package_session_v2", {
       p_customer_package_item_id: customerPackageItemId,
       p_staff_id: staffId || null,
@@ -22044,7 +22729,7 @@ export async function usePackageSessionV2(
     });
 
     if (error) {
-      console.error("RPC use_package_session_v2 error:", {
+      console.error("❌ RPC use_package_session_v2 error:", {
         message: error.message,
         code: error.code,
         details: error.details,
@@ -22057,8 +22742,13 @@ export async function usePackageSessionV2(
       };
     }
 
-    // 🔥 FIX: data có thể null nếu RPC không trả về gì
-    if (!data) {
+    console.log("✅ RPC use_package_session_v2 raw data:", data);
+
+    // 🔥 QUAN TRỌNG: RPC trả về mảng, lấy phần tử đầu tiên
+    const result = Array.isArray(data) && data.length > 0 ? data[0] : data;
+
+    if (!result) {
+      console.error("❌ RPC không trả về kết quả");
       return {
         success: false,
         message: "Không nhận được phản hồi từ server",
@@ -22066,9 +22756,15 @@ export async function usePackageSessionV2(
       };
     }
 
-    return data as { success: boolean; message: string; remaining_quantity: number };
+    console.log("📦 Kết quả RPC đã parse:", result);
+
+    return {
+      success: result.success === true,
+      message: result.message || (result.success === true ? "Sử dụng thành công" : "Lỗi sử dụng package"),
+      remaining_quantity: Number(result.remaining_quantity ?? 0),
+    };
   } catch (err: any) {
-    console.error("RPC use_package_session_v2 exception:", err);
+    console.error("❌ RPC use_package_session_v2 exception:", err);
     return {
       success: false,
       message: err.message || "Lỗi kết nối",
@@ -22087,6 +22783,7 @@ export async function usePackageSession(
   return usePackageSessionV2(customerPackageItemId, staffId, notes);
 }
 
+// 🔥 QUAN TRỌNG: Export usePackageSessionLegacy để tương thích với code cũ
 export const usePackageSessionLegacy = usePackageSession;
 
 // ============ SERVICE HISTORY ============
@@ -22197,7 +22894,6 @@ export const customerService = {
 };
 
 export default customerService;
-
 ============================================================
 FILE: ./src/services/demo-service.ts
 ============================================================
@@ -22212,7 +22908,6 @@ export const demoService = {
   async getStaff() { await pause(180); return demoStaff; },
   async getExpenses() { await pause(180); return demoExpenses; },
 };
-
 ============================================================
 FILE: ./src/services/expense.service.ts
 ============================================================
@@ -22249,7 +22944,6 @@ export const expenseService = {
     if (error) throw error;
   },
 };
-
 
 ============================================================
 FILE: ./src/services/operations.service.ts
@@ -22299,7 +22993,6 @@ export const operationsService = {
     }
   },
 };
-
 
 ============================================================
 FILE: ./src/services/package.service.ts
@@ -22361,7 +23054,6 @@ export const packageService = {
     return data;
   },
 };
-
 
 ============================================================
 FILE: ./src/services/payment-settings.service.ts
@@ -22536,7 +23228,6 @@ export const paymentSettingsService = {
     return null;
   }
 };
-
 ============================================================
 FILE: ./src/services/payroll.service.ts
 ============================================================
@@ -22836,722 +23527,695 @@ export const payrollService = {
     return data || [];
   },
 };
-
 ============================================================
 FILE: ./src/services/pos-service.ts
 ============================================================
-// src/services/pos-service.ts
-import { supabase, DEFAULT_ORG_ID, DEFAULT_BRANCH_ID } from "./supabase";
-import {
-  Customer,
-  Staff,
-  CatalogServiceItem,
-  CatalogProductItem,
-  CatalogPackageItem,
-  CreateInvoicePayload,
-  CheckoutPayload,
-  CheckoutResult,
-  CartItem,
-} from "@/types/pos";
-import { catalogService } from "./catalog-service";
-import { customerService } from "./customer.service";
+    // src/services/pos-service.ts
+    import { supabase, DEFAULT_ORG_ID, DEFAULT_BRANCH_ID } from "./supabase";
+    import {
+      Customer,
+      Staff,
+      CatalogServiceItem,
+      CatalogProductItem,
+      CatalogPackageItem,
+      CreateInvoicePayload,
+      CheckoutPayload,
+      CheckoutResult,
+      CartItem,
+    } from "@/types/pos";
+    import { catalogService } from "./catalog-service";
+    import { customerService } from "./customer.service";
 
-export class POSService {
-  /**
-   * Lấy staff đầu tiên – không filter org/branch
-   */
-  static async getLoggedInStaff(): Promise<Staff | null> {
-    console.log("🔍 getLoggedInStaff: lấy staff không filter");
-    const { data, error } = await supabase
-      .from("staff")
-      .select("id, full_name, role")
-      .eq("status", "ACTIVE")
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle();
+    export class POSService {
+      /**
+       * Lấy staff đầu tiên – không filter org/branch
+       */
+      static async getLoggedInStaff(): Promise<Staff | null> {
+        console.log("🔍 getLoggedInStaff: lấy staff không filter");
+        const { data, error } = await supabase
+          .from("staff")
+          .select("id, full_name, role")
+          .eq("status", "ACTIVE")
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
 
-    if (error) {
-      console.error("❌ Lỗi lấy staff:", error);
-      return null;
-    }
-    console.log("✅ Staff tìm thấy:", data);
-    return data || null;
-  }
-
-  static async searchCustomers(query: string): Promise<Customer[]> {
-    if (!query.trim()) {
-      console.log("🔍 searchCustomers: query rỗng");
-      return [];
-    }
-
-    console.log(`🔍 searchCustomers: tìm "${query}"`);
-    try {
-      const allCustomers = await customerService.fetchCustomers();
-      const filtered = allCustomers.filter(
-        (c) =>
-          (c.full_name || "").toLowerCase().includes(query.toLowerCase()) ||
-          (c.phone || "").toLowerCase().includes(query.toLowerCase())
-      );
-      console.log(`✅ Tìm thấy ${filtered.length} khách hàng`);
-      return filtered.slice(0, 10);
-    } catch (error) {
-      console.error("❌ Lỗi tìm kiếm khách hàng:", error);
-      return [];
-    }
-  }
-
-  static async fetchStaffList(): Promise<Staff[]> {
-    console.log("🔍 fetchStaffList: lấy danh sách staff không filter");
-    const { data, error } = await supabase
-      .from("staff")
-      .select("id, full_name, role")
-      .eq("status", "ACTIVE")
-      .order("full_name");
-
-    if (error) {
-      console.error("❌ Lỗi tải staff:", error);
-      return [];
-    }
-
-    console.log(`✅ Tìm thấy ${data?.length || 0} staff:`, data);
-    return data || [];
-  }
-
-  static async fetchServices(): Promise<CatalogServiceItem[]> {
-    console.log("🔍 fetchServices: lấy dịch vụ từ catalogService");
-    try {
-      const services = await catalogService.fetchServices();
-      console.log(`✅ Tìm thấy ${services.length} dịch vụ:`, services);
-      return services.map((s) => ({
-        id: s.service_id || s.id,
-        catalog_item_id: s.id,
-        name: s.name,
-        price: Number(s.price),
-        duration_minutes: s.duration_minutes || 0,
-        is_active: s.status === "ACTIVE",
-        sales_commission_type: s.sales_commission_type || "PERCENT",
-        sales_commission_value: Number(s.sales_commission_value || 0),
-        performance_commission_type: s.performance_commission_type || "PERCENT",
-        performance_commission_value: Number(s.performance_commission_value || 0),
-      }));
-    } catch (error) {
-      console.error("❌ Lỗi tải dịch vụ:", error);
-      return [];
-    }
-  }
-
-  static async fetchProducts(): Promise<CatalogProductItem[]> {
-    console.log("🔍 fetchProducts: lấy sản phẩm từ catalogService");
-    try {
-      const products = await catalogService.fetchProducts();
-      console.log(`✅ Tìm thấy ${products.length} sản phẩm:`, products);
-      return products.map((p) => ({
-        id: p.product_id,
-        catalog_item_id: p.id,
-        name: p.name,
-        selling_price: Number(p.selling_price || p.price),
-        stock_quantity: Number(p.stock_quantity || 0),
-        minimum_stock: Number(p.minimum_stock || 0),
-        unit: p.unit || "cái",
-        product_type: p.product_type || "RETAIL",
-        is_active: p.status === "ACTIVE",
-        sales_commission_type: p.sales_commission_type || "PERCENT",
-        sales_commission_value: Number(p.sales_commission_value || 0),
-      }));
-    } catch (error) {
-      console.error("❌ Lỗi tải sản phẩm:", error);
-      return [];
-    }
-  }
-
-  static async fetchPackages(): Promise<CatalogPackageItem[]> {
-    console.log("🔍 fetchPackages: lấy gói từ catalogService");
-    try {
-      const packages = await catalogService.fetchPackages();
-      console.log(`✅ Tìm thấy ${packages.length} gói:`, packages);
-      return packages.map((pkg) => ({
-        id: pkg.id,
-        name: pkg.name,
-        price: Number(pkg.price),
-        validity_days: Number(pkg.validity_days) || 365,
-        description: pkg.description || "",
-        is_active: pkg.is_active ?? true,
-        sales_commission_type: pkg.sales_commission_type || "PERCENT",
-        sales_commission_value: Number(pkg.sales_commission_value || 0),
-        items: (pkg.package_items || []).map((pi) => ({
-          package_id: pi.package_id || pkg.id,
-          service_id: pi.service_id,
-          service_name: pi.service_name || "Dịch vụ",
-          quantity: Number(pi.quantity || 1),
-          price_override: pi.price_override ? Number(pi.price_override) : undefined,
-          item_type: pi.item_type,
-          product_id: pi.product_id,
-        })),
-      }));
-    } catch (error) {
-      console.error("❌ Lỗi tải gói:", error);
-      return [];
-    }
-  }
-
-  static calculateTotals(items: CartItem[], overallDiscount: number = 0) {
-    const subtotal = items.reduce(
-      (sum, item) => sum + Math.round(item.unit_price * item.quantity),
-      0,
-    );
-    const itemDiscounts = items.reduce(
-      (sum, item) => sum + Math.round(item.discount_amount || 0),
-      0,
-    );
-    const totalDiscount = Math.round(itemDiscounts + overallDiscount);
-    const finalTotal = Math.max(0, Math.round(subtotal - totalDiscount));
-
-    return {
-      subtotal: Math.round(subtotal),
-      discount_amount: Math.round(totalDiscount),
-      total_amount: Math.round(finalTotal),
-    };
-  }
-
-  static async createDraftInvoice(
-    payload: CreateInvoicePayload,
-  ): Promise<CheckoutResult> {
-    try {
-      const loggedStaff = await this.getLoggedInStaff();
-      const sellerStaffId = payload.seller_staff_id || loggedStaff?.id || null;
-
-      const insertData: any = {
-        organization_id: DEFAULT_ORG_ID,
-        branch_id: DEFAULT_BRANCH_ID,
-        customer_id: payload.customer_id || null,
-        seller_staff_id: sellerStaffId,
-        status: "DRAFT",
-        subtotal: payload.subtotal,
-        discount_amount: payload.discount_amount,
-        total_amount: payload.total_amount,
-        payment_method: payload.payment_method,
-      };
-
-      const { data: invoice, error: invoiceErr } = await supabase
-        .from("invoices")
-        .insert(insertData)
-        .select("id")
-        .single();
-
-      if (invoiceErr || !invoice) {
-        return {
-          success: false,
-          error: invoiceErr?.message || "Lỗi khi tạo đơn nháp",
-        };
-      }
-
-      const invoiceItemsData = payload.items.map((item) => ({
-        invoice_id: invoice.id,
-        catalog_item_id: item.catalog_item_id || null,
-        package_id: item.package_id || null,
-        actual_service_id: item.actual_service_id || null,
-        seller_staff_id: item.seller_staff_id || sellerStaffId,
-        performing_staff_id: item.performing_staff_id || null,
-        description: item.description,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-        discount_amount: item.discount_amount,
-        total_amount: item.total_amount,
-        is_gift: item.is_gift || false,
-      }));
-
-      const { error: itemsErr } = await supabase
-        .from("invoice_items")
-        .insert(invoiceItemsData);
-
-      if (itemsErr) {
-        return { success: false, error: itemsErr.message };
-      }
-
-      return { success: true, invoice_id: invoice.id };
-    } catch (err: any) {
-      return {
-        success: false,
-        error: err.message || "Lỗi hệ thống khi tạo đơn nháp",
-      };
-    }
-  }
-
-  static async processCheckout(
-    cartItems: CartItem[],
-    payload: CheckoutPayload,
-  ): Promise<CheckoutResult> {
-    try {
-      const loggedStaff = await this.getLoggedInStaff();
-      const defaultSellerId = payload.seller_staff_id || loggedStaff?.id || null;
-
-      // ============ VALIDATION ============
-      if (payload.payment_method === "DEBT" && !payload.customer_id) {
-        return {
-          success: false,
-          error: "Thanh toán Ghi nợ bắt buộc phải chọn Khách hàng!",
-        };
-      }
-
-      if (payload.payment_method === "GIFT" && !payload.customer_id) {
-        return {
-          success: false,
-          error: "Tặng quà bắt buộc phải chọn Khách hàng!",
-        };
-      }
-
-      const hasPackage = cartItems.some((it) => it.item_type === "PACKAGE");
-      if (hasPackage && !payload.customer_id) {
-        return {
-          success: false,
-          error: "Mua Gói dịch vụ bắt buộc phải chọn Khách hàng!",
-        };
-      }
-
-      // Kiểm tra KTV split
-      for (const item of cartItems) {
-        if (item.item_type === "SERVICE" && item.ktv_splits && item.ktv_splits.length > 0) {
-          const totalShare = item.ktv_splits.reduce((sum, s) => sum + s.share_percent, 0);
-          if (Math.abs(totalShare - 100) > 0.01) {
-            return {
-              success: false,
-              error: `Tổng tỷ lệ chia KTV cho "${item.name}" phải bằng 100% (hiện tại ${totalShare}%)`,
-            };
-          }
+        if (error) {
+          console.error("❌ Lỗi lấy staff:", error);
+          return null;
         }
+        console.log("✅ Staff tìm thấy:", data);
+        return data || null;
       }
 
-      // ============ INVOICE ============
-      let invoiceStatus: "PAID" | "PARTIALLY_PAID" = "PAID";
-      if (payload.payment_method === "DEBT") {
-        invoiceStatus = "PARTIALLY_PAID";
-      }
-
-      const invoiceData: any = {
-        organization_id: DEFAULT_ORG_ID,
-        branch_id: DEFAULT_BRANCH_ID,
-        customer_id: payload.customer_id || null,
-        seller_staff_id: defaultSellerId,
-        status: invoiceStatus,
-        subtotal: payload.subtotal,
-        discount_amount: payload.discount_amount,
-        total_amount: payload.total_amount,
-        payment_method: payload.payment_method,
-      };
-
-      const { data: invoice, error: invoiceErr } = await supabase
-        .from("invoices")
-        .insert(invoiceData)
-        .select("id")
-        .single();
-
-      if (invoiceErr || !invoice) {
-        return {
-          success: false,
-          error: invoiceErr?.message || "Lỗi khi tạo hóa đơn",
-        };
-      }
-
-      // ============ INVOICE ITEMS ============
-      for (const item of cartItems) {
-        const itemData: any = {
-          invoice_id: invoice.id,
-          catalog_item_id: item.catalog_item_id || null,
-          package_id: item.package_id || null,
-          actual_service_id: item.actual_service_id || null,
-          seller_staff_id: item.seller_staff_id || defaultSellerId,
-          performing_staff_id: item.performing_staff_id || null,
-          description: item.name,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          discount_amount: item.discount_amount,
-          total_amount: item.total_amount,
-          is_gift: item.is_gift || false,
-        };
-
-        const { data: invItem, error: itemErr } = await supabase
-          .from("invoice_items")
-          .insert(itemData)
-          .select("id")
-          .single();
-
-        if (itemErr) {
-          return { success: false, error: itemErr.message };
+      static async searchCustomers(query: string): Promise<Customer[]> {
+        if (!query.trim()) {
+          console.log("🔍 searchCustomers: query rỗng");
+          return [];
         }
 
-        // ============ MULTI KTV (chỉ khi có tiền và không dùng package) ============
-        if (item.item_type === "SERVICE" && item.ktv_splits && item.ktv_splits.length > 0 && !item.use_package && item.total_amount > 0) {
-          const splits = item.ktv_splits.map((s) => ({
-            invoice_item_id: invItem.id,
-            staff_id: s.staff_id,
-            share_percent: s.share_percent,
-            commission_amount: s.commission_amount || 0,
-          }));
-
-          try {
-            const { error: splitErr } = await supabase
-              .from("invoice_item_staff")
-              .insert(splits);
-            if (splitErr) {
-              console.warn("Lỗi lưu KTV split (bỏ qua):", splitErr);
-            }
-          } catch (err) {
-            console.warn("Không thể lưu KTV split, bỏ qua:", err);
-          }
-        }
-
-        // ============ PACKAGE USAGE ============
-        if (item.use_package && item.customer_package_id && item.package_item_id && item.actual_service_id) {
-          try {
-            // Gọi RPC với customer_package_item_id
-            const result = await customerService.usePackageSessionV2(
-              item.package_item_id, // đây là customer_package_item_id
-              item.performing_staff_id || null,
-              `Sử dụng package qua POS, invoice ${invoice.id}`,
-            );
-
-            // Kiểm tra result trả về từ RPC
-            if (!result) {
-              console.error("❌ Lỗi sử dụng package: Không nhận được phản hồi");
-              return {
-                success: false,
-                error: "Lỗi sử dụng package: Không nhận được phản hồi từ server",
-              };
-            }
-
-            // Nếu RPC trả về success = false, báo lỗi
-            if (!result.success) {
-              const errorMsg = result.message || "Không thể sử dụng gói, vui lòng thử lại";
-              console.error("❌ Lỗi sử dụng package:", errorMsg);
-              return {
-                success: false,
-                error: `Lỗi sử dụng package: ${errorMsg}`,
-              };
-            }
-
-            // Nếu success = true, tiếp tục...
-
-            // 🔥 Tạo package_usage
-            try {
-              // Tìm service_session vừa tạo
-              const { data: sessionData } = await supabase
-                .from("service_sessions")
-                .select("id")
-                .eq("invoice_id", invoice.id)
-                .eq("source_type", "PACKAGE")
-                .order("created_at", { ascending: false })
-                .limit(1)
-                .maybeSingle();
-
-              if (sessionData) {
-                // Lấy package_item_id (template) từ package_items
-                const { data: pkgItemData } = await supabase
-                  .from("package_items")
-                  .select("id")
-                  .eq("package_id", item.package_id)
-                  .eq("service_id", item.actual_service_id)
-                  .maybeSingle();
-
-                await supabase.from("package_usages").insert({
-                  organization_id: DEFAULT_ORG_ID,
-                  branch_id: DEFAULT_BRANCH_ID,
-                  customer_id: payload.customer_id,
-                  package_id: item.package_id, // template package id
-                  service_session_id: sessionData.id,
-                  customer_package_item_id: item.package_item_id,
-                  package_item_id: pkgItemData?.id || null,
-                  service_id: item.actual_service_id,
-                  used_at: new Date().toISOString(),
-                  notes: `Sử dụng package từ POS, invoice ${invoice.id}`,
-                  created_at: new Date().toISOString(),
-                });
-              }
-            } catch (usageErr) {
-              console.warn("⚠️ Lỗi tạo package_usage (bỏ qua):", usageErr);
-            }
-
-          } catch (err: any) {
-            const errorMsg = err?.message || "Lỗi không xác định khi sử dụng gói";
-            console.error("❌ Lỗi sử dụng package:", errorMsg);
-            return {
-              success: false,
-              error: `Lỗi sử dụng package: ${errorMsg}`,
-            };
-          }
-        }
-      }
-
-      // ============ INVENTORY (PRODUCT RETAIL) ============
-      for (const item of cartItems) {
-        if (item.item_type === "PRODUCT" && item.product_id && !item.use_package) {
-          try {
-            await catalogService.processInventoryTransaction({
-              product_id: item.product_id,
-              type: "OUT",
-              quantity: item.quantity,
-              note: `POS bán hàng, invoice ${invoice.id}`,
-            });
-          } catch (invErr: any) {
-            console.warn("Lỗi ghi inventory transaction, fallback:", invErr);
-            const { data: currentProd } = await supabase
-              .from("products")
-              .select("stock_quantity")
-              .eq("id", item.product_id)
-              .single();
-
-            if (currentProd) {
-              const updatedStock = Math.max(
-                0,
-                Number(currentProd.stock_quantity || 0) - item.quantity,
-              );
-              await supabase
-                .from("products")
-                .update({ stock_quantity: updatedStock })
-                .eq("id", item.product_id);
-            }
-          }
-        }
-      }
-
-      // ============ PACKAGE PURCHASE (Mua Package mới) ============
-      for (const item of cartItems) {
-        if (item.item_type === "PACKAGE" && item.package_id && payload.customer_id) {
-          const isGift = payload.payment_method === "GIFT" || item.is_gift;
-
-          const { data: pkgInfo } = await supabase
-            .from("packages")
-            .select("validity_days, package_items(quantity, service_id)")
-            .eq("id", item.package_id)
-            .single();
-
-          const validityDays = pkgInfo?.validity_days ? Number(pkgInfo.validity_days) : 365;
-          const totalSessionsPerPkg = (pkgInfo?.package_items || []).reduce(
-            (acc: number, pi: any) => acc + Number(pi.quantity || 1),
-            0,
+        console.log(`🔍 searchCustomers: tìm "${query}"`);
+        try {
+          const allCustomers = await customerService.fetchCustomers();
+          const filtered = allCustomers.filter(
+            (c) =>
+              (c.full_name || "").toLowerCase().includes(query.toLowerCase()) ||
+              (c.phone || "").toLowerCase().includes(query.toLowerCase())
           );
-          const totalSessions = (totalSessionsPerPkg || 1) * item.quantity;
+          console.log(`✅ Tìm thấy ${filtered.length} khách hàng`);
+          return filtered.slice(0, 10);
+        } catch (error) {
+          console.error("❌ Lỗi tìm kiếm khách hàng:", error);
+          return [];
+        }
+      }
 
-          const expiresAt = new Date();
-          expiresAt.setDate(expiresAt.getDate() + validityDays);
+      static async fetchStaffList(): Promise<Staff[]> {
+        console.log("🔍 fetchStaffList: lấy danh sách staff không filter");
+        const { data, error } = await supabase
+          .from("staff")
+          .select("id, full_name, role")
+          .eq("status", "ACTIVE")
+          .order("full_name");
 
-          const cpData: any = {
+        if (error) {
+          console.error("❌ Lỗi tải staff:", error);
+          return [];
+        }
+
+        console.log(`✅ Tìm thấy ${data?.length || 0} staff:`, data);
+        return data || [];
+      }
+
+      static async fetchServices(): Promise<CatalogServiceItem[]> {
+        console.log("🔍 fetchServices: lấy dịch vụ từ catalogService");
+        try {
+          const services = await catalogService.fetchServices();
+          console.log(`✅ Tìm thấy ${services.length} dịch vụ:`, services);
+          return services.map((s) => ({
+            id: s.service_id || s.id,
+            catalog_item_id: s.id,
+            name: s.name,
+            price: Number(s.price),
+            duration_minutes: s.duration_minutes || 0,
+            is_active: s.status === "ACTIVE",
+            sales_commission_type: s.sales_commission_type || "PERCENT",
+            sales_commission_value: Number(s.sales_commission_value || 0),
+            performance_commission_type: s.performance_commission_type || "PERCENT",
+            performance_commission_value: Number(s.performance_commission_value || 0),
+          }));
+        } catch (error) {
+          console.error("❌ Lỗi tải dịch vụ:", error);
+          return [];
+        }
+      }
+
+      static async fetchProducts(): Promise<CatalogProductItem[]> {
+        console.log("🔍 fetchProducts: lấy sản phẩm từ catalogService");
+        try {
+          const products = await catalogService.fetchProducts();
+          console.log(`✅ Tìm thấy ${products.length} sản phẩm:`, products);
+          return products.map((p) => ({
+            id: p.product_id,
+            catalog_item_id: p.id,
+            name: p.name,
+            selling_price: Number(p.selling_price || p.price),
+            stock_quantity: Number(p.stock_quantity || 0),
+            minimum_stock: Number(p.minimum_stock || 0),
+            unit: p.unit || "cái",
+            product_type: p.product_type || "RETAIL",
+            is_active: p.status === "ACTIVE",
+            sales_commission_type: p.sales_commission_type || "PERCENT",
+            sales_commission_value: Number(p.sales_commission_value || 0),
+          }));
+        } catch (error) {
+          console.error("❌ Lỗi tải sản phẩm:", error);
+          return [];
+        }
+      }
+
+      static async fetchPackages(): Promise<CatalogPackageItem[]> {
+        console.log("🔍 fetchPackages: lấy gói từ catalogService");
+        try {
+          const packages = await catalogService.fetchPackages();
+          console.log(`✅ Tìm thấy ${packages.length} gói:`, packages);
+          return packages.map((pkg) => ({
+            id: pkg.id,
+            name: pkg.name,
+            price: Number(pkg.price),
+            validity_days: Number(pkg.validity_days) || 365,
+            description: pkg.description || "",
+            is_active: pkg.is_active ?? true,
+            sales_commission_type: pkg.sales_commission_type || "PERCENT",
+            sales_commission_value: Number(pkg.sales_commission_value || 0),
+            items: (pkg.package_items || []).map((pi) => ({
+              package_id: pi.package_id || pkg.id,
+              service_id: pi.service_id,
+              service_name: pi.service_name || "Dịch vụ",
+              quantity: Number(pi.quantity || 1),
+              price_override: pi.price_override ? Number(pi.price_override) : undefined,
+              item_type: pi.item_type,
+              product_id: pi.product_id,
+            })),
+          }));
+        } catch (error) {
+          console.error("❌ Lỗi tải gói:", error);
+          return [];
+        }
+      }
+
+      static calculateTotals(items: CartItem[], overallDiscount: number = 0) {
+        const subtotal = items.reduce(
+          (sum, item) => sum + Math.round(item.unit_price * item.quantity),
+          0,
+        );
+        const itemDiscounts = items.reduce(
+          (sum, item) => sum + Math.round(item.discount_amount || 0),
+          0,
+        );
+        const totalDiscount = Math.round(itemDiscounts + overallDiscount);
+        const finalTotal = Math.max(0, Math.round(subtotal - totalDiscount));
+
+        return {
+          subtotal: Math.round(subtotal),
+          discount_amount: Math.round(totalDiscount),
+          total_amount: Math.round(finalTotal),
+        };
+      }
+
+      static async createDraftInvoice(
+        payload: CreateInvoicePayload,
+      ): Promise<CheckoutResult> {
+        try {
+          const loggedStaff = await this.getLoggedInStaff();
+          const sellerStaffId = payload.seller_staff_id || loggedStaff?.id || null;
+
+          const insertData: any = {
             organization_id: DEFAULT_ORG_ID,
             branch_id: DEFAULT_BRANCH_ID,
-            customer_id: payload.customer_id,
-            package_id: item.package_id,
-            invoice_id: invoice.id,
-            total_sessions: totalSessions,
-            remaining_sessions: totalSessions,
-            status: "ACTIVE",
-            expires_at: expiresAt.toISOString(),
-            is_gift: isGift,
-            price_paid: isGift ? 0 : item.total_amount,
+            customer_id: payload.customer_id || null,
+            seller_staff_id: sellerStaffId,
+            status: "DRAFT",
+            subtotal: payload.subtotal,
+            discount_amount: payload.discount_amount,
+            total_amount: payload.total_amount,
+            payment_method: payload.payment_method,
           };
 
-          const { data: customerPkg, error: cpErr } = await supabase
-            .from("customer_packages")
-            .insert(cpData)
+          const { data: invoice, error: invoiceErr } = await supabase
+            .from("invoices")
+            .insert(insertData)
             .select("id")
             .single();
 
-          if (cpErr) {
-            console.error("❌ Lỗi tạo customer_package:", cpErr);
+          if (invoiceErr || !invoice) {
             return {
               success: false,
-              error: `Không thể tạo gói cho khách hàng: ${cpErr.message}`,
+              error: invoiceErr?.message || "Lỗi khi tạo đơn nháp",
             };
           }
 
-          // ============ TẠO CUSTOMER_PACKAGE_ITEMS ============
-          if (pkgInfo?.package_items && pkgInfo.package_items.length > 0) {
-            const cpItems = pkgInfo.package_items.map((pi: any) => ({
-              customer_package_id: customerPkg.id,
-              service_id: pi.service_id,
-              total_quantity: Number(pi.quantity) * item.quantity,
-              used_quantity: 0,
-              remaining_quantity: Number(pi.quantity) * item.quantity,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            }));
+          const invoiceItemsData = payload.items.map((item) => ({
+            invoice_id: invoice.id,
+            catalog_item_id: item.catalog_item_id || null,
+            package_id: item.package_id || null,
+            actual_service_id: item.actual_service_id || null,
+            seller_staff_id: item.seller_staff_id || sellerStaffId,
+            performing_staff_id: item.performing_staff_id || null,
+            description: item.description,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            discount_amount: item.discount_amount,
+            total_amount: item.total_amount,
+            is_gift: item.is_gift || false,
+          }));
 
-            const { error: cpItemsErr } = await supabase
-              .from("customer_package_items")
-              .insert(cpItems);
+          const { error: itemsErr } = await supabase
+            .from("invoice_items")
+            .insert(invoiceItemsData);
 
-            if (cpItemsErr) {
-              console.error("❌ Lỗi tạo customer_package_items:", cpItemsErr);
-            } else {
-              console.log(`✅ Đã tạo ${cpItems.length} customer_package_items cho gói ${customerPkg.id}`);
+          if (itemsErr) {
+            return { success: false, error: itemsErr.message };
+          }
+
+          return { success: true, invoice_id: invoice.id };
+        } catch (err: any) {
+          return {
+            success: false,
+            error: err.message || "Lỗi hệ thống khi tạo đơn nháp",
+          };
+        }
+      }
+
+      static async processCheckout(
+        cartItems: CartItem[],
+        payload: CheckoutPayload,
+      ): Promise<CheckoutResult> {
+        try {
+          const loggedStaff = await this.getLoggedInStaff();
+          const defaultSellerId = payload.seller_staff_id || loggedStaff?.id || null;
+
+          // ============ VALIDATION ============
+          if (payload.payment_method === "DEBT" && !payload.customer_id) {
+            return {
+              success: false,
+              error: "Thanh toán Ghi nợ bắt buộc phải chọn Khách hàng!",
+            };
+          }
+
+          if (payload.payment_method === "GIFT" && !payload.customer_id) {
+            return {
+              success: false,
+              error: "Tặng quà bắt buộc phải chọn Khách hàng!",
+            };
+          }
+
+          const hasPackage = cartItems.some((it) => it.item_type === "PACKAGE");
+          if (hasPackage && !payload.customer_id) {
+            return {
+              success: false,
+              error: "Mua Gói dịch vụ bắt buộc phải chọn Khách hàng!",
+            };
+          }
+
+          // Kiểm tra KTV split
+          for (const item of cartItems) {
+            if (item.item_type === "SERVICE" && item.ktv_splits && item.ktv_splits.length > 0) {
+              const totalShare = item.ktv_splits.reduce((sum, s) => sum + s.share_percent, 0);
+              if (Math.abs(totalShare - 100) > 0.01) {
+                return {
+                  success: false,
+                  error: `Tổng tỷ lệ chia KTV cho "${item.name}" phải bằng 100% (hiện tại ${totalShare}%)`,
+                };
+              }
             }
           }
 
-          // ============ TẠO SERVICE SESSION CHO BUỔI ĐẦU (nếu dùng ngay) ============
-          if (item.use_package && item.actual_service_id) {
-            try {
-              // Tìm customer_package_item tương ứng với service_id để trừ buổi
-              const { data: cpItem } = await supabase
-                .from("customer_package_items")
-                .select("id")
-                .eq("customer_package_id", customerPkg.id)
-                .eq("service_id", item.actual_service_id)
-                .single();
+          // ============ INVOICE ============
+          let invoiceStatus: "PAID" | "PARTIALLY_PAID" = "PAID";
+          if (payload.payment_method === "DEBT") {
+            invoiceStatus = "PARTIALLY_PAID";
+          }
 
-              if (cpItem) {
+          const invoiceData: any = {
+            organization_id: DEFAULT_ORG_ID,
+            branch_id: DEFAULT_BRANCH_ID,
+            customer_id: payload.customer_id || null,
+            seller_staff_id: defaultSellerId,
+            status: invoiceStatus,
+            subtotal: payload.subtotal,
+            discount_amount: payload.discount_amount,
+            total_amount: payload.total_amount,
+            payment_method: payload.payment_method,
+          };
+
+          const { data: invoice, error: invoiceErr } = await supabase
+            .from("invoices")
+            .insert(invoiceData)
+            .select("id")
+            .single();
+
+          if (invoiceErr || !invoice) {
+            return {
+              success: false,
+              error: invoiceErr?.message || "Lỗi khi tạo hóa đơn",
+            };
+          }
+
+          // ============ INVOICE ITEMS ============
+          for (const item of cartItems) {
+            const itemData: any = {
+              invoice_id: invoice.id,
+              catalog_item_id: item.catalog_item_id || null,
+              package_id: item.package_id || null,
+              actual_service_id: item.actual_service_id || null,
+              seller_staff_id: item.seller_staff_id || defaultSellerId,
+              performing_staff_id: item.performing_staff_id || null,
+              description: item.name,
+              quantity: item.quantity,
+              unit_price: item.unit_price,
+              discount_amount: item.discount_amount,
+              total_amount: item.total_amount,
+              is_gift: item.is_gift || false,
+            };
+
+            const { data: invItem, error: itemErr } = await supabase
+              .from("invoice_items")
+              .insert(itemData)
+              .select("id")
+              .single();
+
+            if (itemErr) {
+              return { success: false, error: itemErr.message };
+            }
+
+            // ============ MULTI KTV (chỉ khi có tiền và không dùng package) ============
+            if (item.item_type === "SERVICE" && item.ktv_splits && item.ktv_splits.length > 0 && !item.use_package && item.total_amount > 0) {
+              const splits = item.ktv_splits.map((s) => ({
+                invoice_item_id: invItem.id,
+                staff_id: s.staff_id,
+                share_percent: s.share_percent,
+                commission_amount: s.commission_amount || 0,
+              }));
+
+              try {
+                const { error: splitErr } = await supabase
+                  .from("invoice_item_staff")
+                  .insert(splits);
+                if (splitErr) {
+                  console.warn("Lỗi lưu KTV split (bỏ qua):", splitErr);
+                }
+              } catch (err) {
+                console.warn("Không thể lưu KTV split, bỏ qua:", err);
+              }
+            }
+
+            // ============ PACKAGE USAGE ============
+            if (item.use_package && item.customer_package_id && item.package_item_id && item.actual_service_id) {
+              try {
+                console.log("📦 Bắt đầu sử dụng package với item:", {
+                  customer_package_id: item.customer_package_id,
+                  package_item_id: item.package_item_id,
+                  actual_service_id: item.actual_service_id,
+                  performing_staff_id: item.performing_staff_id,
+                });
+
                 const result = await customerService.usePackageSessionV2(
-                  cpItem.id,
+                  item.package_item_id,
                   item.performing_staff_id || null,
-                  `Sử dụng buổi đầu từ package mới, invoice ${invoice.id}`,
+                  `Sử dụng package qua POS, invoice ${invoice.id}`,
                 );
-                if (!result.success) {
-                  console.warn("⚠️ Lỗi sử dụng buổi đầu package:", result.message);
-                } else {
-                  // Tạo package_usage cho buổi đầu
-                  try {
-                    const { data: sessionData } = await supabase
-                      .from("service_sessions")
+
+                console.log("📦 Kết quả RPC:", result);
+
+                if (!result) {
+                  console.error("❌ RPC không trả về kết quả");
+                  return {
+                    success: false,
+                    error: "Không nhận được phản hồi từ server",
+                  };
+                }
+
+                // Chỉ báo lỗi khi result.success === false
+                if (result.success === false) {
+                  console.error("❌ Lỗi sử dụng package:", result.message);
+                  return {
+                    success: false,
+                    error: `Lỗi sử dụng package: ${result.message}`,
+                  };
+                }
+
+                console.log(`✅ Sử dụng package thành công. Còn ${result.remaining_quantity} buổi`);
+
+                // Tạo package_usage
+                try {
+                  const { data: sessionData } = await supabase
+                    .from("service_sessions")
+                    .select("id")
+                    .eq("invoice_id", invoice.id)
+                    .eq("source_type", "PACKAGE")
+                    .order("created_at", { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+
+                  if (sessionData) {
+                    const { data: pkgItemData } = await supabase
+                      .from("package_items")
                       .select("id")
-                      .eq("invoice_id", invoice.id)
-                      .eq("source_type", "PACKAGE")
-                      .order("created_at", { ascending: false })
-                      .limit(1)
+                      .eq("package_id", item.package_id)
+                      .eq("service_id", item.actual_service_id)
                       .maybeSingle();
 
-                    if (sessionData) {
-                      await supabase.from("package_usages").insert({
-                        organization_id: DEFAULT_ORG_ID,
-                        branch_id: DEFAULT_BRANCH_ID,
-                        customer_id: payload.customer_id,
-                        package_id: item.package_id,
-                        service_session_id: sessionData.id,
-                        customer_package_item_id: cpItem.id,
-                        package_item_id: null,
-                        service_id: item.actual_service_id,
-                        used_at: new Date().toISOString(),
-                        notes: `Sử dụng buổi đầu từ package mới, invoice ${invoice.id}`,
-                        created_at: new Date().toISOString(),
-                      });
-                    }
-                  } catch (e) {
-                    console.warn("⚠️ Lỗi tạo package_usage cho buổi đầu:", e);
+                    await supabase.from("package_usages").insert({
+                      organization_id: DEFAULT_ORG_ID,
+                      branch_id: DEFAULT_BRANCH_ID,
+                      customer_id: payload.customer_id,
+                      package_id: item.package_id,
+                      service_session_id: sessionData.id,
+                      customer_package_item_id: item.package_item_id,
+                      package_item_id: pkgItemData?.id || null,
+                      service_id: item.actual_service_id,
+                      used_at: new Date().toISOString(),
+                      notes: `Sử dụng package từ POS, invoice ${invoice.id}`,
+                      created_at: new Date().toISOString(),
+                    });
+                    console.log("✅ Đã tạo package_usage");
                   }
+                } catch (usageErr) {
+                  console.warn("⚠️ Lỗi tạo package_usage (bỏ qua):", usageErr);
+                }
+
+              } catch (err: any) {
+                console.error("❌ Lỗi sử dụng package (catch):", err);
+                return {
+                  success: false,
+                  error: `Lỗi sử dụng package: ${err.message || err}`,
+                };
+              }
+            }
+          }
+
+          // ============ INVENTORY (PRODUCT RETAIL) ============
+          for (const item of cartItems) {
+            if (item.item_type === "PRODUCT" && item.product_id && !item.use_package) {
+              try {
+                await catalogService.processInventoryTransaction({
+                  product_id: item.product_id,
+                  type: "OUT",
+                  quantity: item.quantity,
+                  note: `POS bán hàng, invoice ${invoice.id}`,
+                });
+              } catch (invErr: any) {
+                console.warn("Lỗi ghi inventory transaction, fallback:", invErr);
+                const { data: currentProd } = await supabase
+                  .from("products")
+                  .select("stock_quantity")
+                  .eq("id", item.product_id)
+                  .single();
+
+                if (currentProd) {
+                  const updatedStock = Math.max(
+                    0,
+                    Number(currentProd.stock_quantity || 0) - item.quantity,
+                  );
+                  await supabase
+                    .from("products")
+                    .update({ stock_quantity: updatedStock })
+                    .eq("id", item.product_id);
                 }
               }
-            } catch (usageErr: any) {
-              console.warn("⚠️ Lỗi sử dụng buổi đầu package:", usageErr);
             }
           }
-        }
-      }
 
-      // ============ SERVICE SESSION CHO SERVICE LẺ (DIRECT, không dùng package) ============
-      for (const item of cartItems) {
-        if (item.item_type === "SERVICE" && !item.use_package && item.actual_service_id && item.total_amount > 0) {
-          try {
-            await supabase.from("service_sessions").insert({
-              organization_id: DEFAULT_ORG_ID,
-              branch_id: DEFAULT_BRANCH_ID,
-              customer_id: payload.customer_id,
-              catalog_item_id: item.catalog_item_id,
-              staff_id: item.performing_staff_id || null,
-              source_type: "DIRECT",
-              package_id: null,
-              price_charged: item.total_amount,
-              notes: `Invoice ${invoice.id}`,
-              performed_at: new Date().toISOString(),
-            });
-          } catch (sessionErr: any) {
-            console.warn("⚠️ Lỗi tạo service_session cho service lẻ:", sessionErr);
-          }
-        }
-      }
+          // ============ PACKAGE PURCHASE (Mua Package mới) ============
+          for (const item of cartItems) {
+            if (item.item_type === "PACKAGE" && item.package_id && payload.customer_id) {
+              const isGift = payload.payment_method === "GIFT" || item.is_gift;
 
-      // ============ COMMISSION ============
-      const commissionLogs = [];
+              const { data: pkgInfo } = await supabase
+                .from("packages")
+                .select("validity_days, package_items(quantity, service_id)")
+                .eq("id", item.package_id)
+                .single();
 
-      for (const item of cartItems) {
-        // Bỏ qua nếu là quà tặng, GIFT payment, hoặc đang sử dụng package
-        if (item.is_gift) continue;
-        if (payload.payment_method === "GIFT") continue;
+              const validityDays = pkgInfo?.validity_days ? Number(pkgInfo.validity_days) : 365;
+              const totalSessionsPerPkg = (pkgInfo?.package_items || []).reduce(
+                (acc: number, pi: any) => acc + Number(pi.quantity || 1),
+                0,
+              );
+              const totalSessions = (totalSessionsPerPkg || 1) * item.quantity;
 
-        const isPackageUsage = item.use_package === true;
+              const expiresAt = new Date();
+              expiresAt.setDate(expiresAt.getDate() + validityDays);
 
-        // Sale Commission (chỉ khi không phải package usage)
-        if (!isPackageUsage && item.total_amount > 0) {
-          const sellerStaffId = item.seller_staff_id || defaultSellerId;
-          if (sellerStaffId) {
-            let saleComm = 0;
-            if (item.sales_commission_type === "PERCENT") {
-              const pct = Math.min(100, Math.max(0, Number(item.sales_commission_value || 0)));
-              saleComm = Math.round((item.total_amount * pct) / 100);
-            } else if (item.sales_commission_type === "FIXED") {
-              const fixVal = Math.max(0, Number(item.sales_commission_value || 0));
-              saleComm = fixVal * item.quantity;
-            }
-
-            if (saleComm > 0) {
-              commissionLogs.push({
-                staff_id: sellerStaffId,
+              const cpData: any = {
+                organization_id: DEFAULT_ORG_ID,
+                branch_id: DEFAULT_BRANCH_ID,
+                customer_id: payload.customer_id,
+                package_id: item.package_id,
                 invoice_id: invoice.id,
-                commission_type: "SALE",
-                amount: saleComm,
-                description: `Hoa hồng bán hàng: ${item.name}`,
-              });
+                total_sessions: totalSessions,
+                remaining_sessions: totalSessions,
+                status: "ACTIVE",
+                expires_at: expiresAt.toISOString(),
+                is_gift: isGift,
+                price_paid: isGift ? 0 : item.total_amount,
+              };
+
+              const { data: customerPkg, error: cpErr } = await supabase
+                .from("customer_packages")
+                .insert(cpData)
+                .select("id")
+                .single();
+
+              if (cpErr) {
+                console.error("❌ Lỗi tạo customer_package:", cpErr);
+                return {
+                  success: false,
+                  error: `Không thể tạo gói cho khách hàng: ${cpErr.message}`,
+                };
+              }
+
+              // ============ TẠO CUSTOMER_PACKAGE_ITEMS ============
+              if (pkgInfo?.package_items && pkgInfo.package_items.length > 0) {
+                const cpItems = pkgInfo.package_items.map((pi: any) => ({
+                  customer_package_id: customerPkg.id,
+                  service_id: pi.service_id,
+                  total_quantity: Number(pi.quantity) * item.quantity,
+                  used_quantity: 0,
+                  remaining_quantity: Number(pi.quantity) * item.quantity,
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                }));
+
+                const { error: cpItemsErr } = await supabase
+                  .from("customer_package_items")
+                  .insert(cpItems);
+
+                if (cpItemsErr) {
+                  console.error("❌ Lỗi tạo customer_package_items:", cpItemsErr);
+                } else {
+                  console.log(`✅ Đã tạo ${cpItems.length} customer_package_items cho gói ${customerPkg.id}`);
+                }
+              }
+
+              // ============ TẠO SERVICE SESSION CHO BUỔI ĐẦU (nếu dùng ngay) ============
+              if (item.use_now && item.actual_service_id) {
+                try {
+                  // Tìm customer_package_item tương ứng với service_id để trừ buổi
+                  const { data: cpItem } = await supabase
+                    .from("customer_package_items")
+                    .select("id")
+                    .eq("customer_package_id", customerPkg.id)
+                    .eq("service_id", item.actual_service_id)
+                    .single();
+
+                  if (cpItem) {
+                    const result = await customerService.usePackageSessionV2(
+                      cpItem.id,
+                      item.performing_staff_id || null,
+                      `Sử dụng buổi đầu từ package mới, invoice ${invoice.id}`,
+                    );
+                    if (result && result.success) {
+                      console.log("✅ Đã sử dụng buổi đầu thành công");
+                    } else {
+                      console.warn("⚠️ Lỗi sử dụng buổi đầu:", result?.message);
+                    }
+                  }
+                } catch (usageErr: any) {
+                  console.warn("⚠️ Lỗi sử dụng buổi đầu package:", usageErr);
+                }
+              }
             }
           }
-        }
 
-        // KTV Commission (cho cả DIRECT và PACKAGE USAGE)
-        if (item.item_type === "SERVICE" && item.ktv_splits && item.ktv_splits.length > 0) {
-          // Lấy giá service để tính commission (cho package usage, dùng unit_price đã lưu giá gốc)
-          const servicePrice = item.unit_price || 0;
-          if (servicePrice > 0) {
-            const totalPerformanceComm = item.performance_commission_type && item.performance_commission_value
-              ? (() => {
-                  if (item.performance_commission_type === "PERCENT") {
-                    const pct = Math.min(100, Math.max(0, Number(item.performance_commission_value || 0)));
-                    return Math.round((servicePrice * pct) / 100);
-                  } else {
-                    return Math.max(0, Number(item.performance_commission_value || 0)) * item.quantity;
-                  }
-                })()
-              : 0;
+          // ============ SERVICE SESSION CHO SERVICE LẺ (DIRECT, không dùng package) ============
+          for (const item of cartItems) {
+            if (item.item_type === "SERVICE" && !item.use_package && item.actual_service_id && item.total_amount > 0) {
+              try {
+                await supabase.from("service_sessions").insert({
+                  organization_id: DEFAULT_ORG_ID,
+                  branch_id: DEFAULT_BRANCH_ID,
+                  customer_id: payload.customer_id,
+                  catalog_item_id: item.catalog_item_id,
+                  staff_id: item.performing_staff_id || null,
+                  source_type: "DIRECT",
+                  package_id: null,
+                  price_charged: item.total_amount,
+                  notes: `Invoice ${invoice.id}`,
+                  performed_at: new Date().toISOString(),
+                });
+              } catch (sessionErr: any) {
+                console.warn("⚠️ Lỗi tạo service_session cho service lẻ:", sessionErr);
+              }
+            }
+          }
 
-            if (totalPerformanceComm > 0) {
-              for (const split of item.ktv_splits) {
-                const commAmount = Math.round((totalPerformanceComm * split.share_percent) / 100);
-                if (commAmount > 0) {
+          // ============ COMMISSION ============
+          const commissionLogs = [];
+
+          for (const item of cartItems) {
+            if (item.is_gift) continue;
+            if (payload.payment_method === "GIFT") continue;
+
+            const isPackageUsage = item.use_package === true;
+
+            // Sale Commission (chỉ khi không phải package usage và có tiền)
+            if (!isPackageUsage && item.total_amount > 0) {
+              const sellerStaffId = item.seller_staff_id || defaultSellerId;
+              if (sellerStaffId) {
+                let saleComm = 0;
+                if (item.sales_commission_type === "PERCENT") {
+                  const pct = Math.min(100, Math.max(0, Number(item.sales_commission_value || 0)));
+                  saleComm = Math.round((item.total_amount * pct) / 100);
+                } else if (item.sales_commission_type === "FIXED") {
+                  const fixVal = Math.max(0, Number(item.sales_commission_value || 0));
+                  saleComm = fixVal * item.quantity;
+                }
+
+                if (saleComm > 0) {
                   commissionLogs.push({
-                    staff_id: split.staff_id,
+                    staff_id: sellerStaffId,
                     invoice_id: invoice.id,
-                    commission_type: "PERFORMANCE",
-                    amount: commAmount,
-                    description: `Hoa hồng KTV${isPackageUsage ? ' (Package)' : ''} (${split.share_percent}%): ${item.name}`,
+                    commission_type: "SALE",
+                    amount: saleComm,
+                    description: `Hoa hồng bán hàng: ${item.name}`,
                   });
                 }
               }
             }
+
+            // KTV Commission (cho cả DIRECT và PACKAGE USAGE)
+            if (item.item_type === "SERVICE" && item.ktv_splits && item.ktv_splits.length > 0) {
+              // Lấy giá service để tính commission (cho package usage, dùng unit_price đã lưu giá gốc)
+              const servicePrice = item.unit_price || 0;
+              if (servicePrice > 0) {
+                const totalPerformanceComm = item.performance_commission_type && item.performance_commission_value
+                  ? (() => {
+                      if (item.performance_commission_type === "PERCENT") {
+                        const pct = Math.min(100, Math.max(0, Number(item.performance_commission_value || 0)));
+                        return Math.round((servicePrice * pct) / 100);
+                      } else {
+                        return Math.max(0, Number(item.performance_commission_value || 0)) * item.quantity;
+                      }
+                    })()
+                  : 0;
+
+                if (totalPerformanceComm > 0) {
+                  for (const split of item.ktv_splits) {
+                    const commAmount = Math.round((totalPerformanceComm * split.share_percent) / 100);
+                    if (commAmount > 0) {
+                      commissionLogs.push({
+                        staff_id: split.staff_id,
+                        invoice_id: invoice.id,
+                        commission_type: "PERFORMANCE",
+                        amount: commAmount,
+                        description: `Hoa hồng KTV${isPackageUsage ? ' (Package)' : ''} (${split.share_percent}%): ${item.name}`,
+                      });
+                    }
+                  }
+                }
+              }
+            }
           }
+
+          if (commissionLogs.length > 0) {
+            const { error: commErr } = await supabase.from("commission_logs").insert(commissionLogs);
+            if (commErr) {
+              console.warn("Lỗi lưu commission (bỏ qua):", commErr);
+            }
+          }
+
+          return { success: true, invoice_id: invoice.id };
+        } catch (err: any) {
+          console.error("❌ Lỗi processCheckout:", err);
+          return {
+            success: false,
+            error: err.message || "Lỗi khi xử lý thanh toán",
+          };
         }
       }
-
-      if (commissionLogs.length > 0) {
-        const { error: commErr } = await supabase.from("commission_logs").insert(commissionLogs);
-        if (commErr) {
-          console.warn("Lỗi lưu commission (bỏ qua):", commErr);
-        }
-      }
-
-      return { success: true, invoice_id: invoice.id };
-    } catch (err: any) {
-      console.error("❌ Lỗi processCheckout:", err);
-      return {
-        success: false,
-        error: err.message || "Lỗi khi xử lý thanh toán",
-      };
     }
-  }
-}
-
 ============================================================
 FILE: ./src/services/seed.service.ts
 ============================================================
@@ -23637,20 +24301,18 @@ export const seedService = {
   },
 };
 
-
 ============================================================
 FILE: ./src/services/staff.service.ts
 ============================================================
+// src/services/staff.service.ts
 import { supabase, DEFAULT_ORG_ID, DEFAULT_BRANCH_ID } from "./supabase";
 import {
   StaffMemberDomain,
   CreateStaffInput,
   UpdateStaffInput,
 } from "../types/domain";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval } from "date-fns";
 
-/**
- * Tải danh sách nhân viên
- */
 export const fetchStaff = async (
   searchQuery?: string,
   includeInactive: boolean = true,
@@ -23675,19 +24337,10 @@ export const fetchStaff = async (
   }
 
   const { data, error } = await query;
-
-  if (error) {
-    throw new Error(
-      `Lỗi khi lấy dữ liệu nhân viên từ Supabase: ${error.message}`,
-    );
-  }
-
+  if (error) throw new Error(`Lỗi khi lấy dữ liệu nhân viên: ${error.message}`);
   return (data as StaffMemberDomain[]) || [];
 };
 
-/**
- * Lấy chi tiết nhân viên
- */
 export const getStaffById = async (id: string): Promise<StaffMemberDomain> => {
   const { data, error } = await supabase
     .from("staff")
@@ -23696,20 +24349,11 @@ export const getStaffById = async (id: string): Promise<StaffMemberDomain> => {
     .eq("organization_id", DEFAULT_ORG_ID)
     .eq("branch_id", DEFAULT_BRANCH_ID)
     .single();
-
-  if (error) {
-    throw new Error(`Lỗi khi lấy thông tin nhân viên: ${error.message}`);
-  }
-
+  if (error) throw new Error(`Lỗi khi lấy thông tin nhân viên: ${error.message}`);
   return data as StaffMemberDomain;
 };
 
-/**
- * Tạo mới nhân viên
- */
-export const createStaff = async (
-  input: CreateStaffInput,
-): Promise<StaffMemberDomain> => {
+export const createStaff = async (input: CreateStaffInput): Promise<StaffMemberDomain> => {
   const payload = {
     organization_id: DEFAULT_ORG_ID,
     branch_id: DEFAULT_BRANCH_ID,
@@ -23721,31 +24365,13 @@ export const createStaff = async (
     status: input.status || "ACTIVE",
     started_on: input.started_on || new Date().toISOString().split("T")[0],
   };
-
-  const { data, error } = await supabase
-    .from("staff")
-    .insert(payload)
-    .select()
-    .single();
-
-  if (error) {
-    throw new Error(`Lỗi khi thêm nhân viên mới: ${error.message}`);
-  }
-
+  const { data, error } = await supabase.from("staff").insert(payload).select().single();
+  if (error) throw new Error(`Lỗi khi thêm nhân viên mới: ${error.message}`);
   return data as StaffMemberDomain;
 };
 
-/**
- * Cập nhật thông tin nhân viên (bao gồm lương)
- */
-export const updateStaff = async (
-  id: string,
-  input: UpdateStaffInput,
-): Promise<StaffMemberDomain> => {
-  const payload: Record<string, any> = {
-    updated_at: new Date().toISOString(),
-  };
-
+export const updateStaff = async (id: string, input: UpdateStaffInput): Promise<StaffMemberDomain> => {
+  const payload: Record<string, any> = { updated_at: new Date().toISOString() };
   if (input.full_name !== undefined) payload.full_name = input.full_name;
   if (input.role !== undefined) payload.role = input.role;
   if (input.phone !== undefined) payload.phone = input.phone;
@@ -23762,47 +24388,393 @@ export const updateStaff = async (
     .eq("branch_id", DEFAULT_BRANCH_ID)
     .select()
     .single();
-
-  if (error) {
-    throw new Error(`Lỗi khi cập nhật nhân viên: ${error.message}`);
-  }
-
+  if (error) throw new Error(`Lỗi khi cập nhật nhân viên: ${error.message}`);
   return data as StaffMemberDomain;
 };
 
-/**
- * Đổi trạng thái
- */
-export const updateStaffStatus = async (
-  id: string,
-  status: "ACTIVE" | "INACTIVE",
-): Promise<StaffMemberDomain> => {
+export const updateStaffStatus = async (id: string, status: "ACTIVE" | "INACTIVE"): Promise<StaffMemberDomain> => {
   return updateStaff(id, { status });
 };
 
-/**
- * Lưu trữ nhân viên
- */
 export const archiveStaff = async (id: string): Promise<StaffMemberDomain> => {
   const { data, error } = await supabase
     .from("staff")
-    .update({
-      archived_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
+    .update({ archived_at: new Date().toISOString(), updated_at: new Date().toISOString() })
     .eq("id", id)
     .eq("organization_id", DEFAULT_ORG_ID)
     .eq("branch_id", DEFAULT_BRANCH_ID)
     .select()
     .single();
-
-  if (error) {
-    throw new Error(`Lỗi khi lưu trữ nhân viên: ${error.message}`);
-  }
-
+  if (error) throw new Error(`Lỗi khi lưu trữ nhân viên: ${error.message}`);
   return data as StaffMemberDomain;
 };
 
+// ============ STAFF DETAIL STATS ============
+
+export interface StaffDetailStats {
+  total_working_days: number;
+  total_leave_days: number;
+  total_invoices: number;
+  total_services: number;
+  total_service_revenue: number;
+  total_commission: number;
+  paid_commission: number;
+  unpaid_commission: number;
+}
+
+export interface StaffAttendanceDay {
+  date: string;
+  check_in: string | null;
+  check_out: string | null;
+  status: string | null;
+  notes: string | null;
+}
+
+export interface StaffInvoiceItem {
+  id: string;
+  invoice_code: string;
+  customer_name: string;
+  created_at: string;
+  total_amount: number;
+  payment_method: string;
+  status: string;
+  commission_amount: number;
+}
+
+export interface StaffCommissionItem {
+  id: string;
+  invoice_id: string;
+  invoice_code: string;
+  commission_type: string;
+  amount: number;
+  description: string;
+  created_at: string;
+  customer_name: string;
+}
+
+/**
+ * Lấy thống kê của nhân viên trong tháng
+ */
+export const getStaffDetailStats = async (
+  staffId: string,
+  month: number,
+  year: number
+): Promise<StaffDetailStats> => {
+  const startDate = new Date(year, month - 1, 1);
+  const endDate = new Date(year, month, 0);
+  const startStr = startDate.toISOString().split("T")[0];
+  const endStr = endDate.toISOString().split("T")[0];
+  const startTimestamp = startDate.toISOString();
+  const endTimestamp = endDate.toISOString();
+
+  // 1. Attendance
+  const { data: attendances, error: attErr } = await supabase
+    .from("attendance")
+    .select("*")
+    .eq("staff_id", staffId)
+    .gte("work_date", startStr)
+    .lte("work_date", endStr);
+  if (attErr) throw attErr;
+
+  const workingDays = (attendances || []).filter(a => a.check_in !== null).length;
+  const leaveDays = (attendances || []).filter(a => a.check_in === null).length;
+
+  // 2. Service sessions
+  const { data: sessions, error: sessErr } = await supabase
+    .from("service_sessions")
+    .select("*")
+    .eq("staff_id", staffId)
+    .gte("performed_at", startTimestamp)
+    .lte("performed_at", endTimestamp);
+  if (sessErr) throw sessErr;
+  const totalServices = (sessions || []).length;
+
+  // 3. Invoices via invoice_items (performing_staff_id)
+  const { data: invoiceItems, error: invErr } = await supabase
+    .from("invoice_items")
+    .select(`
+      invoice_id,
+      total_amount,
+      invoices:invoice_id (id, customer_id, total_amount, payment_method, status, customers:customer_id (full_name))
+    `)
+    .eq("performing_staff_id", staffId)
+    .gte("created_at", startTimestamp)
+    .lte("created_at", endTimestamp);
+  if (invErr) throw invErr;
+
+  const invoicesMap = new Map();
+  (invoiceItems || []).forEach((item: any) => {
+    const inv = item.invoices;
+    if (inv && !invoicesMap.has(inv.id)) {
+      invoicesMap.set(inv.id, {
+        id: inv.id,
+        total_amount: inv.total_amount || 0,
+        customer_name: inv.customers?.full_name || "Khách vãng lai",
+      });
+    }
+  });
+  const uniqueInvoices = Array.from(invoicesMap.values());
+  const totalInvoices = uniqueInvoices.length;
+  const totalServiceRevenue = uniqueInvoices.reduce((sum, inv) => sum + (inv.total_amount || 0), 0);
+
+  // 4. Commission logs
+  const { data: commissions, error: commErr } = await supabase
+    .from("commission_logs")
+    .select("*")
+    .eq("staff_id", staffId)
+    .gte("created_at", startTimestamp)
+    .lte("created_at", endTimestamp);
+  if (commErr) throw commErr;
+
+  const totalCommission = (commissions || []).reduce((sum, c) => sum + (c.amount || 0), 0);
+
+  return {
+    total_working_days: workingDays,
+    total_leave_days: leaveDays,
+    total_invoices: totalInvoices,
+    total_services: totalServices,
+    total_service_revenue: totalServiceRevenue,
+    total_commission: totalCommission,
+    paid_commission: 0,
+    unpaid_commission: totalCommission,
+  };
+};
+
+/**
+ * Lấy lịch chấm công của nhân viên trong tháng (từng ngày)
+ */
+export const getStaffAttendanceCalendar = async (
+  staffId: string,
+  month: number,
+  year: number
+): Promise<StaffAttendanceDay[]> => {
+  const startDate = new Date(year, month - 1, 1);
+  const endDate = new Date(year, month, 0);
+  const startStr = startDate.toISOString().split("T")[0];
+  const endStr = endDate.toISOString().split("T")[0];
+
+  const { data, error } = await supabase
+    .from("attendance")
+    .select("*")
+    .eq("staff_id", staffId)
+    .gte("work_date", startStr)
+    .lte("work_date", endStr)
+    .order("work_date", { ascending: true });
+  if (error) throw error;
+
+  const attMap = new Map<string, any>();
+  (data || []).forEach((att: any) => {
+    attMap.set(att.work_date, att);
+  });
+
+  const days = eachDayOfInterval({ start: startDate, end: endDate });
+  return days.map((day) => {
+    const dateStr = format(day, "yyyy-MM-dd");
+    const att = attMap.get(dateStr);
+    return {
+      date: dateStr,
+      check_in: att?.check_in || null,
+      check_out: att?.check_out || null,
+      status: att?.status || null,
+      notes: att?.notes || null,
+    };
+  });
+};
+
+/**
+ * Lấy danh sách hóa đơn của nhân viên trong tháng (với chi tiết)
+ */
+export const getStaffInvoices = async (
+  staffId: string,
+  month: number,
+  year: number
+): Promise<StaffInvoiceItem[]> => {
+  const startTimestamp = new Date(year, month - 1, 1).toISOString();
+  const endTimestamp = new Date(year, month, 0, 23, 59, 59).toISOString();
+
+  // Lấy invoice_items
+  const { data: items, error } = await supabase
+    .from("invoice_items")
+    .select(`
+      invoice_id,
+      total_amount,
+      invoices:invoice_id (
+        id,
+        created_at,
+        customer_id,
+        total_amount,
+        payment_method,
+        status,
+        customers:customer_id (full_name)
+      )
+    `)
+    .eq("performing_staff_id", staffId)
+    .gte("created_at", startTimestamp)
+    .lte("created_at", endTimestamp)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Lỗi getStaffInvoices:", error);
+    return [];
+  }
+
+  const invoiceIds = (items || []).map((item: any) => item.invoice_id).filter(Boolean);
+  let commissionsMap = new Map<string, number>();
+  if (invoiceIds.length > 0) {
+    const { data: commData } = await supabase
+      .from("commission_logs")
+      .select("invoice_id, amount")
+      .eq("staff_id", staffId)
+      .in("invoice_id", invoiceIds)
+      .eq("commission_type", "PERFORMANCE");
+    (commData || []).forEach((c: any) => {
+      const current = commissionsMap.get(c.invoice_id) || 0;
+      commissionsMap.set(c.invoice_id, current + (c.amount || 0));
+    });
+  }
+
+  const result = (items || []).map((item: any) => {
+    const inv = item.invoices;
+    if (!inv) return null;
+    return {
+      id: inv.id,
+      invoice_code: inv.id.slice(0, 8).toUpperCase(),
+      customer_name: inv.customers?.full_name || "Khách vãng lai",
+      created_at: inv.created_at,
+      total_amount: inv.total_amount || 0,
+      payment_method: inv.payment_method || "CASH",
+      status: inv.status || "PAID",
+      commission_amount: commissionsMap.get(inv.id) || 0,
+    };
+  }).filter(Boolean) as StaffInvoiceItem[];
+
+  return result;
+};
+
+/**
+ * Lấy danh sách hoa hồng của nhân viên trong tháng
+ */
+export const getStaffCommissions = async (
+  staffId: string,
+  month: number,
+  year: number
+): Promise<StaffCommissionItem[]> => {
+  const startTimestamp = new Date(year, month - 1, 1).toISOString();
+  const endTimestamp = new Date(year, month, 0, 23, 59, 59).toISOString();
+
+  // Lấy commission logs trước
+  const { data: comms, error } = await supabase
+    .from("commission_logs")
+    .select("*")
+    .eq("staff_id", staffId)
+    .gte("created_at", startTimestamp)
+    .lte("created_at", endTimestamp)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Lỗi getStaffCommissions:", error);
+    return [];
+  }
+
+  if (!comms || comms.length === 0) return [];
+
+  // Lấy thông tin invoice cho từng commission
+  const invoiceIds = comms.map(c => c.invoice_id).filter(Boolean);
+  let invoiceMap = new Map<string, any>();
+  if (invoiceIds.length > 0) {
+    const { data: invoices } = await supabase
+      .from("invoices")
+      .select(`
+        id,
+        customers:customer_id (full_name)
+      `)
+      .in("id", invoiceIds);
+    (invoices || []).forEach((inv: any) => {
+      invoiceMap.set(inv.id, inv);
+    });
+  }
+
+  return comms.map((c: any) => {
+    const inv = invoiceMap.get(c.invoice_id);
+    return {
+      id: c.id,
+      invoice_id: c.invoice_id,
+      invoice_code: c.invoice_id?.slice(0, 8).toUpperCase() || "N/A",
+      commission_type: c.commission_type || "PERFORMANCE",
+      amount: c.amount || 0,
+      description: c.description || "",
+      created_at: c.created_at,
+      customer_name: inv?.customers?.full_name || "Khách vãng lai",
+    };
+  });
+};
+
+/**
+ * Lấy hoạt động gần đây của nhân viên (tối đa 20)
+ */
+export const getStaffRecentActivity = async (staffId: string, limit: number = 20) => {
+  const activities: any[] = [];
+
+  // Lấy service sessions
+  const { data: sessions } = await supabase
+    .from("service_sessions")
+    .select(`
+      id,
+      performed_at,
+      catalog_items:catalog_item_id (name),
+      customers:customer_id (full_name)
+    `)
+    .eq("staff_id", staffId)
+    .order("performed_at", { ascending: false })
+    .limit(limit);
+  if (sessions) {
+    sessions.forEach((s: any) => {
+      activities.push({
+        type: "SERVICE",
+        id: s.id,
+        time: s.performed_at,
+        title: `Thực hiện dịch vụ`,
+        description: `${s.customers?.full_name || "Khách"} - ${s.catalog_items?.name || "Dịch vụ"}`,
+        icon: "💆"
+      });
+    });
+  }
+
+  // Lấy check-in/out
+  const { data: attendances } = await supabase
+    .from("attendance")
+    .select("work_date, check_in, check_out")
+    .eq("staff_id", staffId)
+    .order("work_date", { ascending: false })
+    .limit(limit);
+  if (attendances) {
+    attendances.forEach((a: any) => {
+      if (a.check_in) {
+        activities.push({
+          type: "CHECK_IN",
+          id: a.work_date + "-in",
+          time: a.check_in,
+          title: "Chấm công vào",
+          description: new Date(a.check_in).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+          icon: "🟢"
+        });
+      }
+      if (a.check_out) {
+        activities.push({
+          type: "CHECK_OUT",
+          id: a.work_date + "-out",
+          time: a.check_out,
+          title: "Chấm công ra",
+          description: new Date(a.check_out).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+          icon: "🔴"
+        });
+      }
+    });
+  }
+
+  activities.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+  return activities.slice(0, limit);
+};
 ============================================================
 FILE: ./src/services/supabase.ts
 ============================================================
@@ -23815,7 +24787,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export const DEFAULT_ORG_ID = "4fc2ef26-2fa6-43c1-9e7f-7362ac747a26";
 export const DEFAULT_BRANCH_ID = "677f6f26-77d1-4a26-ab13-7c2f5a2994f9";
-
 
 ============================================================
 FILE: ./src/types/catalog.ts
@@ -23950,7 +24921,6 @@ export interface Package {
   sales_commission_value?: number;         // MỚI
   package_items?: PackageItem[];
 }
-
 ============================================================
 FILE: ./src/types/domain.ts
 ============================================================
@@ -24347,7 +25317,6 @@ export type CreateStaffInput = {
 };
 
 export type UpdateStaffInput = Partial<CreateStaffInput>;
-
 ============================================================
 FILE: ./src/types/pos.ts
 ============================================================
@@ -24506,7 +25475,6 @@ export interface CheckoutResult {
   invoice_id?: string;
   error?: string;
 }
-
 ============================================================
 FILE: ./tsconfig.json
 ============================================================
@@ -24532,7 +25500,6 @@ FILE: ./tsconfig.json
     }
   ]
 }
-
 
 ============================================================
 FILE: ./vite.config.ts
@@ -24606,4 +25573,3 @@ export default defineConfig({
     allowedHosts: true,
   },
 });
-

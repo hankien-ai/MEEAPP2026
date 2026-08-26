@@ -7,11 +7,13 @@ import {
   getStaffInvoices,
   getStaffCommissions,
   getStaffRecentActivity,
+  updateStaff,
 } from "../services/staff.service";
 import { Button, Spinner, Badge } from "../components/primitives";
 import { format, parseISO, differenceInHours, differenceInMinutes } from "date-fns";
 import { vi } from "date-fns/locale";
 import { ArrowLeft, Calendar, FileText, DollarSign, Settings, Clock } from "lucide-react";
+import { supabase } from "../services/supabase";
 
 interface Props {
   staffId: string;
@@ -389,13 +391,15 @@ export const StaffDetailPage: React.FC<Props> = ({ staffId, onBack }) => {
           <h3 className="font-bold text-slate-800 flex items-center gap-2">
             <DollarSign className="w-4 h-4" /> Hoa hồng ({commissions.length})
           </h3>
-          <span className="text-xs text-slate-400">Tổng: {formatVND(stats?.total_commission || 0)}</span>
+          <span className="text-xs font-bold text-emerald-600">
+            Tổng: {formatVND(stats?.total_commission || 0)}
+          </span>
         </div>
         {commissions.length === 0 ? (
           <div className="text-center text-slate-400 py-4 text-sm">Chưa có hoa hồng trong tháng</div>
         ) : (
           <div className="divide-y divide-slate-100 max-h-60 overflow-y-auto">
-            {commissions.slice(0, 10).map((comm) => (
+            {commissions.map((comm) => (
               <div
                 key={comm.id}
                 onClick={() => setSelectedCommission(selectedCommission?.id === comm.id ? null : comm)}
