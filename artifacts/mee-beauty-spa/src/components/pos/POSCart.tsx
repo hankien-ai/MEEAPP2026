@@ -12,8 +12,9 @@ interface Props {
   onOverallDiscountChange?: (type: 'percent' | 'fixed', value: number) => void;
   overallDiscountType?: 'percent' | 'fixed';
   overallDiscountValue?: number;
-  isAdmin?: boolean; // true nếu là admin, false nếu nhân viên thường
-  loggedStaffName?: string; // tên nhân viên đang đăng nhập để hiển thị
+  isAdmin?: boolean;
+  loggedStaffName?: string;
+  onUpdateUseNow?: (cartItemId: string, useNow: boolean) => void; // 🔥 Mới
 }
 
 export const POSCart: React.FC<Props> = ({
@@ -29,6 +30,7 @@ export const POSCart: React.FC<Props> = ({
   overallDiscountValue = 0,
   isAdmin = false,
   loggedStaffName,
+  onUpdateUseNow,
 }) => {
   const formatVND = (val: number) => new Intl.NumberFormat('vi-VN').format(val) + ' đ';
 
@@ -53,7 +55,7 @@ export const POSCart: React.FC<Props> = ({
 
       {/* Discount tổng đơn */}
       {onOverallDiscountChange && (
-        <div className="p-3 bg-slate-50/50 border-b border-slate-200 flex items-center gap-3 text-xs">
+        <div className="p-3 bg-slate-50/50 border-b border-slate-200 flex items-center gap-3 text-xs flex-wrap">
           <span className="font-medium text-slate-700">Giảm giá tổng đơn:</span>
           <div className="flex items-center gap-1">
             <button
@@ -152,6 +154,26 @@ export const POSCart: React.FC<Props> = ({
                       </div>
                     )}
                   </div>
+
+                  {/* 🔥 Checkbox cho package: Sử dụng buổi đầu */}
+                  {isPackage && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <input
+                        type="checkbox"
+                        checked={item.use_now !== false}
+                        onChange={(e) => {
+                          if (onUpdateUseNow) {
+                            onUpdateUseNow(item.cart_item_id, e.target.checked);
+                          }
+                        }}
+                        className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500"
+                      />
+                      <span className="text-xs text-slate-600">Sử dụng buổi đầu ngay</span>
+                      {item.use_now !== false && (
+                        <span className="text-[10px] text-emerald-600 font-medium">(sẽ trừ 1 buổi khi thanh toán)</span>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="text-right">

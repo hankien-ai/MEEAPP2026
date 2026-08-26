@@ -144,7 +144,7 @@ export const POSPage: React.FC = () => {
   // Data states
   const [services, setServices] = useState<CatalogServiceItem[]>([]);
   const [products, setProducts] = useState<CatalogProductItem[]>([]);
-  const [packages, setPackages] = useState<CatalogPackageItem[]>([]); // ĐÃ SỬA LỖI
+  const [packages, setPackages] = useState<CatalogPackageItem[]>([]);
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [loggedStaff, setLoggedStaff] = useState<Staff | null>(null);
 
@@ -211,7 +211,6 @@ export const POSPage: React.FC = () => {
       POSService.getLoggedInStaff(),
     ]);
 
-    // Chỉ hiển thị sản phẩm RETAIL (loại bỏ CONSUMABLE)
     const retailProducts = pData.filter(p => p.product_type === 'RETAIL');
 
     setServices(sData);
@@ -235,14 +234,13 @@ export const POSPage: React.FC = () => {
   const hasPackageInCart = cartItems.some((it) => it.item_type === "PACKAGE");
   const getDefaultSellerId = () => selectedSellerId || loggedStaff?.id || undefined;
 
-  // ========== ADD ITEMS TO CART (toggle) ==========
+  // ========== ADD ITEMS TO CART ==========
   const toggleCartItem = (item: any, type: 'SERVICE' | 'PRODUCT' | 'PACKAGE') => {
     let id: string | undefined;
     if (type === 'SERVICE') id = item.catalog_item_id;
     else if (type === 'PRODUCT') id = item.catalog_item_id;
     else if (type === 'PACKAGE') id = item.package_id || item.id;
 
-    // Kiểm tra xem item đã có trong giỏ chưa
     const exists = cartItems.some((cartItem) => {
       if (type === 'SERVICE') return cartItem.catalog_item_id === id;
       if (type === 'PRODUCT') return cartItem.catalog_item_id === id;
@@ -251,7 +249,6 @@ export const POSPage: React.FC = () => {
     });
 
     if (exists) {
-      // Nếu đã có, xóa khỏi giỏ
       setCartItems(prev => prev.filter((cartItem) => {
         if (type === 'SERVICE') return cartItem.catalog_item_id !== id;
         if (type === 'PRODUCT') return cartItem.catalog_item_id !== id;
@@ -260,13 +257,13 @@ export const POSPage: React.FC = () => {
       }));
       showAlert("info", `Đã bỏ "${item.name}" khỏi giỏ`);
     } else {
-      // Nếu chưa có, thêm vào giỏ
       if (type === 'SERVICE') {
         handleAddService(item);
       } else if (type === 'PRODUCT') {
         handleAddProduct(item);
       } else if (type === 'PACKAGE') {
-        handleAddPackage(item);
+        // Mặc định useNow = true khi thêm package
+        handleAddPackage(item, true);
       }
     }
   };
@@ -277,7 +274,6 @@ export const POSPage: React.FC = () => {
         (it) => it.item_type === "SERVICE" && it.catalog_item_id === service.catalog_item_id,
       );
       if (existing) {
-        // Nếu đã có, tăng số lượng
         return prev.map((it) =>
           it.cart_item_id === existing.cart_item_id
             ? {
@@ -371,7 +367,7 @@ export const POSPage: React.FC = () => {
     });
   };
 
-  const handleAddPackage = (pkg: CatalogPackageItem) => {
+  const handleAddPackage = (pkg: CatalogPackageItem, useNow: boolean = true) => {
     setCartItems((prev) => {
       const existing = prev.find(
         (it) => it.item_type === "PACKAGE" && it.package_id === pkg.id,
@@ -406,21 +402,21 @@ export const POSPage: React.FC = () => {
         sales_commission_type: pkg.sales_commission_type,
         sales_commission_value: pkg.sales_commission_value,
         use_package: false,
+        use_now: useNow,
       };
       return [...prev, newItem];
     });
+    showAlert("info", `Đã thêm gói "${pkg.name}" vào giỏ${useNow ? ' (sẽ trừ buổi đầu)' : ''}`);
   };
 
   // ========== PACKAGE USAGE (thêm vào giỏ, không thu tiền) ==========
   const handleUsePackageItem = (customerPackageId: string, customerPackageItemId: string, serviceName: string, serviceId: string, remaining: number) => {
-    // Tìm service trong catalog để lấy thông tin
     const service = services.find(s => s.id === serviceId);
     if (!service) {
       showAlert("error", "Không tìm thấy dịch vụ này trong danh mục");
       return;
     }
 
-    // Kiểm tra xem đã có trong giỏ chưa (tránh duplicate)
     const exists = cartItems.some(item => 
       item.use_package && 
       item.customer_package_id === customerPackageId && 
@@ -438,6 +434,8 @@ export const POSPage: React.FC = () => {
       defaultSplits = [{ staff_id: selectedStaffId, staff_name: staffName, share_percent: 100 }];
     }
 
+    const originalPrice = service.price;
+
     const newItem: CartItem = {
       cart_item_id: `pkg_use_${Date.now()}_${Math.random()}`,
       item_type: "SERVICE",
@@ -445,7 +443,7 @@ export const POSPage: React.FC = () => {
       actual_service_id: service.id,
       name: `📦 ${serviceName} (Dùng gói)`,
       quantity: 1,
-      unit_price: 0,
+      unit_price: originalPrice,
       discount_amount: 0,
       total_amount: 0,
       seller_staff_id: selectedStaffId,
@@ -453,7 +451,7 @@ export const POSPage: React.FC = () => {
       sales_commission_type: service.sales_commission_type,
       sales_commission_value: 0,
       performance_commission_type: service.performance_commission_type,
-      performance_commission_value: 0,
+      performance_commission_value: service.performance_commission_value,
       ktv_splits: defaultSplits,
       use_package: true,
       customer_package_id: customerPackageId,
@@ -477,7 +475,6 @@ export const POSPage: React.FC = () => {
       return;
     }
 
-    // Nếu là package usage (giá 0đ), không cho tăng số lượng
     if (item?.use_package) {
       showAlert("warning", "Không thể tăng số lượng cho dịch vụ dùng gói");
       return;
@@ -516,12 +513,10 @@ export const POSPage: React.FC = () => {
   };
 
   const handleUpdateSellerStaff = (cartItemId: string, staffId: string) => {
-    // Cập nhật seller_staff_id và cập nhật KTV splits nếu là service
     setCartItems((prev) =>
       prev.map((it) => {
         if (it.cart_item_id !== cartItemId) return it;
         const updated = { ...it, seller_staff_id: staffId };
-        // Nếu là service, cập nhật KTV splits
         if (it.item_type === "SERVICE") {
           const staffName = staffList.find(s => s.id === staffId)?.full_name || "KTV";
           updated.ktv_splits = [{ staff_id: staffId, staff_name: staffName, share_percent: 100 }];
@@ -544,6 +539,17 @@ export const POSPage: React.FC = () => {
 
   const handleRemoveItem = (cartItemId: string) => {
     setCartItems((prev) => prev.filter((it) => it.cart_item_id !== cartItemId));
+  };
+
+  // ========== UPDATE USE_NOW ==========
+  const handleUpdateUseNow = (cartItemId: string, useNow: boolean) => {
+    setCartItems(prev =>
+      prev.map(item =>
+        item.cart_item_id === cartItemId
+          ? { ...item, use_now: useNow }
+          : item
+      )
+    );
   };
 
   // ========== DISCOUNT ==========
@@ -603,6 +609,7 @@ export const POSPage: React.FC = () => {
         customer_package_id: it.customer_package_id,
         package_item_id: it.package_item_id,
         ktv_splits: it.ktv_splits,
+        use_now: it.use_now || false,
       })),
     };
 
@@ -620,7 +627,6 @@ export const POSPage: React.FC = () => {
     }
   };
 
-  // Bỏ method selector, chuyển thẳng đến POSPaymentModal
   const handleOpenPayment = () => {
     if (cartItems.length === 0) {
       showAlert("error", "Giỏ hàng đang trống!");
@@ -632,7 +638,6 @@ export const POSPage: React.FC = () => {
       return;
     }
 
-    // Kiểm tra KTV splits
     for (const item of cartItems) {
       if (item.item_type === "SERVICE" && item.ktv_splits && item.ktv_splits.length > 0) {
         const totalShare = item.ktv_splits.reduce((sum, s) => sum + s.share_percent, 0);
@@ -643,7 +648,12 @@ export const POSPage: React.FC = () => {
       }
     }
 
-    // Mở thẳng POSPaymentModal
+    const hasOnlyPackageUsage = cartItems.length > 0 && cartItems.every(item => item.use_package === true);
+    if (hasOnlyPackageUsage && finalTotal === 0) {
+      handleConfirmPayment('CASH', 0, 'Sử dụng gói');
+      return;
+    }
+
     setIsPaymentModalOpen(true);
   };
 
@@ -655,15 +665,9 @@ export const POSPage: React.FC = () => {
     setIsSubmitting(true);
 
     const isGift = method === "GIFT";
-    // Nếu total = 0 (gói) hoặc GIFT, total_amount = 0
     const finalTotalAmount = (isGift || finalTotal === 0) ? 0 : finalTotal;
     const isDebt = method === "DEBT";
     const actualPaidAmount = isDebt ? paidAmount : finalTotalAmount;
-
-    // Nếu finalTotal === 0 và method là CASH, vẫn cho phép thanh toán
-    if (finalTotal === 0 && method === "CASH") {
-      // Cho phép thanh toán 0đ
-    }
 
     const payload = {
       customer_id: customer?.id || null,
@@ -692,6 +696,7 @@ export const POSPage: React.FC = () => {
         customer_package_id: it.customer_package_id,
         package_item_id: it.package_item_id,
         ktv_splits: it.ktv_splits,
+        use_now: it.use_now || false,
       })),
     };
 
@@ -708,11 +713,12 @@ export const POSPage: React.FC = () => {
           ? `Đã tặng gói thành công! Mã: #${res.invoice_id?.slice(0, 8)}`
           : `Thanh toán thành công! Hóa đơn #${res.invoice_id?.slice(0, 8)} đã ghi nhận.`,
       );
+      // 🔥 RESET GIỎ HÀNG VÀ KHÁCH HÀNG
       setCartItems([]);
       setCustomer(null);
       setOverallDiscount(0);
       setOverallDiscountValue(0);
-      loadData();
+      loadData(); // Tải lại dữ liệu để cập nhật package
     } else {
       showAlert("error", res.error || "Thanh toán thất bại!");
     }
@@ -758,7 +764,6 @@ export const POSPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Chọn nhân viên */}
           <div className="flex items-center gap-1 text-xs">
             <span className="text-slate-500">NV:</span>
             <select
@@ -838,6 +843,7 @@ export const POSPage: React.FC = () => {
               overallDiscountValue={overallDiscountValue}
               isAdmin={isAdmin}
               loggedStaffName={loggedStaff?.full_name}
+              onUpdateUseNow={handleUpdateUseNow}
             />
 
             {cartItems
@@ -906,7 +912,6 @@ export const POSPage: React.FC = () => {
         </div>
       )}
 
-      {/* ===== POS PAYMENT MODAL ===== */}
       <POSPaymentModal
         isOpen={isPaymentModalOpen}
         onClose={() => setIsPaymentModalOpen(false)}
@@ -921,7 +926,6 @@ export const POSPage: React.FC = () => {
         qrCodeUrl={undefined}
       />
 
-      {/* ===== INVOICE HISTORY MODAL ===== */}
       <InvoiceHistoryModal
         isOpen={isInvoiceHistoryOpen}
         onClose={() => setIsInvoiceHistoryOpen(false)}

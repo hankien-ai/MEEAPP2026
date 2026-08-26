@@ -336,20 +336,58 @@ export async function usePackageSessionV2(
   staffId?: string,
   notes?: string
 ): Promise<{ success: boolean; message: string; remaining_quantity: number }> {
-  const { data, error } = await supabase.rpc("use_package_session_v2", {
-    p_customer_package_item_id: customerPackageItemId,
-    p_staff_id: staffId || null,
-    p_notes: notes || null,
-  });
-  if (error) {
-    console.error("RPC use_package_session_v2 error:", error);
+  try {
+    console.log("📦 Gọi RPC use_package_session_v2 với ID:", customerPackageItemId);
+
+    const { data, error } = await supabase.rpc("use_package_session_v2", {
+      p_customer_package_item_id: customerPackageItemId,
+      p_staff_id: staffId || null,
+      p_notes: notes || null,
+    });
+
+    if (error) {
+      console.error("❌ RPC use_package_session_v2 error:", {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      return {
+        success: false,
+        message: error.message || "Lỗi sử dụng package",
+        remaining_quantity: 0,
+      };
+    }
+
+    console.log("✅ RPC use_package_session_v2 raw data:", data);
+
+    // RPC trả về mảng, không phải object
+    const result = Array.isArray(data) && data.length > 0 ? data[0] : data;
+
+    if (!result) {
+      console.error("❌ RPC không trả về kết quả");
+      return {
+        success: false,
+        message: "Không nhận được phản hồi từ server",
+        remaining_quantity: 0,
+      };
+    }
+
+    console.log("📦 Kết quả RPC đã parse:", result);
+
+    return {
+      success: result.success === true,
+      message: result.message || (result.success === true ? "Sử dụng thành công" : "Lỗi sử dụng package"),
+      remaining_quantity: Number(result.remaining_quantity ?? 0),
+    };
+  } catch (err: any) {
+    console.error("❌ RPC use_package_session_v2 exception:", err);
     return {
       success: false,
-      message: error.message || "Lỗi sử dụng package",
+      message: err.message || "Lỗi kết nối",
       remaining_quantity: 0,
     };
   }
-  return data as { success: boolean; message: string; remaining_quantity: number };
 }
 
 export async function usePackageSession(
