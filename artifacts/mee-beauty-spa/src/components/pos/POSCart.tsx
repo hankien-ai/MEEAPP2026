@@ -169,8 +169,10 @@ export const POSCart: React.FC<Props> = ({
                         className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500"
                       />
                       <span className="text-xs text-slate-600">Sử dụng buổi đầu ngay</span>
-                      {item.use_now !== false && (
-                        <span className="text-[10px] text-emerald-600 font-medium">(sẽ trừ 1 buổi khi thanh toán)</span>
+                      {item.use_now && item.actual_service_name && (
+                        <span className="text-[10px] text-emerald-600 font-medium">
+                          ({item.actual_service_name})
+                        </span>
                       )}
                     </div>
                   )}

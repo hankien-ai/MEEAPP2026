@@ -361,7 +361,7 @@ export async function usePackageSessionV2(
 
     console.log("✅ RPC use_package_session_v2 raw data:", data);
 
-    // RPC trả về mảng, không phải object
+    // 🔥 QUAN TRỌNG: RPC trả về mảng, lấy phần tử đầu tiên
     const result = Array.isArray(data) && data.length > 0 ? data[0] : data;
 
     if (!result) {
@@ -400,6 +400,7 @@ export async function usePackageSession(
   return usePackageSessionV2(customerPackageItemId, staffId, notes);
 }
 
+// 🔥 QUAN TRỌNG: Export usePackageSessionLegacy để tương thích với code cũ
 export const usePackageSessionLegacy = usePackageSession;
 
 // ============ SERVICE HISTORY ============

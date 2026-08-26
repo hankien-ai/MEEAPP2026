@@ -164,6 +164,8 @@ export const POSPage: React.FC = () => {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isQRModalOpen, setIsQRModalOpen] = useState(false);
   const [isInvoiceHistoryOpen, setIsInvoiceHistoryOpen] = useState(false);
+  const [isServiceSelectorOpen, setIsServiceSelectorOpen] = useState(false);
+  const [pendingPackage, setPendingPackage] = useState<CatalogPackageItem | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -262,12 +264,105 @@ export const POSPage: React.FC = () => {
       } else if (type === 'PRODUCT') {
         handleAddProduct(item);
       } else if (type === 'PACKAGE') {
-        // Mặc định useNow = true khi thêm package
-        handleAddPackage(item, true);
+        // Kiểm tra nếu package có nhiều service và còn buổi
+        handleAddPackageWithServiceSelect(item);
       }
     }
   };
 
+  // 🔥 MỚI: Xử lý thêm package với service selector
+  const handleAddPackageWithServiceSelect = (pkg: CatalogPackageItem) => {
+    // Nếu chưa có customer, không hỏi use_now
+    if (!customer) {
+      handleAddPackage(pkg, false);
+      return;
+    }
+
+    // Nếu chỉ có 1 service, không cần hỏi
+    if (pkg.items.length === 1) {
+      const shouldUseNow = window.confirm(`Bạn có muốn sử dụng buổi đầu của gói "${pkg.name}" ngay không?`);
+      handleAddPackage(pkg, shouldUseNow, pkg.items[0].service_id);
+      return;
+    }
+
+    // Nếu có nhiều service, mở modal chọn service và use_now
+    setPendingPackage(pkg);
+    setIsServiceSelectorOpen(true);
+  };
+
+  // 🔥 MỚI: Xác định service nào còn buổi để hiển thị
+  const getAvailableServices = (pkg: CatalogPackageItem) => {
+    // Lọc các service có remaining > 0 (nếu có dữ liệu từ customer)
+    // Nếu chưa có customer_package_items, tất cả service đều có buổi
+    return pkg.items.map(item => ({
+      ...item,
+      available: true // Mặc định true, khi có dữ liệu thực tế sẽ lọc
+    }));
+  };
+
+  const handleAddPackage = (pkg: CatalogPackageItem, useNow: boolean = false, selectedServiceId?: string) => {
+    // Nếu useNow nhưng chưa có service, báo lỗi
+    if (useNow && pkg.items.length > 1 && !selectedServiceId) {
+      showAlert("error", "Vui lòng chọn dịch vụ sử dụng buổi đầu");
+      return;
+    }
+
+    setCartItems((prev) => {
+      const existing = prev.find(
+        (it) => it.item_type === "PACKAGE" && it.package_id === pkg.id,
+      );
+      if (existing) {
+        const nextQty = existing.quantity + 1;
+        return prev.map((it) =>
+          it.cart_item_id === existing.cart_item_id
+            ? {
+                ...it,
+                quantity: nextQty,
+                total_amount: Math.round(
+                  nextQty * it.unit_price - it.discount_amount,
+                ),
+              }
+            : it,
+        );
+      }
+
+      const selectedStaffId = getDefaultSellerId();
+
+      // Nếu useNow và có selectedServiceId, tìm service tương ứng
+      const actualService = selectedServiceId 
+        ? pkg.items.find(item => item.service_id === selectedServiceId)
+        : (pkg.items.length === 1 ? pkg.items[0] : null);
+
+      const newItem: CartItem = {
+        cart_item_id: `pkg_${Date.now()}_${Math.random()}`,
+        item_type: "PACKAGE",
+        package_id: pkg.id,
+        name: pkg.name,
+        quantity: 1,
+        unit_price: pkg.price,
+        discount_amount: 0,
+        total_amount: pkg.price,
+        package_items: pkg.items,
+        seller_staff_id: selectedStaffId,
+        sales_commission_type: pkg.sales_commission_type,
+        sales_commission_value: pkg.sales_commission_value,
+        use_package: false,
+        use_now: useNow,
+        actual_service_id: actualService?.service_id || null,
+        actual_service_name: actualService?.service_name || null,
+        ktv_splits: selectedStaffId ? [{ staff_id: selectedStaffId, staff_name: loggedStaff?.full_name || "KTV", share_percent: 100 }] : [],
+        performing_staff_id: selectedStaffId,
+      };
+      return [...prev, newItem];
+    });
+
+    const msg = useNow 
+      ? `Đã thêm gói "${pkg.name}" vào giỏ (sẽ sử dụng ${pkg.items.find(i => i.service_id === selectedServiceId)?.service_name || 'dịch vụ'} ngay)`
+      : `Đã thêm gói "${pkg.name}" vào giỏ`;
+    showAlert("info", msg);
+  };
+
+  // ========== HANDLERS ==========
   const handleAddService = (service: CatalogServiceItem) => {
     setCartItems((prev) => {
       const existing = prev.find(
@@ -365,48 +460,6 @@ export const POSPage: React.FC = () => {
       };
       return [...prev, newItem];
     });
-  };
-
-  const handleAddPackage = (pkg: CatalogPackageItem, useNow: boolean = true) => {
-    setCartItems((prev) => {
-      const existing = prev.find(
-        (it) => it.item_type === "PACKAGE" && it.package_id === pkg.id,
-      );
-      if (existing) {
-        const nextQty = existing.quantity + 1;
-        return prev.map((it) =>
-          it.cart_item_id === existing.cart_item_id
-            ? {
-                ...it,
-                quantity: nextQty,
-                total_amount: Math.round(
-                  nextQty * it.unit_price - it.discount_amount,
-                ),
-              }
-            : it,
-        );
-      }
-
-      const selectedStaffId = getDefaultSellerId();
-      const newItem: CartItem = {
-        cart_item_id: `pkg_${Date.now()}_${Math.random()}`,
-        item_type: "PACKAGE",
-        package_id: pkg.id,
-        name: pkg.name,
-        quantity: 1,
-        unit_price: pkg.price,
-        discount_amount: 0,
-        total_amount: pkg.price,
-        package_items: pkg.items,
-        seller_staff_id: selectedStaffId,
-        sales_commission_type: pkg.sales_commission_type,
-        sales_commission_value: pkg.sales_commission_value,
-        use_package: false,
-        use_now: useNow,
-      };
-      return [...prev, newItem];
-    });
-    showAlert("info", `Đã thêm gói "${pkg.name}" vào giỏ${useNow ? ' (sẽ trừ buổi đầu)' : ''}`);
   };
 
   // ========== PACKAGE USAGE (thêm vào giỏ, không thu tiền) ==========
@@ -537,11 +590,6 @@ export const POSPage: React.FC = () => {
     );
   };
 
-  const handleRemoveItem = (cartItemId: string) => {
-    setCartItems((prev) => prev.filter((it) => it.cart_item_id !== cartItemId));
-  };
-
-  // ========== UPDATE USE_NOW ==========
   const handleUpdateUseNow = (cartItemId: string, useNow: boolean) => {
     setCartItems(prev =>
       prev.map(item =>
@@ -550,6 +598,10 @@ export const POSPage: React.FC = () => {
           : item
       )
     );
+  };
+
+  const handleRemoveItem = (cartItemId: string) => {
+    setCartItems((prev) => prev.filter((it) => it.cart_item_id !== cartItemId));
   };
 
   // ========== DISCOUNT ==========
@@ -610,6 +662,7 @@ export const POSPage: React.FC = () => {
         package_item_id: it.package_item_id,
         ktv_splits: it.ktv_splits,
         use_now: it.use_now || false,
+        actual_service_id: it.actual_service_id || null,
       })),
     };
 
@@ -648,6 +701,7 @@ export const POSPage: React.FC = () => {
       }
     }
 
+    // Nếu chỉ có package usage (total=0), bỏ qua payment modal
     const hasOnlyPackageUsage = cartItems.length > 0 && cartItems.every(item => item.use_package === true);
     if (hasOnlyPackageUsage && finalTotal === 0) {
       handleConfirmPayment('CASH', 0, 'Sử dụng gói');
@@ -697,6 +751,7 @@ export const POSPage: React.FC = () => {
         package_item_id: it.package_item_id,
         ktv_splits: it.ktv_splits,
         use_now: it.use_now || false,
+        actual_service_id: it.actual_service_id || null,
       })),
     };
 
@@ -713,12 +768,11 @@ export const POSPage: React.FC = () => {
           ? `Đã tặng gói thành công! Mã: #${res.invoice_id?.slice(0, 8)}`
           : `Thanh toán thành công! Hóa đơn #${res.invoice_id?.slice(0, 8)} đã ghi nhận.`,
       );
-      // 🔥 RESET GIỎ HÀNG VÀ KHÁCH HÀNG
       setCartItems([]);
       setCustomer(null);
       setOverallDiscount(0);
       setOverallDiscountValue(0);
-      loadData(); // Tải lại dữ liệu để cập nhật package
+      loadData();
     } else {
       showAlert("error", res.error || "Thanh toán thất bại!");
     }
@@ -912,6 +966,57 @@ export const POSPage: React.FC = () => {
         </div>
       )}
 
+      {/* ===== SERVICE SELECTOR MODAL ===== */}
+      {isServiceSelectorOpen && pendingPackage && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full max-h-[80vh] overflow-y-auto shadow-2xl border border-slate-100 p-5 space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="text-base font-bold text-slate-800">
+                Chọn dịch vụ sử dụng buổi đầu
+              </h3>
+              <button onClick={() => { setIsServiceSelectorOpen(false); setPendingPackage(null); }} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="text-xs text-slate-500">Gói: <strong>{pendingPackage.name}</strong></div>
+
+            <div className="space-y-2">
+              {pendingPackage.items.map((item) => (
+                <button
+                  key={item.service_id}
+                  onClick={() => {
+                    const shouldUseNow = window.confirm(`Sử dụng "${item.service_name}" ngay?`);
+                    handleAddPackage(pendingPackage, shouldUseNow, item.service_id);
+                    setIsServiceSelectorOpen(false);
+                    setPendingPackage(null);
+                  }}
+                  className="w-full p-3 rounded-xl border-2 border-slate-200 hover:border-emerald-500 transition-all text-left flex items-center justify-between"
+                >
+                  <div>
+                    <div className="font-semibold text-sm text-slate-800">{item.service_name}</div>
+                    <div className="text-xs text-slate-500">
+                      {item.quantity} buổi trong gói
+                    </div>
+                  </div>
+                  <button className="text-emerald-600 text-xs font-medium bg-emerald-50 px-3 py-1 rounded-full">
+                    Chọn
+                  </button>
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={() => { setIsServiceSelectorOpen(false); setPendingPackage(null); }}
+              className="w-full py-2.5 border border-slate-300 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+            >
+              Hủy
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ===== POS PAYMENT MODAL ===== */}
       <POSPaymentModal
         isOpen={isPaymentModalOpen}
         onClose={() => setIsPaymentModalOpen(false)}
@@ -926,6 +1031,7 @@ export const POSPage: React.FC = () => {
         qrCodeUrl={undefined}
       />
 
+      {/* ===== INVOICE HISTORY MODAL ===== */}
       <InvoiceHistoryModal
         isOpen={isInvoiceHistoryOpen}
         onClose={() => setIsInvoiceHistoryOpen(false)}
