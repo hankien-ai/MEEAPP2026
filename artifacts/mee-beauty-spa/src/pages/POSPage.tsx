@@ -174,6 +174,10 @@ export const POSPage: React.FC = () => {
     message: string;
   } | null>(null);
 
+  // 🔥 State cho debt payment
+  const [isDebtPayment, setIsDebtPayment] = useState(false);
+  const [debtAmount, setDebtAmount] = useState(0);
+
   const isAdmin = loggedStaff?.role === 'admin' || isAdminUser;
 
   // Tạo Set các ID đã có trong giỏ để highlight
@@ -264,44 +268,26 @@ export const POSPage: React.FC = () => {
       } else if (type === 'PRODUCT') {
         handleAddProduct(item);
       } else if (type === 'PACKAGE') {
-        // Kiểm tra nếu package có nhiều service và còn buổi
         handleAddPackageWithServiceSelect(item);
       }
     }
   };
 
-  // 🔥 MỚI: Xử lý thêm package với service selector
   const handleAddPackageWithServiceSelect = (pkg: CatalogPackageItem) => {
-    // Nếu chưa có customer, không hỏi use_now
     if (!customer) {
       handleAddPackage(pkg, false);
       return;
     }
-
-    // Nếu chỉ có 1 service, không cần hỏi
     if (pkg.items.length === 1) {
       const shouldUseNow = window.confirm(`Bạn có muốn sử dụng buổi đầu của gói "${pkg.name}" ngay không?`);
       handleAddPackage(pkg, shouldUseNow, pkg.items[0].service_id);
       return;
     }
-
-    // Nếu có nhiều service, mở modal chọn service và use_now
     setPendingPackage(pkg);
     setIsServiceSelectorOpen(true);
   };
 
-  // 🔥 MỚI: Xác định service nào còn buổi để hiển thị
-  const getAvailableServices = (pkg: CatalogPackageItem) => {
-    // Lọc các service có remaining > 0 (nếu có dữ liệu từ customer)
-    // Nếu chưa có customer_package_items, tất cả service đều có buổi
-    return pkg.items.map(item => ({
-      ...item,
-      available: true // Mặc định true, khi có dữ liệu thực tế sẽ lọc
-    }));
-  };
-
   const handleAddPackage = (pkg: CatalogPackageItem, useNow: boolean = false, selectedServiceId?: string) => {
-    // Nếu useNow nhưng chưa có service, báo lỗi
     if (useNow && pkg.items.length > 1 && !selectedServiceId) {
       showAlert("error", "Vui lòng chọn dịch vụ sử dụng buổi đầu");
       return;
@@ -327,8 +313,6 @@ export const POSPage: React.FC = () => {
       }
 
       const selectedStaffId = getDefaultSellerId();
-
-      // Nếu useNow và có selectedServiceId, tìm service tương ứng
       const actualService = selectedServiceId 
         ? pkg.items.find(item => item.service_id === selectedServiceId)
         : (pkg.items.length === 1 ? pkg.items[0] : null);
@@ -352,6 +336,7 @@ export const POSPage: React.FC = () => {
         actual_service_name: actualService?.service_name || null,
         ktv_splits: selectedStaffId ? [{ staff_id: selectedStaffId, staff_name: loggedStaff?.full_name || "KTV", share_percent: 100 }] : [],
         performing_staff_id: selectedStaffId,
+        is_gift: false,
       };
       return [...prev, newItem];
     });
@@ -406,6 +391,7 @@ export const POSPage: React.FC = () => {
         performance_commission_type: service.performance_commission_type,
         performance_commission_value: service.performance_commission_value,
         ktv_splits: defaultSplits,
+        is_gift: false,
       };
       return [...prev, newItem];
     });
@@ -457,12 +443,13 @@ export const POSPage: React.FC = () => {
         seller_staff_id: selectedStaffId,
         sales_commission_type: product.sales_commission_type,
         sales_commission_value: product.sales_commission_value,
+        is_gift: false,
       };
       return [...prev, newItem];
     });
   };
 
-  // ========== PACKAGE USAGE (thêm vào giỏ, không thu tiền) ==========
+  // ========== PACKAGE USAGE (SỬA LỖI KTV SPLITS) ==========
   const handleUsePackageItem = (customerPackageId: string, customerPackageItemId: string, serviceName: string, serviceId: string, remaining: number) => {
     const service = services.find(s => s.id === serviceId);
     if (!service) {
@@ -480,11 +467,20 @@ export const POSPage: React.FC = () => {
       return;
     }
 
-    const selectedStaffId = getDefaultSellerId();
+    // 🔥 ĐẢM BẢO LUÔN CÓ KTV SPLITS
+    let selectedStaffId = getDefaultSellerId();
     let defaultSplits: KTVSplit[] = [];
+
     if (selectedStaffId) {
       const staffName = staffList.find(s => s.id === selectedStaffId)?.full_name || loggedStaff?.full_name || "KTV";
       defaultSplits = [{ staff_id: selectedStaffId, staff_name: staffName, share_percent: 100 }];
+    } else {
+      // Fallback: lấy staff đầu tiên trong danh sách active
+      const firstStaff = staffList.find(s => s.id);
+      if (firstStaff) {
+        selectedStaffId = firstStaff.id;
+        defaultSplits = [{ staff_id: firstStaff.id, staff_name: firstStaff.full_name, share_percent: 100 }];
+      }
     }
 
     const originalPrice = service.price;
@@ -701,14 +697,44 @@ export const POSPage: React.FC = () => {
       }
     }
 
-    // Nếu chỉ có package usage (total=0), bỏ qua payment modal
     const hasOnlyPackageUsage = cartItems.length > 0 && cartItems.every(item => item.use_package === true);
     if (hasOnlyPackageUsage && finalTotal === 0) {
       handleConfirmPayment('CASH', 0, 'Sử dụng gói');
       return;
     }
 
+    setIsDebtPayment(false);
     setIsPaymentModalOpen(true);
+  };
+
+  // 🔥 Hàm xử lý thanh toán nợ
+  const handleDebtPaymentConfirm = async (method: PaymentMethod, paidAmount: number, notes?: string) => {
+    if (!customer) {
+      showAlert("error", "Không có khách hàng!");
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      const result = await customerService.payCustomerDebt(
+        customer.id,
+        paidAmount,
+        method,
+        notes
+      );
+      if (result.success) {
+        showAlert("success", result.message);
+        setDebtAmount(result.remainingDebt);
+        setIsPaymentModalOpen(false);
+        setIsDebtPayment(false);
+        setCustomer({ ...customer });
+      } else {
+        showAlert("error", result.message);
+      }
+    } catch (err: any) {
+      showAlert("error", err.message || "Thanh toán nợ thất bại");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleConfirmPayment = async (
@@ -868,7 +894,25 @@ export const POSPage: React.FC = () => {
                 customer={customer}
                 onUsePackageItem={handleUsePackageItem}
                 onSelectGift={() => {}}
-                onPayDebt={() => {}}
+                onPayDebt={() => {
+                  // 🔥 XỬ LÝ THANH TOÁN NỢ
+                  if (!customer) {
+                    showAlert("error", "Vui lòng chọn khách hàng!");
+                    return;
+                  }
+                  customerService.fetchCustomerInvoices(customer.id).then(invoices => {
+                    const totalDebt = invoices
+                      .filter(inv => inv.status === "PARTIALLY_PAID")
+                      .reduce((sum, inv) => sum + (inv.total_amount - (inv.paid_amount || 0)), 0);
+                    if (totalDebt <= 0) {
+                      showAlert("info", "Khách hàng không có nợ");
+                      return;
+                    }
+                    setDebtAmount(totalDebt);
+                    setIsDebtPayment(true);
+                    setIsPaymentModalOpen(true);
+                  });
+                }}
               />
             )}
 
@@ -1019,16 +1063,22 @@ export const POSPage: React.FC = () => {
       {/* ===== POS PAYMENT MODAL ===== */}
       <POSPaymentModal
         isOpen={isPaymentModalOpen}
-        onClose={() => setIsPaymentModalOpen(false)}
+        onClose={() => {
+          setIsPaymentModalOpen(false);
+          setIsDebtPayment(false);
+        }}
         customer={customer}
         items={cartItems}
         subtotal={subtotal}
         discountAmount={totalDiscount}
-        totalAmount={finalTotal}
+        totalAmount={isDebtPayment ? debtAmount : finalTotal}
         staffList={staffList}
         onConfirmPayment={handleConfirmPayment}
         isSubmitting={isSubmitting}
         qrCodeUrl={undefined}
+        isDebtPayment={isDebtPayment}
+        debtAmount={debtAmount}
+        onDebtPaymentConfirm={handleDebtPaymentConfirm}
       />
 
       {/* ===== INVOICE HISTORY MODAL ===== */}

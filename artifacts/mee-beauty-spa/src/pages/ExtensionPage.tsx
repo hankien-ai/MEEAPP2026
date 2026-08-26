@@ -5,22 +5,17 @@ import {
   ShoppingCart,
   Users,
   UserCog,
-  Clock,
-  DollarSign,
   BarChart3,
-  Package,
   Settings,
-  QrCode,
   Plus,
-  Grid,
   Scissors,
   Sliders,
   FileText,
-  Gift,
-  Home,
-  LayoutDashboard
+  LayoutDashboard,
+  Check,
+  Zap
 } from 'lucide-react';
-import { Button, Card, Badge, Spinner } from '@/components/primitives';
+import { Button, Spinner } from '@/components/primitives';
 
 interface ExtensionModule {
   id: string;
@@ -77,7 +72,6 @@ const ExtensionPage: React.FC<ExtensionPageProps> = ({ onNavigate }) => {
   const saveQuickButtons = (ids: string[]) => {
     setQuickButtons(ids);
     localStorage.setItem('mee_quick_buttons', JSON.stringify(ids));
-    setIsEditQuick(false);
   };
 
   const toggleQuickButton = (moduleId: string) => {
@@ -104,94 +98,128 @@ const ExtensionPage: React.FC<ExtensionPageProps> = ({ onNavigate }) => {
   if (loading) return <Spinner className="py-12" />;
 
   return (
-    <div className="max-w-6xl mx-auto p-4 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="max-w-md mx-auto min-h-screen bg-[#F8FAFC] p-4 pb-12 sm:max-w-2xl lg:max-w-4xl">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-5 pt-1">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Mở rộng</h1>
-          <p className="text-sm text-slate-500">Trung tâm điều khiển các tính năng</p>
+          <h1 className="text-xl font-bold text-slate-800 tracking-tight">Tiện ích</h1>
+          <p className="text-xs text-slate-400 font-medium">Trung tâm điều khiển ứng dụng</p>
         </div>
         {isAdmin && (
-          <Button variant="outline" size="sm" onClick={() => setIsEditQuick(!isEditQuick)}>
-            {isEditQuick ? 'Hoàn tất' : 'Chỉnh sửa Quick'}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsEditQuick(!isEditQuick)}
+            className={`rounded-full text-xs font-semibold px-3 py-1.5 h-auto transition-all ${
+              isEditQuick 
+                ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm' 
+                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 shadow-sm'
+            }`}
+          >
+            {isEditQuick ? 'Hoàn tất' : 'Sửa Quick'}
           </Button>
         )}
       </div>
 
-      {/* Quick Button */}
-      {quickModules.length > 0 && (
-        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Quick</span>
-            {isEditQuick && <span className="text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">Chọn module</span>}
+      {/* Widget Quick Minimalist */}
+      {quickModules.length > 0 && !isEditQuick && (
+        <div className="mb-5 bg-white/80 border border-slate-200/60 p-3.5 rounded-2xl shadow-[0_2px_12px_-4px_rgba(0,0,0,0.04)] backdrop-blur-md">
+          <div className="flex items-center gap-1.5 mb-3 px-1">
+            <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Truy cập nhanh</span>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {visibleModules.map(mod => {
-              const isQuick = quickButtons.includes(mod.id);
-              if (isEditQuick) {
-                return (
-                  <button
-                    key={mod.id}
-                    onClick={() => toggleQuickButton(mod.id)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
-                      isQuick ? 'bg-indigo-100 border-indigo-400 text-indigo-700' : 'bg-slate-100 border-slate-200 text-slate-500'
-                    }`}
-                  >
-                    {isQuick ? '✓' : <Plus className="w-3 h-3" />}
+
+          <div className="grid grid-cols-4 gap-2.5">
+            {quickModules.map(mod => {
+              const Icon = mod.icon;
+              return (
+                <button
+                  key={mod.id}
+                  onClick={() => onNavigate(mod.tabKey)}
+                  className="flex flex-col items-center group active:scale-95 transition-all"
+                >
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 bg-indigo-50/70 rounded-2xl flex items-center justify-center border border-indigo-100/80 text-indigo-600 group-hover:bg-indigo-100/70 transition-all shadow-sm">
+                    <Icon className="w-5 h-5 sm:w-6 sm:h-6 stroke-[1.75]" />
+                  </div>
+                  <span className="mt-1.5 text-[11px] font-medium text-slate-700 text-center line-clamp-1">
                     {mod.title}
-                  </button>
-                );
-              } else if (isQuick) {
-                const Icon = mod.icon;
-                return (
-                  <button
-                    key={mod.id}
-                    onClick={() => onNavigate(mod.tabKey)}
-                    className="flex items-center gap-2 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-sm font-medium border border-indigo-200"
-                  >
-                    <Icon className="w-4 h-4" />
-                    {mod.title}
-                  </button>
-                );
-              }
-              return null;
+                  </span>
+                </button>
+              );
             })}
           </div>
         </div>
       )}
 
-      {/* Danh sách module theo category */}
-      <div className="space-y-6">
+      {/* Chế độ sửa Quick Banner */}
+      {isEditQuick && (
+        <div className="mb-4 bg-indigo-50/80 border border-indigo-100 rounded-2xl p-3 flex items-center justify-between text-xs text-indigo-900">
+          <span className="font-medium">Chạm ứng dụng bên dưới để thêm/bớt</span>
+          <span className="font-bold bg-indigo-200/50 text-indigo-700 px-2 py-0.5 rounded-full text-[10px]">
+            Đã chọn {quickButtons.length}
+          </span>
+        </div>
+      )}
+
+      {/* Grid Apps Theo Danh Mục */}
+      <div className="space-y-4">
         {Object.entries(categories).map(([category, modules]) => (
-          <div key={category}>
-            <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-3 border-b border-slate-200 pb-2">
+          <div key={category} className="bg-white rounded-2xl p-4 border border-slate-100 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.03)]">
+            <h2 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-3 px-1">
               {category}
             </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+
+            <div className="grid grid-cols-4 gap-y-4 gap-x-2 sm:grid-cols-6 md:grid-cols-8">
               {modules.map(mod => {
                 const Icon = mod.icon;
                 const isQuick = quickButtons.includes(mod.id);
+
                 return (
-                  <Card
+                  <div
                     key={mod.id}
-                    className={`p-3 hover:shadow-md transition-shadow cursor-pointer border ${
-                      isQuick ? 'border-indigo-300 bg-indigo-50/30' : 'border-slate-200'
-                    }`}
-                    onClick={() => onNavigate(mod.tabKey)}
+                    onClick={() => {
+                      if (isEditQuick) {
+                        toggleQuickButton(mod.id);
+                      } else {
+                        onNavigate(mod.tabKey);
+                      }
+                    }}
+                    className="flex flex-col items-center cursor-pointer group active:scale-95 transition-transform select-none"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                        <Icon className="w-4 h-4" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-slate-900 text-sm">{mod.title}</span>
-                          {isQuick && <Badge variant="info" className="text-[10px] px-1.5 py-0.5">Quick</Badge>}
-                          {mod.adminOnly && <Badge variant="neutral" className="text-[10px] px-1.5 py-0.5 bg-amber-50 text-amber-700">Admin</Badge>}
+                    {/* App Icon Box */}
+                    <div
+                      className={`relative w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center transition-all ${
+                        isQuick && !isEditQuick
+                          ? 'bg-indigo-50/80 text-indigo-600 border border-indigo-200/60 shadow-sm'
+                          : 'bg-slate-50 text-slate-600 border border-slate-200/50 group-hover:bg-slate-100'
+                      }`}
+                    >
+                      <Icon className="w-5 h-5 sm:w-6 sm:h-6 stroke-[1.75]" />
+
+                      {/* Flag Admin */}
+                      {mod.adminOnly && !isEditQuick && (
+                        <span className="absolute -top-1 -right-1 bg-amber-500 text-white text-[8px] font-bold px-1 rounded-full border border-white">
+                          ADM
+                        </span>
+                      )}
+
+                      {/* Check mark khi Edit */}
+                      {isEditQuick && (
+                        <div
+                          className={`absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center border-2 border-white shadow-sm transition-all ${
+                            isQuick ? 'bg-indigo-600 text-white scale-105' : 'bg-slate-200 text-slate-500'
+                          }`}
+                        >
+                          {isQuick ? <Check className="w-3 h-3 stroke-[3]" /> : <Plus className="w-3 h-3 stroke-[3]" />}
                         </div>
-                        {mod.description && <p className="text-xs text-slate-500">{mod.description}</p>}
-                      </div>
+                      )}
                     </div>
-                  </Card>
+
+                    {/* App Title */}
+                    <span className="mt-1.5 text-[11px] font-medium text-slate-700 text-center line-clamp-1 max-w-[68px]">
+                      {mod.title}
+                    </span>
+                  </div>
                 );
               })}
             </div>

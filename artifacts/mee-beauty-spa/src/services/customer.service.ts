@@ -361,7 +361,6 @@ export async function usePackageSessionV2(
 
     console.log("✅ RPC use_package_session_v2 raw data:", data);
 
-    // 🔥 QUAN TRỌNG: RPC trả về mảng, lấy phần tử đầu tiên
     const result = Array.isArray(data) && data.length > 0 ? data[0] : data;
 
     if (!result) {
@@ -400,7 +399,6 @@ export async function usePackageSession(
   return usePackageSessionV2(customerPackageItemId, staffId, notes);
 }
 
-// 🔥 QUAN TRỌNG: Export usePackageSessionLegacy để tương thích với code cũ
 export const usePackageSessionLegacy = usePackageSession;
 
 // ============ SERVICE HISTORY ============
@@ -477,6 +475,98 @@ export async function fetchCustomerStats(customerId: string): Promise<{
   return { total_spending, total_visits, last_visit };
 }
 
+// ============ DEBT PAYMENT ============
+
+export async function payCustomerDebt(
+  customerId: string,
+  amount: number,
+  paymentMethod: string,
+  notes?: string
+): Promise<{ success: boolean; remainingDebt: number; message: string }> {
+  if (!customerId) throw new Error("Không có khách hàng");
+  if (amount <= 0) throw new Error("Số tiền thanh toán phải lớn hơn 0");
+
+  const { data: invoices, error } = await supabase
+    .from("invoices")
+    .select("id, total_amount, paid_amount, status")
+    .eq("customer_id", customerId)
+    .eq("organization_id", DEFAULT_ORG_ID)
+    .eq("branch_id", DEFAULT_BRANCH_ID)
+    .eq("status", "PARTIALLY_PAID")
+    .order("created_at", { ascending: true });
+
+  if (error) throw new Error(`Không thể lấy danh sách nợ: ${error.message}`);
+  if (!invoices || invoices.length === 0) {
+    return { success: false, remainingDebt: 0, message: "Khách hàng không có nợ" };
+  }
+
+  let remainingAmount = amount;
+  const updates = [];
+
+  for (const inv of invoices) {
+    const debt = inv.total_amount - (inv.paid_amount || 0);
+    if (debt <= 0) continue;
+
+    if (remainingAmount >= debt) {
+      updates.push({
+        id: inv.id,
+        paid_amount: inv.total_amount,
+        status: "PAID",
+        updated_at: new Date().toISOString(),
+      });
+      remainingAmount -= debt;
+    } else {
+      updates.push({
+        id: inv.id,
+        paid_amount: (inv.paid_amount || 0) + remainingAmount,
+        status: "PARTIALLY_PAID",
+        updated_at: new Date().toISOString(),
+      });
+      remainingAmount = 0;
+      break;
+    }
+  }
+
+  for (const upd of updates) {
+    const { error: updErr } = await supabase
+      .from("invoices")
+      .update({
+        paid_amount: upd.paid_amount,
+        status: upd.status,
+        updated_at: upd.updated_at,
+      })
+      .eq("id", upd.id);
+    if (updErr) throw new Error(`Lỗi cập nhật hóa đơn: ${updErr.message}`);
+  }
+
+  const { data: remainingInvoices } = await supabase
+    .from("invoices")
+    .select("total_amount, paid_amount")
+    .eq("customer_id", customerId)
+    .eq("organization_id", DEFAULT_ORG_ID)
+    .eq("branch_id", DEFAULT_BRANCH_ID)
+    .eq("status", "PARTIALLY_PAID");
+
+  const remainingDebt = (remainingInvoices || []).reduce(
+    (sum, inv) => sum + (inv.total_amount - (inv.paid_amount || 0)),
+    0
+  );
+
+  console.log("💳 Thanh toán nợ:", {
+    customerId,
+    amount,
+    paymentMethod,
+    remainingDebt,
+    notes,
+  });
+
+  return {
+    success: true,
+    remainingDebt,
+    message: `Đã thanh toán ${amount.toLocaleString()}đ. Còn nợ ${remainingDebt.toLocaleString()}đ.`,
+  };
+}
+
 // ============ EXPORTS ============
 
 export const getCustomers = fetchCustomers;
@@ -508,6 +598,7 @@ export const customerService = {
   usePackageSessionLegacy,
   isValidPhone,
   isPhoneExists,
+  payCustomerDebt,
 };
 
 export default customerService;

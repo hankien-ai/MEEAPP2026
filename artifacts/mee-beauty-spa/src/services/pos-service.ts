@@ -165,6 +165,8 @@ export class POSService {
           discount_amount: payload.discount_amount,
           total_amount: payload.total_amount,
           payment_method: payload.payment_method,
+          paid_amount: payload.paid_amount || 0,
+          is_gift: payload.is_gift || false,
         })
         .select("id")
         .single();
@@ -226,31 +228,45 @@ export class POSService {
 
       // ============ INVOICE ============
       let invoiceStatus: "PAID" | "PARTIALLY_PAID" = "PAID";
-      if (payload.payment_method === "DEBT") invoiceStatus = "PARTIALLY_PAID";
+      if (payload.payment_method === "DEBT") {
+        const paidAmount = Number(payload.paid_amount) || 0;
+        const totalAmount = Number(payload.total_amount) || 0;
+        if (paidAmount >= totalAmount) {
+          invoiceStatus = "PAID";
+        } else {
+          invoiceStatus = "PARTIALLY_PAID";
+        }
+      }
+
+      const invoiceData: any = {
+        organization_id: DEFAULT_ORG_ID,
+        branch_id: DEFAULT_BRANCH_ID,
+        customer_id: payload.customer_id || null,
+        seller_staff_id: defaultSellerId,
+        status: invoiceStatus,
+        subtotal: payload.subtotal,
+        discount_amount: payload.discount_amount,
+        total_amount: payload.total_amount,
+        payment_method: payload.payment_method,
+        paid_amount: payload.paid_amount || 0,
+        is_gift: payload.is_gift || false,
+      };
+
+      console.log("🧾 INSERT INVOICE PAYLOAD:", invoiceData);
+
       const { data: invoice, error: invoiceErr } = await supabase
         .from("invoices")
-        .insert({
-          organization_id: DEFAULT_ORG_ID,
-          branch_id: DEFAULT_BRANCH_ID,
-          customer_id: payload.customer_id || null,
-          seller_staff_id: defaultSellerId,
-          status: invoiceStatus,
-          subtotal: payload.subtotal,
-          discount_amount: payload.discount_amount,
-          total_amount: payload.total_amount,
-          payment_method: payload.payment_method,
-        })
+        .insert(invoiceData)
         .select("id")
         .single();
+
       if (invoiceErr || !invoice) {
         return { success: false, error: invoiceErr?.message || "Lỗi khi tạo hóa đơn" };
       }
 
       const commissionLogs: any[] = [];
-      // Map lưu invoice_item_id theo package_id để dùng khi tạo commission cho buổi đầu
       const packageInvoiceItemMap = new Map<string, string>();
 
-      // LOG cart items
       console.log("📦 CART ITEMS:", cartItems.map(i => ({
         name: i.name,
         item_type: i.item_type,
@@ -258,7 +274,8 @@ export class POSService {
         package_id: i.package_id,
         use_package: i.use_package,
         cart_item_id: i.cart_item_id,
-        ktv_splits: i.ktv_splits
+        ktv_splits: i.ktv_splits,
+        is_gift: i.is_gift
       })));
 
       // ============ XỬ LÝ TỪNG ITEM (INVOICE ITEMS & COMMISSION) ============
@@ -286,7 +303,6 @@ export class POSService {
           return { success: false, error: itemErr.message };
         }
 
-        // Lưu invoice_item_id nếu là package
         if (item.item_type === "PACKAGE" && item.package_id) {
           packageInvoiceItemMap.set(item.package_id, invItem.id);
         }
@@ -310,7 +326,7 @@ export class POSService {
         const isGift = item.is_gift || payload.payment_method === "GIFT";
         const isPackageUsage = item.use_package === true;
 
-        // SALE COMMISSION (SALES)
+        // SALE COMMISSION (SALES – đúng constraint)
         if (!isPackageUsage && !isGift && item.total_amount > 0) {
           const sellerStaffId = item.seller_staff_id || defaultSellerId;
           if (sellerStaffId && invItem?.id) {
@@ -335,7 +351,7 @@ export class POSService {
           }
         }
 
-        // PERFORMANCE COMMISSION - cho cả DIRECT và PACKAGE USAGE (nếu có ktv_splits)
+        // PERFORMANCE COMMISSION
         if (item.item_type === "SERVICE" && item.ktv_splits && item.ktv_splits.length > 0 && invItem?.id) {
           const servicePrice = item.unit_price || 0;
           if (servicePrice > 0) {
@@ -368,7 +384,7 @@ export class POSService {
           }
         }
 
-        // ============ PACKAGE USAGE (nếu có item.use_package) ============
+        // ============ PACKAGE USAGE ============
         if (item.use_package && item.customer_package_id && item.package_item_id && item.actual_service_id) {
           try {
             console.log("📦 Gọi RPC use_package_session_v2 với ID:", item.package_item_id);
@@ -381,7 +397,6 @@ export class POSService {
               console.error("❌ Lỗi sử dụng package:", result?.message);
               return { success: false, error: `Lỗi sử dụng package: ${result?.message}` };
             }
-            // Tạo package_usage
             try {
               const { data: sessionData } = await supabase
                 .from("service_sessions")
@@ -461,7 +476,7 @@ export class POSService {
         }
       }
 
-      // ============ NHÓM CÁC ITEM PACKAGE THEO PACKAGE_ID ============
+      // ============ PACKAGE PURCHASE ============
       const packageGroups = new Map<string, { items: CartItem[], totalQuantity: number, isGift: boolean }>();
       for (const item of cartItems) {
         if (item.item_type === "PACKAGE" && item.package_id) {
@@ -481,7 +496,6 @@ export class POSService {
         }
       }
 
-      // ============ XỬ LÝ PACKAGE PURCHASE (MỖI PACKAGE MỘT LẦN) ============
       for (const [packageId, group] of packageGroups.entries()) {
         const { items, totalQuantity, isGift } = group;
         const firstItem = items[0];
@@ -499,7 +513,16 @@ export class POSService {
           return { success: false, error: `Không tìm thấy gói dịch vụ` };
         }
 
-        // NHÓM package_items theo service_id để tránh duplicate
+        // 🔥 Kiểm tra gift package không có items
+        if (!pkgInfo.package_items || pkgInfo.package_items.length === 0) {
+          console.error("❌ Gói không có dịch vụ nào! packageId:", packageId);
+          return {
+            success: false,
+            error: `Gói "${firstItem.name}" không có dịch vụ nào. Vui lòng kiểm tra cấu hình gói.`,
+          };
+        }
+
+        // Nhóm package_items theo service_id
         const serviceQuantityMap = new Map<string, number>();
         for (const pi of pkgInfo.package_items || []) {
           if (!pi.service_id) continue;
@@ -541,7 +564,7 @@ export class POSService {
 
         console.log(`✅ Đã tạo customer_package: ${customerPkg.id}`);
 
-        // Tạo customer_package_items – kiểm tra nếu đã có (do trigger) thì gán đè, không insert
+        // Tạo customer_package_items – KHÔNG insert remaining_quantity
         for (const [serviceId, quantityPerService] of serviceQuantityMap.entries()) {
           const quantity = quantityPerService * totalQuantity;
           console.log(`📦 Service ${serviceId}: quantityPerService=${quantityPerService}, totalQuantity=${totalQuantity}, quantity=${quantity}`);
@@ -573,6 +596,7 @@ export class POSService {
                 used_quantity: 0,
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
+                // KHÔNG có remaining_quantity (generated column)
               });
             if (insertErr) {
               console.error(`❌ Lỗi insert customer_package_item cho service ${serviceId}:`, insertErr);
@@ -582,11 +606,10 @@ export class POSService {
           }
         }
 
-        // ============ SỬ DỤNG BUỔI ĐẦU & TẠO PERFORMANCE COMMISSION ============
+        // ============ SỬ DỤNG BUỔI ĐẦU ============
         const hasUseNow = items.some(it => it.use_now === true);
         if (hasUseNow && firstItem.actual_service_id) {
           try {
-            // Lấy customer_package_item của service đó để trừ buổi
             const { data: cpItem } = await supabase
               .from("customer_package_items")
               .select("id")
@@ -603,7 +626,7 @@ export class POSService {
               if (result && result.success) {
                 console.log("✅ Đã sử dụng buổi đầu thành công");
 
-                // ============ TẠO PERFORMANCE COMMISSION CHO BUỔI ĐẦU ============
+                // 🔥 Tạo PERFORMANCE commission cho buổi đầu
                 const serviceId = firstItem.actual_service_id;
                 const { data: serviceDetail, error: serviceErr } = await supabase
                   .from("services")
@@ -669,7 +692,6 @@ export class POSService {
                     }
                   }
                 }
-                // ============ KẾT THÚC TẠO COMMISSION ============
 
               } else {
                 console.warn("⚠️ Lỗi sử dụng buổi đầu:", result?.message);

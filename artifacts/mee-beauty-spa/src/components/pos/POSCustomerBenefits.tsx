@@ -65,7 +65,6 @@ export const POSCustomerBenefits: React.FC<Props> = ({
       const giftPackages = activePackages.filter((pkg) => pkg.is_gift === true);
       const purchasedPackages = activePackages.filter((pkg) => pkg.is_gift !== true);
 
-      // Map items với service_name
       const mappedPackages = purchasedPackages.map((pkg) => ({
         ...pkg,
         items: pkg.items.map((item: any) => ({
@@ -86,9 +85,10 @@ export const POSCustomerBenefits: React.FC<Props> = ({
       setPackages(mappedPackages);
       setGifts(mappedGifts);
 
+      // 🔥 SỬA: chỉ lấy PARTIALLY_PAID
       const invoices = await customerService.fetchCustomerInvoices(customer.id);
       const totalDebt = invoices
-        .filter((inv) => inv.status === "UNPAID" || inv.status === "PARTIALLY_PAID")
+        .filter((inv) => inv.status === "PARTIALLY_PAID")
         .reduce((sum, inv) => sum + (inv.total_amount - (inv.paid_amount || 0)), 0);
       setDebtAmount(totalDebt);
     } catch (err) {
@@ -213,7 +213,7 @@ export const POSCustomerBenefits: React.FC<Props> = ({
             </div>
           </div>
           <button
-            onClick={() => onPayDebt()}
+            onClick={onPayDebt}
             className="px-3 py-1.5 bg-amber-600 text-white text-xs font-bold rounded hover:bg-amber-700 transition-colors"
           >
             Thanh toán nợ
