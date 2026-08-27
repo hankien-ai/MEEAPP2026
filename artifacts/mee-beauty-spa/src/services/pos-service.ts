@@ -153,6 +153,9 @@ export class POSService {
     try {
       const loggedStaff = await this.getLoggedInStaff();
       const sellerStaffId = payload.seller_staff_id || loggedStaff?.id || null;
+
+      const paymentMethod = payload.is_gift ? null : payload.payment_method;
+
       const { data: invoice, error: invoiceErr } = await supabase
         .from("invoices")
         .insert({
@@ -164,7 +167,7 @@ export class POSService {
           subtotal: payload.subtotal,
           discount_amount: payload.discount_amount,
           total_amount: payload.total_amount,
-          payment_method: payload.payment_method,
+          payment_method: paymentMethod,
           paid_amount: payload.paid_amount || 0,
           is_gift: payload.is_gift || false,
         })
@@ -206,7 +209,7 @@ export class POSService {
       if (payload.payment_method === "DEBT" && !payload.customer_id) {
         return { success: false, error: "Thanh toán Ghi nợ bắt buộc phải chọn Khách hàng!" };
       }
-      if (payload.payment_method === "GIFT" && !payload.customer_id) {
+      if (payload.is_gift && !payload.customer_id) {
         return { success: false, error: "Tặng quà bắt buộc phải chọn Khách hàng!" };
       }
       const hasPackage = cartItems.some((it) => it.item_type === "PACKAGE");
@@ -238,6 +241,8 @@ export class POSService {
         }
       }
 
+      const finalPaymentMethod = payload.is_gift ? null : payload.payment_method;
+
       const invoiceData: any = {
         organization_id: DEFAULT_ORG_ID,
         branch_id: DEFAULT_BRANCH_ID,
@@ -247,12 +252,12 @@ export class POSService {
         subtotal: payload.subtotal,
         discount_amount: payload.discount_amount,
         total_amount: payload.total_amount,
-        payment_method: payload.payment_method,
+        payment_method: finalPaymentMethod,
         paid_amount: payload.paid_amount || 0,
         is_gift: payload.is_gift || false,
       };
 
-      console.log("🧾 INSERT INVOICE PAYLOAD:", invoiceData);
+      console.log("🧾 INSERT INVOICE PAYLOAD:", JSON.stringify(invoiceData, null, 2));
 
       const { data: invoice, error: invoiceErr } = await supabase
         .from("invoices")
@@ -261,6 +266,13 @@ export class POSService {
         .single();
 
       if (invoiceErr || !invoice) {
+        console.error("❌❌❌ INVOICE INSERT ERROR FULL:", {
+          code: invoiceErr.code,
+          message: invoiceErr.message,
+          details: invoiceErr.details,
+          hint: invoiceErr.hint,
+          payload: invoiceData,
+        });
         return { success: false, error: invoiceErr?.message || "Lỗi khi tạo hóa đơn" };
       }
 
@@ -303,6 +315,70 @@ export class POSService {
           return { success: false, error: itemErr.message };
         }
 
+        // ============ GIFT SERVICE ENTITLEMENT ============
+        console.log("🔍 Check Gift entitlement for item:", {
+          name: item.name,
+          item_type: item.item_type,
+          payload_is_gift: payload.is_gift,
+          actual_service_id: item.actual_service_id,
+          package_id: item.package_id,
+          customer_id: payload.customer_id,
+          invoice_id: invoice.id,
+        });
+
+        // ✅ SỬA: chỉ cần payload.is_gift và item là SERVICE (không cần item.is_gift)
+        if (
+          payload.is_gift &&
+          payload.customer_id &&
+          item.item_type === "SERVICE" &&
+          item.actual_service_id &&
+          !item.package_id
+        ) {
+          console.log("🎁 Điều kiện đúng, chuẩn bị insert entitlement...");
+
+          const entitlementPayload = {
+            organization_id: DEFAULT_ORG_ID,
+            branch_id: DEFAULT_BRANCH_ID,
+            customer_id: payload.customer_id,
+            service_id: item.actual_service_id,
+            total_quantity: item.quantity,
+            used_quantity: 0,
+            invoice_id: invoice.id,
+            is_gift: true,
+          };
+
+          console.log("🎁 GIFT ENTITLEMENT INSERT PAYLOAD", entitlementPayload);
+
+          const { data, error } = await supabase
+            .from('customer_service_entitlements')
+            .insert(entitlementPayload)
+            .select()
+            .single();
+
+          if (error) {
+            console.error("❌ GIFT ENTITLEMENT INSERT ERROR", {
+              code: error.code,
+              message: error.message,
+              details: error.details,
+              hint: error.hint,
+            });
+            // Rollback
+            await supabase.from('invoice_items').delete().eq('invoice_id', invoice.id);
+            await supabase.from('invoices').delete().eq('id', invoice.id);
+            return { success: false, error: `Không thể tạo quyền lợi Gift: ${error.message}` };
+          }
+
+          console.log("✅ GIFT ENTITLEMENT CREATED", data);
+        } else {
+          console.log("⚠️ Điều kiện không thỏa, bỏ qua insert entitlement", {
+            condition1: payload.is_gift,
+            condition2: !!payload.customer_id,
+            condition3: item.item_type === "SERVICE",
+            condition4: !!item.actual_service_id,
+            condition5: !item.package_id,
+          });
+        }
+
         if (item.item_type === "PACKAGE" && item.package_id) {
           packageInvoiceItemMap.set(item.package_id, invItem.id);
         }
@@ -323,10 +399,10 @@ export class POSService {
         }
 
         // ============ COMMISSION ============
-        const isGift = item.is_gift || payload.payment_method === "GIFT";
+        const isGift = item.is_gift || payload.is_gift;
         const isPackageUsage = item.use_package === true;
 
-        // SALE COMMISSION (SALES – đúng constraint)
+        // SALE COMMISSION – KHÔNG cho Gift
         if (!isPackageUsage && !isGift && item.total_amount > 0) {
           const sellerStaffId = item.seller_staff_id || defaultSellerId;
           if (sellerStaffId && invItem?.id) {
@@ -351,8 +427,8 @@ export class POSService {
           }
         }
 
-        // PERFORMANCE COMMISSION
-        if (item.item_type === "SERVICE" && item.ktv_splits && item.ktv_splits.length > 0 && invItem?.id) {
+        // PERFORMANCE COMMISSION – CHỈ tạo nếu KHÔNG phải Gift
+        if (item.item_type === "SERVICE" && !isGift && item.ktv_splits && item.ktv_splits.length > 0 && invItem?.id) {
           const servicePrice = item.unit_price || 0;
           if (servicePrice > 0) {
             const totalPerformanceComm = item.performance_commission_type && item.performance_commission_value
@@ -484,13 +560,13 @@ export class POSService {
             packageGroups.set(item.package_id, {
               items: [],
               totalQuantity: 0,
-              isGift: payload.payment_method === "GIFT" || item.is_gift || false
+              isGift: payload.is_gift || item.is_gift || false
             });
           }
           const group = packageGroups.get(item.package_id)!;
           group.items.push(item);
           group.totalQuantity += item.quantity;
-          if (item.is_gift || payload.payment_method === "GIFT") {
+          if (payload.is_gift || item.is_gift) {
             group.isGift = true;
           }
         }
@@ -513,7 +589,6 @@ export class POSService {
           return { success: false, error: `Không tìm thấy gói dịch vụ` };
         }
 
-        // 🔥 Kiểm tra gift package không có items
         if (!pkgInfo.package_items || pkgInfo.package_items.length === 0) {
           console.error("❌ Gói không có dịch vụ nào! packageId:", packageId);
           return {
@@ -522,7 +597,6 @@ export class POSService {
           };
         }
 
-        // Nhóm package_items theo service_id
         const serviceQuantityMap = new Map<string, number>();
         for (const pi of pkgInfo.package_items || []) {
           if (!pi.service_id) continue;
@@ -538,7 +612,6 @@ export class POSService {
 
         console.log(`📦 totalSessionsPerPkg=${totalSessionsPerPkg}, totalQuantity=${totalQuantity}, totalSessions=${totalSessions}`);
 
-        // Tạo customer_package
         const { data: customerPkg, error: cpErr } = await supabase
           .from("customer_packages")
           .insert({
@@ -564,50 +637,30 @@ export class POSService {
 
         console.log(`✅ Đã tạo customer_package: ${customerPkg.id}`);
 
-        // Tạo customer_package_items – KHÔNG insert remaining_quantity
         for (const [serviceId, quantityPerService] of serviceQuantityMap.entries()) {
           const quantity = quantityPerService * totalQuantity;
           console.log(`📦 Service ${serviceId}: quantityPerService=${quantityPerService}, totalQuantity=${totalQuantity}, quantity=${quantity}`);
 
-          const { data: existing } = await supabase
+          const { error: insertErr } = await supabase
             .from("customer_package_items")
-            .select("id, total_quantity")
-            .eq("customer_package_id", customerPkg.id)
-            .eq("service_id", serviceId)
-            .maybeSingle();
-
-          if (existing) {
-            if (existing.total_quantity !== quantity) {
-              await supabase
-                .from("customer_package_items")
-                .update({ total_quantity: quantity, updated_at: new Date().toISOString() })
-                .eq("id", existing.id);
-              console.log(`✅ Gán đè total_quantity thành ${quantity}`);
-            } else {
-              console.log(`✅ total_quantity đã đúng ${quantity}, không cần thay đổi`);
-            }
-          } else {
-            const { error: insertErr } = await supabase
-              .from("customer_package_items")
-              .insert({
-                customer_package_id: customerPkg.id,
-                service_id: serviceId,
-                total_quantity: quantity,
-                used_quantity: 0,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-                // KHÔNG có remaining_quantity (generated column)
-              });
-            if (insertErr) {
-              console.error(`❌ Lỗi insert customer_package_item cho service ${serviceId}:`, insertErr);
-              return { success: false, error: `Không thể tạo chi tiết gói: ${insertErr.message}` };
-            }
-            console.log(`✅ Thêm mới customer_package_item cho service ${serviceId}, quantity = ${quantity}`);
+            .insert({
+              customer_package_id: customerPkg.id,
+              service_id: serviceId,
+              total_quantity: quantity,
+              used_quantity: 0,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            });
+          if (insertErr) {
+            console.error(`❌ Lỗi insert customer_package_item cho service ${serviceId}:`, insertErr);
+            return { success: false, error: `Không thể tạo chi tiết gói: ${insertErr.message}` };
           }
+          console.log(`✅ Thêm mới customer_package_item cho service ${serviceId}, quantity = ${quantity}`);
         }
 
         // ============ SỬ DỤNG BUỔI ĐẦU ============
-        const hasUseNow = items.some(it => it.use_now === true);
+        // Gift KHÔNG được sử dụng buổi đầu
+        const hasUseNow = !isGift && items.some(it => it.use_now === true);
         if (hasUseNow && firstItem.actual_service_id) {
           try {
             const { data: cpItem } = await supabase
@@ -626,7 +679,6 @@ export class POSService {
               if (result && result.success) {
                 console.log("✅ Đã sử dụng buổi đầu thành công");
 
-                // 🔥 Tạo PERFORMANCE commission cho buổi đầu
                 const serviceId = firstItem.actual_service_id;
                 const { data: serviceDetail, error: serviceErr } = await supabase
                   .from("services")
@@ -705,9 +757,9 @@ export class POSService {
         }
       }
 
-      // ============ SERVICE SESSION CHO SERVICE LẺ ============
+      // ============ SERVICE SESSION CHO SERVICE LẺ (không Gift) ============
       for (const item of cartItems) {
-        if (item.item_type === "SERVICE" && !item.use_package && item.actual_service_id && item.total_amount > 0) {
+        if (item.item_type === "SERVICE" && !item.use_package && item.actual_service_id && item.total_amount > 0 && !item.is_gift && !payload.is_gift) {
           try {
             await supabase.from("service_sessions").insert({
               organization_id: DEFAULT_ORG_ID,

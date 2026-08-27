@@ -8,6 +8,7 @@ import {
   Invoice,
   PhotoType,
   CustomerPackageItem,
+  CustomerServiceEntitlement,
 } from "../types/domain";
 
 export type CustomerInput = {
@@ -567,6 +568,30 @@ export async function payCustomerDebt(
   };
 }
 
+// ============ CUSTOMER SERVICE ENTITLEMENTS ============
+
+export async function fetchCustomerServiceEntitlements(customerId: string): Promise<CustomerServiceEntitlement[]> {
+  const { data, error } = await supabase
+    .from('customer_service_entitlements')
+    .select(`
+      *,
+      services:service_id (
+        id,
+        catalog_item_id,
+        catalog_item:catalog_items (name, code)
+      )
+    `)
+    .eq('customer_id', customerId)
+    .gt('remaining_quantity', 0)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error("Lỗi fetchCustomerServiceEntitlements:", error);
+    return [];
+  }
+  return data || [];
+}
+
 // ============ EXPORTS ============
 
 export const getCustomers = fetchCustomers;
@@ -599,6 +624,7 @@ export const customerService = {
   isValidPhone,
   isPhoneExists,
   payCustomerDebt,
+  fetchCustomerServiceEntitlements,  // 👈 THÊM DÒNG NÀY
 };
 
 export default customerService;

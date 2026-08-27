@@ -378,6 +378,26 @@ export interface Expense {
 }
 
 // ============================================================
+// CUSTOMER SERVICE ENTITLEMENTS (Gift service lẻ)
+// ============================================================
+
+export interface CustomerServiceEntitlement {
+  id: string;
+  customer_id: string;
+  service_id: string;
+  total_quantity: number;
+  used_quantity: number;
+  remaining_quantity: number;
+  invoice_id: string | null;
+  is_gift: boolean;
+  created_at: string;
+  updated_at: string;
+  services?: {
+    catalog_item?: { name: string; code: string };
+  };
+}
+
+// ============================================================
 // CUSTOM TYPES (dùng chung)
 // ============================================================
 

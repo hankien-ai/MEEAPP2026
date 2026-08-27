@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import { Customer } from "@/types/pos";
 import { customerService } from "@/services/customer.service";
 import { Package, Gift, CreditCard, ChevronDown, ChevronUp } from "lucide-react";
+import type { CustomerServiceEntitlement } from "@/types/domain";
 
 interface CustomerPackageItem {
   id: string;
@@ -44,6 +45,7 @@ export const POSCustomerBenefits: React.FC<Props> = ({
   const [packages, setPackages] = useState<CustomerPackage[]>([]);
   const [gifts, setGifts] = useState<CustomerPackage[]>([]);
   const [debtAmount, setDebtAmount] = useState<number>(0);
+  const [entitlements, setEntitlements] = useState<CustomerServiceEntitlement[]>([]);
   const [expandedPkg, setExpandedPkg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -53,6 +55,7 @@ export const POSCustomerBenefits: React.FC<Props> = ({
       setPackages([]);
       setGifts([]);
       setDebtAmount(0);
+      setEntitlements([]);
     }
   }, [customer]);
 
@@ -85,6 +88,10 @@ export const POSCustomerBenefits: React.FC<Props> = ({
       setPackages(mappedPackages);
       setGifts(mappedGifts);
 
+      // 🔥 Lấy entitlements (Gift service lẻ)
+      const entitlementsData = await customerService.fetchCustomerServiceEntitlements(customer.id);
+      setEntitlements(entitlementsData);
+
       // 🔥 SỬA: chỉ lấy PARTIALLY_PAID
       const invoices = await customerService.fetchCustomerInvoices(customer.id);
       const totalDebt = invoices
@@ -103,7 +110,7 @@ export const POSCustomerBenefits: React.FC<Props> = ({
   if (!customer) return null;
   if (loading) return <div className="p-3 text-xs text-slate-500">Đang tải quyền lợi...</div>;
 
-  const hasBenefits = packages.length > 0 || gifts.length > 0 || debtAmount > 0;
+  const hasBenefits = packages.length > 0 || gifts.length > 0 || debtAmount > 0 || entitlements.length > 0;
   if (!hasBenefits) {
     return (
       <div className="bg-white rounded-xl border border-slate-200 p-3 mb-3 text-xs text-slate-400 text-center">
@@ -176,7 +183,7 @@ export const POSCustomerBenefits: React.FC<Props> = ({
         </div>
       )}
 
-      {/* GIFTS */}
+      {/* GIFTS (Package) */}
       {gifts.length > 0 && (
         <div className="space-y-2">
           <div className="text-[11px] font-semibold text-slate-600 flex items-center gap-1.5">
@@ -197,6 +204,31 @@ export const POSCustomerBenefits: React.FC<Props> = ({
               >
                 Sử dụng
               </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* CUSTOMER SERVICE ENTITLEMENTS (Gift service lẻ) */}
+      {entitlements.length > 0 && (
+        <div className="space-y-2">
+          <div className="text-[11px] font-semibold text-slate-600 flex items-center gap-1.5">
+            <Gift className="w-3.5 h-3.5 text-purple-600" />
+            Quà tặng dịch vụ ({entitlements.length})
+          </div>
+          {entitlements.map(ent => (
+            <div key={ent.id} className="bg-purple-50 border border-purple-200 rounded-lg p-2.5 flex items-center justify-between">
+              <div>
+                <div className="text-sm font-semibold text-purple-800">
+                  {ent.services?.catalog_item?.name || 'Dịch vụ'}
+                </div>
+                <div className="text-xs text-purple-600">
+                  Còn {ent.remaining_quantity} buổi
+                </div>
+              </div>
+              <span className="px-2 py-1 text-[10px] font-bold bg-purple-700 text-white rounded-full">
+                🎁 QUÀ TẶNG
+              </span>
             </div>
           ))}
         </div>
