@@ -4,8 +4,9 @@ import { supabase } from '@/services/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
-import { Eye, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Eye, Search } from 'lucide-react';
 import { Badge, Spinner } from '@/components/primitives';
+import { InvoiceDetailModal } from '@/components/InvoiceDetailModal';
 
 export const InvoicesPage: React.FC = () => {
   const { role } = useAuth();
@@ -13,7 +14,8 @@ export const InvoicesPage: React.FC = () => {
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
+  const [isInvoiceDetailOpen, setIsInvoiceDetailOpen] = useState(false);
 
   useEffect(() => {
     loadInvoices();
@@ -33,7 +35,6 @@ export const InvoicesPage: React.FC = () => {
         .order('created_at', { ascending: false });
 
       if (!isAdmin) {
-        // Nếu staff, chỉ xem hóa đơn của mình (tạm thời lấy staff đầu tiên)
         const { data: staffData } = await supabase.from('staff').select('id').limit(1).single();
         if (staffData) {
           query = query.eq('seller_staff_id', staffData.id);
@@ -50,6 +51,11 @@ export const InvoicesPage: React.FC = () => {
     }
   };
 
+  const handleOpenInvoice = (id: string) => {
+    setSelectedInvoiceId(id);
+    setIsInvoiceDetailOpen(true);
+  };
+
   const formatVND = (val: number) => new Intl.NumberFormat('vi-VN').format(val) + ' đ';
   const formatDate = (date: string) => format(new Date(date), 'dd/MM/yyyy HH:mm', { locale: vi });
 
@@ -57,7 +63,8 @@ export const InvoicesPage: React.FC = () => {
 
   const filtered = invoices.filter(inv =>
     inv.customers?.full_name?.toLowerCase().includes(search.toLowerCase()) ||
-    inv.invoice_code?.toLowerCase().includes(search.toLowerCase())
+    inv.invoice_code?.toLowerCase().includes(search.toLowerCase()) ||
+    inv.id.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -88,7 +95,7 @@ export const InvoicesPage: React.FC = () => {
             <div
               key={inv.id}
               className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 hover:shadow-md transition-all cursor-pointer"
-              onClick={() => setSelectedInvoice(inv)}
+              onClick={() => handleOpenInvoice(inv.id)}
             >
               <div className="flex flex-wrap justify-between items-start gap-2">
                 <div>
@@ -125,70 +132,14 @@ export const InvoicesPage: React.FC = () => {
         </div>
       )}
 
-      {/* Modal chi tiết hóa đơn */}
-      {selectedInvoice && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl p-5 space-y-4">
-            <div className="flex justify-between items-center border-b pb-3">
-              <h3 className="text-lg font-bold text-slate-900">
-                Hóa đơn {selectedInvoice.invoice_code || selectedInvoice.id.slice(0, 8)}
-              </h3>
-              <button onClick={() => setSelectedInvoice(null)} className="text-slate-400 hover:text-slate-600">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-slate-500">Khách hàng:</span>
-                <span className="font-medium">{selectedInvoice.customers?.full_name || 'Khách vãng lai'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Ngày:</span>
-                <span>{formatDate(selectedInvoice.created_at)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Trạng thái:</span>
-                <Badge variant={selectedInvoice.status === 'PAID' ? 'success' : 'neutral'}>
-                  {selectedInvoice.status}
-                </Badge>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Phương thức:</span>
-                <span>{selectedInvoice.payment_method}</span>
-              </div>
-            </div>
-
-            <div className="border-t pt-3">
-              <h4 className="font-semibold text-slate-800 mb-2">Chi tiết</h4>
-              <div className="space-y-2">
-                {selectedInvoice.items?.map((item: any, idx: number) => (
-                  <div key={idx} className="flex justify-between text-sm bg-slate-50 p-2 rounded-lg">
-                    <span>{item.description || 'Dịch vụ'}</span>
-                    <span>{item.quantity} x {formatVND(item.unit_price)}</span>
-                    <span className="font-bold">{formatVND(item.total_amount)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="border-t pt-3 space-y-1 text-right">
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-500">Tạm tính:</span>
-                <span>{formatVND(selectedInvoice.subtotal)}</span>
-              </div>
-              <div className="flex justify-between text-sm text-red-600">
-                <span>Giảm giá:</span>
-                <span>-{formatVND(selectedInvoice.discount_amount)}</span>
-              </div>
-              <div className="flex justify-between text-lg font-bold text-emerald-700">
-                <span>Tổng cộng:</span>
-                <span>{formatVND(selectedInvoice.total_amount)}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Invoice Detail Modal dùng chung */}
+      <InvoiceDetailModal
+        isOpen={isInvoiceDetailOpen}
+        invoiceId={selectedInvoiceId}
+        onClose={() => setIsInvoiceDetailOpen(false)}
+      />
     </div>
   );
 };
+
+export default InvoicesPage;

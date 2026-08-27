@@ -3,30 +3,42 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import LoginPage from "@/pages/LoginPage";
 import DashboardPage from "./pages/dashboard";
-import CustomersPage, { CustomerProfilePage } from "./pages/customers";
+import CustomersPage from "./pages/customers";
 import CatalogPage from "./pages/catalog";
 import OperationsPage from "./pages/operations";
 import StaffPage from "./pages/staff";
 import SettingsPage from "./pages/SettingsPage";
 import NotFoundPage from "./pages/not-found";
 import POSPage from "./pages/POSPage";
-import { InvoicesPage } from "./pages/InvoicesPage";        // ✅ named export
-import ReportsPage from "./pages/ReportsPage";              // ✅ default export (sẽ tạo)
-import ExtensionPage from "./pages/ExtensionPage";          // ✅ default export
-
+import { InvoicesPage } from "./pages/InvoicesPage";
+import ReportsPage from "./pages/ReportsPage";
+import ExtensionPage from "./pages/ExtensionPage";
 import { AppShell } from "./components/app-shell";
 
 export function App() {
   const { role, isLoggedIn, visibility } = useAuth();
   const [activeTab, setActiveTab] = useState<string>("dashboard");
 
+  // Chỉ đặt lại tab khi role thay đổi
   useEffect(() => {
     setActiveTab("dashboard");
   }, [role]);
 
-  if (!isLoggedIn) return <LoginPage />;
-
   const isAdmin = role === 'admin';
+
+  // Route protection – kiểm tra quyền truy cập
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    const tabs = getVisibleTabs();
+    if (!isAdmin && activeTab !== 'dashboard') {
+      const isAllowed = tabs.includes(activeTab);
+      if (!isAllowed) {
+        setActiveTab(tabs[0] || 'dashboard');
+      }
+    }
+  }, [activeTab, isAdmin, isLoggedIn, visibility]);
+
+  if (!isLoggedIn) return <LoginPage />;
 
   const getVisibleTabs = (): string[] => {
     const tabs: string[] = [];
@@ -54,7 +66,7 @@ export function App() {
       case "operations": return <OperationsPage userRole={role} />;
       case "staff": return <StaffPage userRole={role} />;
       case "pos": return <POSPage />;
-      case "settings": return <SettingsPage />;
+      case "settings": return <SettingsPage onNavigate={setActiveTab} />;
       case "invoices": return <InvoicesPage />;
       case "reports": return <ReportsPage />;
       case "extension": return <ExtensionPage onNavigate={setActiveTab} />;

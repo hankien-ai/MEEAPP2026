@@ -1,8 +1,11 @@
+// src/components/pos/POSCustomerSelect.tsx
 import React, { useState, useEffect } from "react";
 import { Customer } from "@/types/pos";
 import { POSService } from "@/services/pos-service";
 import { customerService } from "@/services/customer.service";
 import { X, UserPlus } from "lucide-react";
+import { useAuth } from '@/context/AuthContext';
+import { maskPhone } from '@/lib/utils';
 
 interface Props {
   selectedCustomer: Customer | null;
@@ -15,6 +18,9 @@ export const POSCustomerSelect: React.FC<Props> = ({
   onSelectCustomer,
   hasPackageInCart,
 }) => {
+  const { role } = useAuth();
+  const isAdmin = role === 'admin';
+
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(false);
@@ -95,7 +101,7 @@ export const POSCustomerSelect: React.FC<Props> = ({
             </div>
             <div>
               <div className="font-semibold text-slate-800">{selectedCustomer.full_name}</div>
-              <div className="text-xs text-slate-500">{selectedCustomer.phone}</div>
+              <div className="text-xs text-slate-500">{maskPhone(selectedCustomer.phone, isAdmin)}</div>
             </div>
           </div>
           <span className="px-2.5 py-1 text-xs font-medium text-emerald-700 bg-emerald-100 rounded-full">
@@ -133,7 +139,7 @@ export const POSCustomerSelect: React.FC<Props> = ({
                 >
                   <div>
                     <div className="font-medium text-sm text-slate-800">{c.full_name}</div>
-                    <div className="text-xs text-slate-500">{c.phone}</div>
+                    <div className="text-xs text-slate-500">{maskPhone(c.phone, isAdmin)}</div>
                   </div>
                   <button className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded font-medium">
                     Chọn

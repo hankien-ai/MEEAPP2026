@@ -1,5 +1,6 @@
 // src/context/AuthContext.tsx
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { settingsService, DEFAULT_STAFF_PERMISSIONS } from '@/services/settings.service';
 
 export type UserRole = 'admin' | 'staff';
 
@@ -14,9 +15,11 @@ export interface VisibilitySettings {
   payroll: boolean;
   expenses: boolean;
   settings: boolean;
+  invoices: boolean;
+  reports: boolean;
+  extension: boolean;
 }
 
-// Mặc định: staff chỉ thấy dashboard, customers, pos, operations
 const defaultVisibility: VisibilitySettings = {
   dashboard: true,
   pos: true,
@@ -28,9 +31,11 @@ const defaultVisibility: VisibilitySettings = {
   payroll: false,
   expenses: false,
   settings: false,
+  invoices: false,
+  reports: false,
+  extension: false,
 };
 
-// Visibility mặc định cho admin: tất cả đều true
 const adminVisibility: VisibilitySettings = {
   dashboard: true,
   pos: true,
@@ -42,6 +47,25 @@ const adminVisibility: VisibilitySettings = {
   payroll: true,
   expenses: true,
   settings: true,
+  invoices: true,
+  reports: true,
+  extension: true,
+};
+
+const moduleToVisibilityKey: Record<string, keyof VisibilitySettings> = {
+  dashboard: 'dashboard',
+  pos: 'pos',
+  customers: 'customers',
+  operations: 'operations',
+  catalog: 'catalog',
+  inventory: 'inventory',
+  staff: 'staff',
+  payroll: 'payroll',
+  expenses: 'expenses',
+  settings: 'settings',
+  invoices: 'invoices',
+  reports: 'reports',
+  extension: 'extension',
 };
 
 interface AuthContextType {
@@ -50,8 +74,9 @@ interface AuthContextType {
   visibility: VisibilitySettings;
   setVisibility: (settings: VisibilitySettings) => void;
   isLoggedIn: boolean;
-  login: (role: UserRole) => void;
+  login: (role: UserRole) => Promise<void>;
   logout: () => void;
+  loadStaffPermissions: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -61,44 +86,68 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [visibility, setVisibility] = useState<VisibilitySettings>(defaultVisibility);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
+  const loadStaffPermissions = async () => {
+    try {
+      const permissions = await settingsService.getStaffPermissions();
+      const newVisibility = { ...defaultVisibility };
+      permissions.forEach((modId: string) => {
+        const key = moduleToVisibilityKey[modId];
+        if (key) {
+          newVisibility[key] = true;
+        }
+      });
+      setVisibility(newVisibility);
+      localStorage.setItem('mee_visibility', JSON.stringify(newVisibility));
+    } catch (err) {
+      console.error('loadStaffPermissions error:', err);
+      setVisibility(defaultVisibility);
+    }
+  };
+
   useEffect(() => {
-    // Load từ localStorage
     const savedRole = localStorage.getItem('mee_role') as UserRole | null;
     const savedVisibility = localStorage.getItem('mee_visibility');
 
     if (savedRole) {
       setRole(savedRole);
       setIsLoggedIn(true);
-      // Nếu có visibility lưu, dùng nó, nếu không dùng mặc định theo role
+
       if (savedVisibility) {
         try {
           setVisibility(JSON.parse(savedVisibility));
         } catch (e) {
-          // Nếu parse lỗi, set mặc định theo role
-          setVisibility(savedRole === 'admin' ? adminVisibility : defaultVisibility);
+          if (savedRole === 'admin') {
+            setVisibility(adminVisibility);
+          } else {
+            loadStaffPermissions();
+          }
         }
       } else {
-        // Chưa có visibility, set mặc định theo role
-        setVisibility(savedRole === 'admin' ? adminVisibility : defaultVisibility);
+        if (savedRole === 'admin') {
+          setVisibility(adminVisibility);
+        } else {
+          loadStaffPermissions();
+        }
       }
     }
   }, []);
 
-  const login = (newRole: UserRole) => {
+  const login = async (newRole: UserRole) => {
     setRole(newRole);
     setIsLoggedIn(true);
     localStorage.setItem('mee_role', newRole);
 
-    // Khi login, set visibility mặc định theo role
-    const newVisibility = newRole === 'admin' ? adminVisibility : defaultVisibility;
-    setVisibility(newVisibility);
-    localStorage.setItem('mee_visibility', JSON.stringify(newVisibility));
+    if (newRole === 'admin') {
+      setVisibility(adminVisibility);
+      localStorage.setItem('mee_visibility', JSON.stringify(adminVisibility));
+    } else {
+      await loadStaffPermissions();
+    }
   };
 
   const logout = () => {
     setIsLoggedIn(false);
     localStorage.removeItem('mee_role');
-    // Không xóa visibility để giữ cài đặt
   };
 
   const handleSetVisibility = (settings: VisibilitySettings) => {
@@ -116,6 +165,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         isLoggedIn,
         login,
         logout,
+        loadStaffPermissions,
       }}
     >
       {children}

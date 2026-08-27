@@ -1,9 +1,12 @@
+// src/components/InvoiceDetailModal.tsx
 import React, { useState, useEffect } from 'react';
 import { supabase, DEFAULT_ORG_ID, DEFAULT_BRANCH_ID } from '@/services/supabase';
+import { useAuth } from '@/context/AuthContext';
 import { X, CreditCard, Gift, Package, User, Users, FileText, CheckCircle, Clock, AlertCircle } from 'lucide-react';
 import { Badge } from '@/components/primitives';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
+import { maskPhone } from '@/lib/utils';
 
 interface InvoiceDetailModalProps {
   isOpen: boolean;
@@ -19,7 +22,10 @@ const formatDate = (dateStr: string) => {
 };
 
 export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({ isOpen, invoiceId, onClose }) => {
+  const { role } = useAuth();
+  const isAdmin = role === 'admin';
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [invoice, setInvoice] = useState<any>(null);
   const [items, setItems] = useState<any[]>([]);
   const [commissions, setCommissions] = useState<any[]>([]);
@@ -35,6 +41,7 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({ isOpen, 
   const loadData = async () => {
     if (!invoiceId) return;
     setLoading(true);
+    setError(null);
     try {
       // 1. Invoice + customer + seller
       const { data: inv, error: invErr } = await supabase
@@ -46,7 +53,23 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({ isOpen, 
         `)
         .eq('id', invoiceId)
         .single();
+
       if (invErr) throw invErr;
+
+      // 👇 STAFF: kiểm tra ngày hôm nay
+      if (!isAdmin && inv) {
+        const now = new Date();
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+        const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        const invDate = new Date(inv.created_at);
+
+        if (invDate < startOfToday || invDate > endOfToday) {
+          setError('Bạn không có quyền xem hóa đơn này (chỉ xem được hóa đơn trong ngày hiện tại)');
+          setLoading(false);
+          return;
+        }
+      }
+
       setInvoice(inv);
 
       // 2. Invoice items
@@ -97,6 +120,7 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({ isOpen, 
       if (!entErr) setEntitlements(entData || []);
     } catch (err) {
       console.error('Lỗi tải chi tiết hóa đơn:', err);
+      setError('Không thể tải chi tiết hóa đơn');
     } finally {
       setLoading(false);
     }
@@ -109,6 +133,25 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({ isOpen, 
       <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] p-6 flex items-center justify-center">
           <div className="text-center text-slate-500">Đang tải chi tiết hóa đơn...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] p-6">
+          <div className="flex justify-between items-center border-b pb-4">
+            <h3 className="text-lg font-bold text-red-600">Lỗi</h3>
+            <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <p className="mt-4 text-slate-600">{error}</p>
+          <button onClick={onClose} className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg">
+            Đóng
+          </button>
         </div>
       </div>
     );
@@ -171,14 +214,16 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({ isOpen, 
         </div>
 
         <div className="p-4 space-y-4">
-          {/* Khách hàng */}
+          {/* Khách hàng - 👇 PHONE MASK */}
           <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 flex items-center gap-3">
             <User className="w-4 h-4 text-slate-600" />
             <div>
               <div className="font-medium text-slate-800">
                 {invoice.customer?.full_name || 'Khách vãng lai'}
               </div>
-              <div className="text-xs text-slate-500">{invoice.customer?.phone || ''}</div>
+              <div className="text-xs text-slate-500">
+                {maskPhone(invoice.customer?.phone, isAdmin)}
+              </div>
             </div>
           </div>
 
@@ -308,8 +353,6 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({ isOpen, 
               </div>
             </div>
           )}
-
-          {/* Lịch sử sử dụng (tạm thời bỏ qua do không có FK) */}
         </div>
       </div>
     </div>

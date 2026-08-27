@@ -1,6 +1,8 @@
 // src/components/pos/POSPaymentModal.tsx
 import React, { useState, useEffect } from "react";
 import { PaymentMethod, Customer, CartItem, Staff } from "@/types/pos";
+import { useAuth } from '@/context/AuthContext';
+import { maskPhone } from '@/lib/utils';
 
 interface Props {
   isOpen: boolean;
@@ -40,6 +42,9 @@ export const POSPaymentModal: React.FC<Props> = ({
   debtAmount = 0,
   onDebtPaymentConfirm,
 }) => {
+  const { role } = useAuth();
+  const isAdmin = role === 'admin';
+
   const [method, setMethod] = useState<PaymentMethod>("CASH");
   const [paidAmount, setPaidAmount] = useState<number>(0);
   const [notes, setNotes] = useState<string>("");
@@ -204,7 +209,7 @@ export const POSPaymentModal: React.FC<Props> = ({
               <div>
                 <span className="text-slate-500 block">Khách hàng:</span>
                 <span className="font-bold text-slate-800 text-sm">
-                  {customer ? `${customer.full_name} (${customer.phone})` : "Khách vãng lai"}
+                  {customer ? `${customer.full_name} (${maskPhone(customer.phone, isAdmin)})` : "Khách vãng lai"}
                 </span>
               </div>
               <div>

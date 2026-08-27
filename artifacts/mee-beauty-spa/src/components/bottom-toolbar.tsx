@@ -11,6 +11,7 @@ import {
   X,
   Settings,
   Grid,
+  Check,
 } from "lucide-react";
 
 interface BottomToolbarProps {
@@ -36,6 +37,35 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
   const normalizedRole = userRole.toLowerCase();
   const isAdmin = ["admin", "owner", "manager", "quan_ly"].includes(normalizedRole);
 
+  // Đọc danh sách quick buttons từ localStorage
+  const [quickButtons, setQuickButtons] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('mee_quick_buttons');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Chỉ giữ các module hợp lệ
+        const allKeys = allModules.map(m => m.key);
+        return parsed.filter((key: string) => allKeys.includes(key));
+      }
+    } catch {}
+    // Mặc định: pos và customers
+    return ['pos', 'customers'];
+  });
+
+  // Lưu vào localStorage khi thay đổi
+  const saveQuickButtons = (keys: string[]) => {
+    setQuickButtons(keys);
+    localStorage.setItem('mee_quick_buttons', JSON.stringify(keys));
+  };
+
+  const toggleQuickButton = (key: string) => {
+    if (quickButtons.includes(key)) {
+      saveQuickButtons(quickButtons.filter(k => k !== key));
+    } else {
+      saveQuickButtons([...quickButtons, key]);
+    }
+  };
+
   const allModules: NavItem[] = [
     { key: "dashboard", label: "Trang chính", icon: Home },
     { key: "customers", label: "Khách hàng", icon: Users },
@@ -47,11 +77,12 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
   ];
 
   const visibleModules = allModules.filter(m => visibleTabs.includes(m.key));
+  const quickModules = visibleModules.filter(m => quickButtons.includes(m.key));
 
   // Admin layout
   const adminMain = visibleModules.filter(m => m.key === 'dashboard' || m.key === 'customers' || m.key === 'staff');
   const otherModules = visibleModules.filter(m => m.key !== 'dashboard' && m.key !== 'customers' && m.key !== 'staff');
-  const quickModules = otherModules.slice(0, 2);
+  // quickModules đã được lọc ở trên
 
   // Staff layout
   const staffMain = visibleModules.filter(m => m.key === 'dashboard' || m.key === 'customers' || m.key === 'pos' || m.key === 'staff');
@@ -94,25 +125,62 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
             </button>
           </div>
         </nav>
+
         {isQuickOpen && (
           <div className="fixed inset-0 z-50 flex flex-col justify-end">
             <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs" onClick={() => setIsQuickOpen(false)} />
-            <div className="relative bg-white rounded-t-3xl p-5 shadow-2xl z-10 max-w-md mx-auto w-full border-t border-slate-100 animate-in slide-in-from-bottom duration-200">
-              <div className="flex justify-between items-center pb-3 border-b border-slate-100">
-                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2"><Zap className="w-4 h-4 text-indigo-600 fill-indigo-600" /> TRUY CẬP NHANH</h3>
-                <button onClick={() => setIsQuickOpen(false)} className="p-1 rounded-full hover:bg-slate-100 text-slate-400"><X className="w-5 h-5" /></button>
+            <div className="relative bg-white rounded-t-3xl p-5 shadow-2xl z-10 max-w-md mx-auto w-full border-t border-slate-100 animate-in slide-in-from-bottom duration-200 max-h-[80vh] flex flex-col">
+              <div className="flex justify-between items-center pb-3 border-b border-slate-100 shrink-0">
+                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-indigo-600 fill-indigo-600" /> TÙY CHỈNH TRUY CẬP NHANH
+                </h3>
+                <button onClick={() => setIsQuickOpen(false)} className="p-1 rounded-full hover:bg-slate-100 text-slate-400">
+                  <X className="w-5 h-5" />
+                </button>
               </div>
-              <div className="grid grid-cols-2 gap-3 pt-4 pb-2">
-                {quickModules.length > 0 ? quickModules.map((item) => {
+              <div className="overflow-y-auto flex-1 py-3 space-y-1">
+                {allModules.map((item) => {
+                  if (!visibleTabs.includes(item.key)) return null;
+                  const isActive = quickButtons.includes(item.key);
                   const Icon = item.icon;
                   return (
-                    <button key={item.key} onClick={() => { handleTabClick(item.key); setIsQuickOpen(false); }}
-                      className={`flex items-center gap-3 p-3.5 rounded-2xl border text-left transition-all ${activeTab === item.key ? "bg-indigo-50 border-indigo-500 text-indigo-700 font-bold shadow-xs" : "bg-slate-50 border-slate-200/80 text-slate-700 hover:bg-slate-100"}`}>
-                      <div className="w-9 h-9 rounded-xl bg-indigo-100/80 text-indigo-700 flex items-center justify-center shrink-0"><Icon className="w-5 h-5" /></div>
-                      <span className="text-xs font-semibold">{item.label}</span>
+                    <button
+                      key={item.key}
+                      onClick={() => toggleQuickButton(item.key)}
+                      className={`w-full flex items-center justify-between p-3 rounded-xl transition-all ${
+                        isActive
+                          ? 'bg-indigo-50 border border-indigo-200 text-indigo-700'
+                          : 'hover:bg-slate-50 text-slate-600'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                          isActive ? 'bg-indigo-200 text-indigo-700' : 'bg-slate-100 text-slate-500'
+                        }`}>
+                          <Icon className="w-4 h-4" />
+                        </div>
+                        <span className="text-sm font-medium">{item.label}</span>
+                      </div>
+                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
+                        isActive ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-300'
+                      }`}>
+                        {isActive && <Check className="w-4 h-4" />}
+                      </div>
                     </button>
                   );
-                }) : <div className="col-span-2 text-center text-xs text-slate-400 py-4">Không có module nào để thêm vào nhanh.</div>}
+                })}
+              </div>
+              <div className="border-t pt-3 shrink-0 flex justify-between items-center">
+                <span className="text-xs text-slate-400">Chọn module để thêm vào thanh nhanh</span>
+                <button
+                  onClick={() => {
+                    setIsQuickOpen(false);
+                    onSelectTab('extension');
+                  }}
+                  className="text-xs text-indigo-600 font-semibold flex items-center gap-1 hover:underline"
+                >
+                  <Settings className="w-3.5 h-3.5" /> Quản lý nâng cao
+                </button>
               </div>
             </div>
           </div>
@@ -121,6 +189,7 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
     );
   }
 
+  // Staff layout (giữ nguyên)
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-lg pb-[env(safe-area-inset-bottom,0px)]">
       <div className="grid grid-cols-5 items-center h-16 px-1 max-w-md mx-auto sm:max-w-none">

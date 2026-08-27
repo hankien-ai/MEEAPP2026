@@ -1,5 +1,7 @@
 // src/pages/customers.tsx
 import React, { useState, useEffect, ChangeEvent, FormEvent, useRef } from "react";
+import { useAuth } from '@/context/AuthContext';
+import { maskPhone } from '@/lib/utils';
 import { supabase } from "../services/supabase";
 import {
   Button,
@@ -47,20 +49,8 @@ import { User, Package, Camera, ArrowLeft } from "lucide-react";
 // HELPERS
 // ============================================================
 
-function maskPhone(phone: string, isAdmin: boolean): string {
-  if (!phone) return "";
-  if (isAdmin) return phone;
-  if (phone.length <= 4) return phone;
-  return "******" + phone.slice(-4);
-}
-
 function formatVND(amount: number): string {
   return (amount || 0).toLocaleString("vi-VN") + " đ";
-}
-
-function useUserRole() {
-  const [role] = useState<"admin" | "staff">("admin");
-  return { role, isAdmin: role === "admin" };
 }
 
 // ============================================================
@@ -78,7 +68,8 @@ export function CustomerProfilePage({
   onBack,
   initialTab = "info",
 }: CustomerProfilePageProps) {
-  const { isAdmin } = useUserRole();
+  const { role } = useAuth();
+  const isAdmin = role === 'admin';
 
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -1226,7 +1217,8 @@ export function CustomerProfilePage({
 // ============================================================
 
 export function CustomersPage() {
-  const { isAdmin } = useUserRole();
+  const { role } = useAuth();
+  const isAdmin = role === 'admin';
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -1425,7 +1417,7 @@ export function CustomersPage() {
                             {badges.hasPackage && (
                               <button
                                 onClick={(e) => {
-                                  e.stopPropagation(); // ngăn sự kiện lan ra thẻ cha
+                                  e.stopPropagation();
                                   handleQuickPackage(item.id);
                                 }}
                                 className="text-blue-500 hover:text-blue-700 transition-colors"
@@ -1436,7 +1428,7 @@ export function CustomersPage() {
                             )}
                             <button
                               onClick={(e) => {
-                                e.stopPropagation(); // ngăn sự kiện lan ra thẻ cha
+                                e.stopPropagation();
                                 handleQuickPhoto(item.id);
                               }}
                               className="text-gray-400 hover:text-gray-600 transition-colors"

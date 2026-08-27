@@ -14,6 +14,8 @@ import { format, parseISO, differenceInHours, differenceInMinutes } from "date-f
 import { vi } from "date-fns/locale";
 import { ArrowLeft, Calendar, FileText, DollarSign, Settings, Clock } from "lucide-react";
 import { supabase } from "../services/supabase";
+import { useAuth } from '@/context/AuthContext';
+import { maskPhone } from '@/lib/utils';
 
 interface Props {
   staffId: string;
@@ -21,6 +23,9 @@ interface Props {
 }
 
 export const StaffDetailPage: React.FC<Props> = ({ staffId, onBack }) => {
+  const { role } = useAuth();
+  const isAdmin = role === 'admin';
+
   const [staff, setStaff] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
