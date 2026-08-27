@@ -33,6 +33,7 @@ interface Props {
   onUsePackageItem: (customerPackageId: string, customerPackageItemId: string, serviceName: string, serviceId: string, remaining: number) => void;
   onSelectGift: () => void;
   onPayDebt: () => void;
+  onUseGiftEntitlement: (entitlementId: string, serviceName: string, serviceId: string, remaining: number) => void; // 👈 MỚI
 }
 
 export const POSCustomerBenefits: React.FC<Props> = ({
@@ -40,6 +41,7 @@ export const POSCustomerBenefits: React.FC<Props> = ({
   onUsePackageItem,
   onSelectGift,
   onPayDebt,
+  onUseGiftEntitlement, // 👈 MỚI
 }) => {
   const [loading, setLoading] = useState(false);
   const [packages, setPackages] = useState<CustomerPackage[]>([]);
@@ -88,11 +90,10 @@ export const POSCustomerBenefits: React.FC<Props> = ({
       setPackages(mappedPackages);
       setGifts(mappedGifts);
 
-      // 🔥 Lấy entitlements (Gift service lẻ)
+      // Lấy entitlements (Gift service lẻ)
       const entitlementsData = await customerService.fetchCustomerServiceEntitlements(customer.id);
       setEntitlements(entitlementsData);
 
-      // 🔥 SỬA: chỉ lấy PARTIALLY_PAID
       const invoices = await customerService.fetchCustomerInvoices(customer.id);
       const totalDebt = invoices
         .filter((inv) => inv.status === "PARTIALLY_PAID")
@@ -226,9 +227,24 @@ export const POSCustomerBenefits: React.FC<Props> = ({
                   Còn {ent.remaining_quantity} buổi
                 </div>
               </div>
-              <span className="px-2 py-1 text-[10px] font-bold bg-purple-700 text-white rounded-full">
-                🎁 QUÀ TẶNG
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-1 text-[10px] font-bold bg-purple-700 text-white rounded-full">
+                  🎁 QUÀ TẶNG
+                </span>
+                {ent.remaining_quantity > 0 && (
+                  <button
+                    onClick={() => onUseGiftEntitlement(
+                      ent.id,
+                      ent.services?.catalog_item?.name || 'Dịch vụ',
+                      ent.service_id,
+                      ent.remaining_quantity
+                    )}
+                    className="px-2.5 py-1 bg-emerald-600 text-white text-[10px] font-bold rounded hover:bg-emerald-700 transition-colors"
+                  >
+                    Sử dụng
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>

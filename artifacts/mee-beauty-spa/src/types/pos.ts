@@ -107,6 +107,8 @@ export interface CartItem {
   use_package?: boolean;
   customer_package_id?: string;
   package_item_id?: string;
+  use_gift_entitlement?: boolean;
+  gift_entitlement_id?: string;
 }
 
 export interface CreateInvoicePayload {

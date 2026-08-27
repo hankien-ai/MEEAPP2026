@@ -511,6 +511,57 @@ export const POSPage: React.FC = () => {
     showAlert("success", `Đã thêm "${serviceName}" vào giỏ (sử dụng gói)`);
   };
 
+  // ============ GIFT ENTITLEMENT USAGE ============
+  const handleUseGiftEntitlement = (
+    entitlementId: string,
+    serviceName: string,
+    serviceId: string,
+    remaining: number
+  ) => {
+    const service = services.find(s => s.id === serviceId);
+    if (!service) {
+      showAlert("error", "Không tìm thấy dịch vụ này");
+      return;
+    }
+
+    // Kiểm tra đã có trong giỏ chưa
+    const exists = cartItems.some(item => item.gift_entitlement_id === entitlementId);
+    if (exists) {
+      showAlert("warning", "Dịch vụ này đã được thêm vào giỏ");
+      return;
+    }
+
+    const selectedStaffId = getDefaultSellerId();
+    let defaultSplits: KTVSplit[] = [];
+    if (selectedStaffId) {
+      const staffName = staffList.find(s => s.id === selectedStaffId)?.full_name || loggedStaff?.full_name || "KTV";
+      defaultSplits = [{ staff_id: selectedStaffId, staff_name: staffName, share_percent: 100 }];
+    }
+
+    const newItem: CartItem = {
+      cart_item_id: `gift_${Date.now()}_${Math.random()}`,
+      item_type: "SERVICE",
+      catalog_item_id: service.catalog_item_id,
+      actual_service_id: service.id,
+      name: `🎁 ${serviceName} (Quà tặng)`,
+      quantity: 1,
+      unit_price: 0,
+      discount_amount: 0,
+      total_amount: 0,
+      seller_staff_id: selectedStaffId,
+      performing_staff_id: selectedStaffId,
+      sales_commission_type: service.sales_commission_type,
+      sales_commission_value: 0,
+      performance_commission_type: service.performance_commission_type,
+      performance_commission_value: service.performance_commission_value,
+      ktv_splits: defaultSplits,
+      is_gift: true,
+      use_gift_entitlement: true,
+      gift_entitlement_id: entitlementId,
+    };
+    setCartItems(prev => [...prev, newItem]);
+    showAlert("success", `Đã thêm "${serviceName}" (Quà tặng) vào giỏ`);
+  };
   // ========== CART OPERATIONS ==========
   const handleUpdateQuantity = (cartItemId: string, newQty: number) => {
     if (newQty <= 0) {
@@ -682,6 +733,19 @@ export const POSPage: React.FC = () => {
       return;
     }
 
+    // Nếu giỏ hàng chỉ chứa các item không phải thanh toán (dùng package hoặc gift entitlement)
+    const allFreeItems = cartItems.every(item => 
+      item.use_package === true || item.use_gift_entitlement === true
+    );
+
+    // Nếu tất cả đều là free và tổng tiền = 0 → tự động hoàn thành
+    if (allFreeItems && finalTotal === 0) {
+      // Gọi thanh toán ngay với method CASH, paidAmount = 0, không notes
+      handleConfirmPayment('CASH', 0, 'Tự động hoàn thành (dùng gói/quà tặng)');
+      return;
+    }
+
+    // Các trường hợp khác cần chọn thanh toán
     if (hasPackageInCart && !customer) {
       showAlert("error", "Gói dịch vụ (Package) bắt buộc phải chọn Khách hàng trước khi thanh toán!");
       return;
@@ -697,12 +761,7 @@ export const POSPage: React.FC = () => {
       }
     }
 
-    const hasOnlyPackageUsage = cartItems.length > 0 && cartItems.every(item => item.use_package === true);
-    if (hasOnlyPackageUsage && finalTotal === 0) {
-      handleConfirmPayment('CASH', 0, 'Sử dụng gói');
-      return;
-    }
-
+    // Mở modal thanh toán bình thường
     setIsDebtPayment(false);
     setIsPaymentModalOpen(true);
   };
@@ -913,6 +972,7 @@ export const POSPage: React.FC = () => {
                     setIsPaymentModalOpen(true);
                   });
                 }}
+                onUseGiftEntitlement={handleUseGiftEntitlement}
               />
             )}
 

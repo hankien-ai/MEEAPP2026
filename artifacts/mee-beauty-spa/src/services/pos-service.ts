@@ -382,7 +382,125 @@ export class POSService {
         if (item.item_type === "PACKAGE" && item.package_id) {
           packageInvoiceItemMap.set(item.package_id, invItem.id);
         }
+        // ============ GIFT ENTITLEMENT USAGE ============
+        if (item.use_gift_entitlement && item.gift_entitlement_id && item.actual_service_id) {
+          try {
+            // 1. Lấy current used_quantity và remaining_quantity
+            const { data: current, error: getErr } = await supabase
+              .from('customer_service_entitlements')
+              .select('used_quantity, remaining_quantity')
+              .eq('id', item.gift_entitlement_id)
+              .single();
 
+            if (getErr || !current) {
+              console.error("❌ Không tìm thấy quà tặng:", getErr);
+              return { success: false, error: 'Không tìm thấy quà tặng' };
+            }
+
+            if (current.remaining_quantity <= 0) {
+              console.error("❌ Quà tặng đã hết");
+              return { success: false, error: 'Quà tặng đã hết' };
+            }
+
+            // 2. Tăng used_quantity lên 1
+            const newUsed = current.used_quantity + 1;
+            const { data: updatedEnt, error: updateErr } = await supabase
+              .from('customer_service_entitlements')
+              .update({
+                used_quantity: newUsed,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', item.gift_entitlement_id)
+              .select()
+              .single();
+
+            if (updateErr) {
+              console.error("❌ Lỗi cập nhật gift entitlement:", updateErr);
+              return { success: false, error: `Không thể sử dụng quà tặng: ${updateErr.message}` };
+            }
+
+            // 3. Tạo service_session
+            const { error: sessErr } = await supabase
+              .from('service_sessions')
+              .insert({
+                organization_id: DEFAULT_ORG_ID,
+                branch_id: DEFAULT_BRANCH_ID,
+                customer_id: payload.customer_id,
+                catalog_item_id: item.catalog_item_id,
+                staff_id: item.performing_staff_id || null,
+                source_type: 'GIFT',
+                package_id: null,
+                price_charged: 0,
+                notes: `Sử dụng quà tặng, entitlement ${item.gift_entitlement_id}, invoice ${invoice.id}`,
+                performed_at: new Date().toISOString(),
+              });
+
+            if (sessErr) {
+              console.error("❌ Lỗi tạo service_session cho gift:", sessErr);
+              // Rollback: trả lại used_quantity
+              await supabase
+                .from('customer_service_entitlements')
+                .update({
+                  used_quantity: current.used_quantity,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', item.gift_entitlement_id);
+              return { success: false, error: `Không thể tạo lịch sử dịch vụ: ${sessErr.message}` };
+            }
+
+            // 4. Tạo PERFORMANCE commission cho KTV
+            const { data: serviceDetail, error: serviceErr } = await supabase
+              .from('services')
+              .select('performance_commission_type, performance_commission_value')
+              .eq('id', item.actual_service_id)
+              .single();
+
+            let totalPerformanceComm = 0;
+            if (!serviceErr && serviceDetail) {
+              const perfType = serviceDetail.performance_commission_type || 'PERCENT';
+              const perfValue = Number(serviceDetail.performance_commission_value || 0);
+              if (perfType === 'PERCENT') {
+                const { data: catalogItem } = await supabase
+                  .from('catalog_items')
+                  .select('price')
+                  .eq('id', item.catalog_item_id)
+                  .single();
+                const basePrice = catalogItem?.price || 0;
+                const pct = Math.min(100, Math.max(0, perfValue));
+                totalPerformanceComm = Math.round((basePrice * pct) / 100);
+              } else if (perfType === 'FIXED') {
+                totalPerformanceComm = perfValue;
+              }
+            }
+
+            if (totalPerformanceComm > 0 && item.ktv_splits && item.ktv_splits.length > 0) {
+              const splits = item.ktv_splits.map(split => ({
+                organization_id: DEFAULT_ORG_ID,
+                branch_id: DEFAULT_BRANCH_ID,
+                staff_id: split.staff_id,
+                invoice_item_id: null,
+                commission_type: 'PERFORMANCE',
+                amount: Math.round((totalPerformanceComm * split.share_percent) / 100),
+              })).filter(c => c.amount > 0);
+
+              if (splits.length > 0) {
+                const { error: commErr } = await supabase
+                  .from('staff_commissions')
+                  .insert(splits);
+                if (commErr) {
+                  console.error("❌ Lỗi lưu PERFORMANCE commission cho gift:", commErr);
+                } else {
+                  console.log("✅ PERFORMANCE commission for gift saved:", splits);
+                }
+              }
+            }
+
+            console.log("✅ Gift entitlement used:", updatedEnt);
+          } catch (err: any) {
+            console.error("❌ Lỗi sử dụng gift entitlement:", err);
+            return { success: false, error: `Lỗi sử dụng quà tặng: ${err.message}` };
+          }
+        }
         // ============ MULTI KTV ============
         if (item.item_type === "SERVICE" && item.ktv_splits && item.ktv_splits.length > 0 && !item.use_package && item.total_amount > 0) {
           const splits = item.ktv_splits.map((s) => ({
