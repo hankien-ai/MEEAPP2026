@@ -1,264 +1,307 @@
 // src/pages/dashboard.tsx
-import React, { useState, useEffect, useCallback } from "react";
-import { supabase, DEFAULT_ORG_ID, DEFAULT_BRANCH_ID } from "../services/supabase";
-import { Button, Card, Badge, Spinner } from "../components/primitives";
-import { attendanceService } from "../services/attendance.service";
-import { format } from "date-fns";
-import { vi } from "date-fns/locale";
+import React, { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/services/supabase";
+import { attendanceService } from "@/services/attendance.service";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday } from "date-fns";
+import { vi } from "date-fns/locale";
+import {
+  Users,
+  ShoppingCart,
+  UserCog,
+  Grid,
+  BarChart3,
+  Clock,
+  Calendar,
+  AlertCircle,
+  DollarSign,
+  FileText,
+  ClipboardCheck,
+} from "lucide-react";
 
-const formatVND = (val: number) =>
-  new Intl.NumberFormat("vi-VN").format(val) + " đ";
+// ==========================================================
+// HELPERS
+// ==========================================================
+const formatVND = (val: number) => new Intl.NumberFormat("vi-VN").format(val) + " đ";
 
-const formatDate = (dateStr: string) => {
-  if (!dateStr) return "";
-  const d = new Date(dateStr);
-  return format(d, "HH:mm", { locale: vi });
-};
+// Danh sách công việc mặc định cho nhân viên
+const DEFAULT_TASKS = [
+  { id: "task-1", label: "Vệ sinh khu vực làm việc", done: false },
+  { id: "task-2", label: "Kiểm tra dụng cụ, thiết bị", done: false },
+  { id: "task-3", label: "Kiểm tra vật tư tiêu hao", done: false },
+  { id: "task-4", label: "Chuẩn bị phòng dịch vụ", done: false },
+  { id: "task-5", label: "Cập nhật danh sách khách hẹn", done: false },
+];
 
-const formatDateFull = (dateStr: string) => {
-  if (!dateStr) return "";
-  const d = new Date(dateStr);
-  return format(d, "EEEE, dd/MM/yyyy", { locale: vi });
-};
-
+// ==========================================================
+// DASHBOARD PAGE
+// ==========================================================
 interface DashboardPageProps {
   userRole?: string;
   onNavigate?: (tab: string) => void;
 }
 
-export const DashboardPage: React.FC<DashboardPageProps> = ({ 
-  userRole = "staff",
-  onNavigate 
-}) => {
+export const DashboardPage: React.FC<DashboardPageProps> = ({ userRole, onNavigate }) => {
   const { currentStaff, role } = useAuth();
-  const isAdmin = role === 'admin' || userRole === 'owner';
+  const isAdmin = role === "admin" || userRole === "owner";
 
+  // ---------------------------------------------------------
+  // State chung
+  // ---------------------------------------------------------
+  const [today, setToday] = useState(new Date());
+  const [currentMonth, setCurrentMonth] = useState(new Date());
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+
+  // ---------------------------------------------------------
+  // Staff Dashboard States
+  // ---------------------------------------------------------
+  const [todayAttendance, setTodayAttendance] = useState<any>(null);
+  const [monthlyAttendance, setMonthlyAttendance] = useState<any[]>([]);
+  const [tasks, setTasks] = useState(DEFAULT_TASKS);
   const [submitting, setSubmitting] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
-  const [currentStaffId, setCurrentStaffId] = useState<string | null>(null);
-
-  // ---- Data states ----
-  const [todayStats, setTodayStats] = useState({
-    revenue: 0,
-    orders: 0,
-    customers: 0,
+  // ---------------------------------------------------------
+  // Admin Dashboard States
+  // ---------------------------------------------------------
+  const [adminStats, setAdminStats] = useState({
+    customersToday: 0,
+    invoicesToday: 0,
+    revenueToday: 0,
     staffOnDuty: 0,
-    staffAvailable: 0,
   });
-
-  const [staffStatus, setStaffStatus] = useState<
-    { id: string; full_name: string; role: string; status: "active" | "busy" | "off" }[]
-  >([]);
-
-  const [todayInvoices, setTodayInvoices] = useState<any[]>([]);
+  const [activities, setActivities] = useState<any[]>([]);
   const [actionItems, setActionItems] = useState<any[]>([]);
 
-  // Staff-only states
-  const [todayAttendance, setTodayAttendance] = useState<any>(null);
-  const [nextAppointment, setNextAppointment] = useState<any>(null);
-  const [currentService, setCurrentService] = useState<any>(null);
-  const [staffList, setStaffList] = useState<any[]>([]);
+  // ---------------------------------------------------------
+  // LOAD DATA
+  // ---------------------------------------------------------
+  useEffect(() => {
+    if (currentStaff) {
+      loadData();
+    }
+  }, [currentStaff, currentMonth]);
 
-  const loadDashboard = useCallback(async () => {
+  const loadData = async () => {
     setLoading(true);
-    setError(null);
     try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const todayIso = today.toISOString();
+      const staffId = currentStaff?.id;
+      if (!staffId) return;
 
-      // 1. Lấy invoices hôm nay
-      const { data: invoices, error: invErr } = await supabase
-        .from("invoices")
-        .select(`
-          id,
-          created_at,
-          customer_id,
-          status,
-          total_amount,
-          subtotal,
-          discount_amount,
-          payment_method,
-          customers (
-            full_name,
-            phone
-          )
-        `)
-        .gte("created_at", todayIso)
-        .order("created_at", { ascending: true });
+      // ---- Attendance ----
+      const todayStr = format(new Date(), "yyyy-MM-dd");
+      const attToday = await attendanceService.getTodayAttendance(staffId);
+      setTodayAttendance(attToday);
 
-      if (invErr) throw invErr;
+      const month = currentMonth.getMonth() + 1;
+      const year = currentMonth.getFullYear();
+      const attMonth = await attendanceService.getMonthlyAttendance(staffId, month, year);
+      setMonthlyAttendance(attMonth);
 
-      const paidInvoices = (invoices || []).filter(
-        (i) => i.status === "PAID" || i.status === "PARTIALLY_PAID"
-      );
-      const revenue = paidInvoices.reduce((sum, i) => sum + (i.total_amount || 0), 0);
-      const orders = (invoices || []).length;
-
-      const custIds = new Set(
-        (invoices || []).filter((i) => i.customer_id).map((i) => i.customer_id)
-      );
-      const customers = custIds.size;
-
-      // 2. Lấy staff attendance hôm nay
-      let staffOnDuty: any[] = [];
-      let staffAvailable: any[] = [];
-      try {
-        const { data: attendances, error: attErr } = await supabase
-          .from("attendance")
-          .select(`
-            staff_id,
-            check_in,
-            check_out,
-            staff:staff_id (
-              id,
-              full_name,
-              role
-            )
-          `)
-          .eq("work_date", today.toISOString().split("T")[0]);
-
-        if (!attErr && attendances) {
-          staffOnDuty = attendances.filter((a) => a.check_in !== null) || [];
-          staffAvailable = staffOnDuty.filter((a) => a.check_out === null) || [];
-        }
-      } catch (attErr) {
-        console.warn("Attendance table not ready:", attErr);
+      // ---- Nếu là admin, load thêm dữ liệu ----
+      if (isAdmin) {
+        await loadAdminData();
       }
-
-      // 3. Lấy tất cả staff (active)
-      const { data: staffData, error: staffErr } = await supabase
-        .from("staff")
-        .select("id, full_name, role, status")
-        .eq("status", "ACTIVE");
-
-      if (staffErr) throw staffErr;
-      setStaffList(staffData || []);
-
-      if (staffData && staffData.length > 0 && !currentStaffId) {
-        setCurrentStaffId(staffData[0].id);
-      }
-
-      const staffMap = new Map(
-        staffOnDuty.map((a) => [
-          a.staff_id,
-          { check_in: a.check_in, check_out: a.check_out, staff: a.staff },
-        ])
-      );
-
-      const staffStatusData = (staffData || []).map((s) => {
-        const att = staffMap.get(s.id);
-        if (!att) return { ...s, status: "off" as const };
-        if (att.check_out) return { ...s, status: "off" as const };
-        return { ...s, status: "active" as const };
-      });
-
-      const draftInvoices = (invoices || []).filter((i) => i.status === "DRAFT");
-      const actionItemsData = draftInvoices.map((inv) => ({
-        id: inv.id,
-        title: `Hóa đơn #${inv.id.slice(0, 8)} chưa thanh toán`,
-        action: "Thanh toán",
-      }));
-
-      setTodayInvoices(invoices || []);
-      setTodayStats({ revenue, orders, customers, staffOnDuty: staffOnDuty.length, staffAvailable: staffAvailable.length });
-      setStaffStatus(staffStatusData);
-      setActionItems(actionItemsData);
-
-      // 4. Lấy attendance của staff hiện tại
-      const staffIdToUse = currentStaffId || staffData?.[0]?.id;
-      if (staffIdToUse) {
-        const { data: attToday, error: attTodayErr } = await supabase
-          .from("attendance")
-          .select("*")
-          .eq("staff_id", staffIdToUse)
-          .eq("work_date", today.toISOString().split("T")[0])
-          .maybeSingle();
-
-        if (!attTodayErr) {
-          setTodayAttendance(attToday || null);
-        } else {
-          setTodayAttendance(null);
-        }
-
-        // Lấy service session đang diễn ra (nếu có)
-        const { data: sessions, error: sessErr } = await supabase
-          .from("service_sessions")
-          .select(`
-            id,
-            performed_at,
-            catalog_item_id,
-            customer_id,
-            catalog_items: catalog_item_id (
-              name
-            ),
-            customers: customer_id (
-              full_name
-            )
-          `)
-          .eq("staff_id", staffIdToUse)
-          .gt("performed_at", todayIso)
-          .order("performed_at", { ascending: true })
-          .limit(1);
-
-        if (!sessErr && sessions && sessions.length > 0) {
-          setCurrentService(sessions[0]);
-        } else {
-          setCurrentService(null);
-        }
-
-        // Khách tiếp theo
-        const { data: nextSessions, error: nextErr } = await supabase
-          .from("service_sessions")
-          .select(`
-            id,
-            performed_at,
-            catalog_item_id,
-            customer_id,
-            catalog_items: catalog_item_id (
-              name
-            ),
-            customers: customer_id (
-              full_name
-            )
-          `)
-          .eq("staff_id", staffIdToUse)
-          .gt("performed_at", new Date().toISOString())
-          .order("performed_at", { ascending: true })
-          .limit(1);
-
-        if (!nextErr && nextSessions && nextSessions.length > 0) {
-          setNextAppointment(nextSessions[0]);
-        } else {
-          setNextAppointment(null);
-        }
-      }
-    } catch (err: any) {
-      setError(err.message || "Lỗi tải dữ liệu Dashboard");
+    } catch (err) {
+      console.error("Lỗi tải dashboard:", err);
     } finally {
       setLoading(false);
     }
-  }, [currentStaffId]);
+  };
 
-  useEffect(() => {
-    loadDashboard();
-  }, [loadDashboard]);
+  // ---------------------------------------------------------
+  // ADMIN DATA
+  // ---------------------------------------------------------
+  const loadAdminData = async () => {
+    const todayStr = format(new Date(), "yyyy-MM-dd");
+    const startOfDay = new Date(todayStr).toISOString();
+    const endOfDay = new Date(todayStr + "T23:59:59.999Z").toISOString();
 
-  const handleCheckIn = async () => {
-    const staffId = currentStaffId || staffList[0]?.id;
-    if (!staffId) {
-      alert("Không tìm thấy nhân viên");
-      return;
+    // 1. Customers mới hôm nay
+    const { count: customersCount } = await supabase
+      .from("customers")
+      .select("id", { count: "exact", head: true })
+      .gte("created_at", startOfDay)
+      .lte("created_at", endOfDay);
+
+    // 2. Invoices hôm nay (đã thanh toán hoặc nợ một phần)
+    const { data: invoices } = await supabase
+      .from("invoices")
+      .select("total_amount, status")
+      .gte("created_at", startOfDay)
+      .lte("created_at", endOfDay)
+      .in("status", ["PAID", "PARTIALLY_PAID"]);
+
+    const revenue = invoices?.reduce((sum, inv) => sum + (inv.total_amount || 0), 0) || 0;
+    const invoiceCount = invoices?.length || 0;
+
+    // 3. Staff đang làm (check-in hôm nay, chưa check-out)
+    const { data: staffOnDuty } = await supabase
+      .from("attendance")
+      .select("staff_id")
+      .eq("work_date", todayStr)
+      .not("check_in", "is", null)
+      .is("check_out", null);
+
+    setAdminStats({
+      customersToday: customersCount || 0,
+      invoicesToday: invoiceCount,
+      revenueToday: revenue,
+      staffOnDuty: staffOnDuty?.length || 0,
+    });
+
+    // 4. Hoạt động hôm nay (timeline)
+    await loadActivities(todayStr);
+
+    // 5. Việc cần xử lý
+    await loadActionItems(todayStr);
+  };
+
+  const loadActivities = async (dateStr: string) => {
+    const activities: any[] = [];
+
+    // Attendance check-in
+    const { data: checkins } = await supabase
+      .from("attendance")
+      .select(`
+        staff_id,
+        check_in,
+        staff:staff_id (full_name)
+      `)
+      .eq("work_date", dateStr)
+      .not("check_in", "is", null)
+      .order("check_in", { ascending: false })
+      .limit(5);
+
+    if (checkins) {
+      checkins.forEach((item) => {
+        activities.push({
+          id: `att-${item.staff_id}`,
+          type: "checkin",
+          label: `${item.staff?.full_name || "Nhân viên"} đã check-in`,
+          time: item.check_in,
+          icon: "🟢",
+        });
+      });
     }
+
+    // Customers mới
+    const { data: newCustomers } = await supabase
+      .from("customers")
+      .select("full_name, created_at")
+      .gte("created_at", `${dateStr}T00:00:00`)
+      .lte("created_at", `${dateStr}T23:59:59`)
+      .order("created_at", { ascending: false })
+      .limit(5);
+
+    if (newCustomers) {
+      newCustomers.forEach((c) => {
+        activities.push({
+          id: `cust-${c.id}`,
+          type: "new_customer",
+          label: `Khách hàng mới: ${c.full_name}`,
+          time: c.created_at,
+          icon: "👤",
+        });
+      });
+    }
+
+    // Invoices thanh toán
+    const { data: paidInvoices } = await supabase
+      .from("invoices")
+      .select("id, total_amount, created_at")
+      .gte("created_at", `${dateStr}T00:00:00`)
+      .lte("created_at", `${dateStr}T23:59:59`)
+      .in("status", ["PAID", "PARTIALLY_PAID"])
+      .order("created_at", { ascending: false })
+      .limit(5);
+
+    if (paidInvoices) {
+      paidInvoices.forEach((inv) => {
+        activities.push({
+          id: `inv-${inv.id}`,
+          type: "invoice_paid",
+          label: `Hóa đơn ${inv.id.slice(0, 6)} - ${formatVND(inv.total_amount)}`,
+          time: inv.created_at,
+          icon: "💳",
+        });
+      });
+    }
+
+    // Sắp xếp theo thời gian giảm dần và lấy 10 mục gần nhất
+    activities.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+    setActivities(activities.slice(0, 10));
+  };
+
+  const loadActionItems = async (dateStr: string) => {
+    const items: any[] = [];
+
+    // 1. Staff chưa check-in hôm nay (active staff)
+    const { data: activeStaff } = await supabase.from("staff").select("id, full_name").eq("status", "ACTIVE");
+    const { data: checkedIn } = await supabase
+      .from("attendance")
+      .select("staff_id")
+      .eq("work_date", dateStr)
+      .not("check_in", "is", null);
+
+    const checkedInIds = new Set(checkedIn?.map((c) => c.staff_id) || []);
+    const notCheckedIn = activeStaff?.filter((s) => !checkedInIds.has(s.id)) || [];
+    if (notCheckedIn.length > 0) {
+      items.push({
+        id: "att-missing",
+        label: `${notCheckedIn.length} nhân viên chưa check-in hôm nay`,
+        action: "Xem",
+        link: "staff",
+        severity: "warning",
+      });
+    }
+
+    // 2. Hóa đơn chưa hoàn tất (DRAFT hoặc PARTIALLY_PAID)
+    const { data: draftInvoices } = await supabase
+      .from("invoices")
+      .select("id, status")
+      .in("status", ["DRAFT", "PARTIALLY_PAID"])
+      .limit(5);
+    if (draftInvoices && draftInvoices.length > 0) {
+      items.push({
+        id: "inv-pending",
+        label: `${draftInvoices.length} hóa đơn chưa hoàn tất`,
+        action: "Xem",
+        link: "invoices",
+        severity: "info",
+      });
+    }
+
+    // 3. Khách đang chờ (service_sessions chưa có staff)
+    const { data: waiting } = await supabase
+      .from("service_sessions")
+      .select("id, customers:customer_id (full_name)")
+      .is("staff_id", null)
+      .gt("performed_at", new Date().toISOString())
+      .limit(5);
+
+    if (waiting && waiting.length > 0) {
+      items.push({
+        id: "waiting",
+        label: `${waiting.length} khách đang chờ dịch vụ`,
+        action: "Xem",
+        link: "operations",
+        severity: "danger",
+      });
+    }
+
+    setActionItems(items);
+  };
+
+  // ---------------------------------------------------------
+  // HANDLERS – CHẤM CÔNG
+  // ---------------------------------------------------------
+  const handleCheckIn = async () => {
+    if (!currentStaff) return;
     setSubmitting(true);
     try {
-      const result = await attendanceService.checkIn(staffId);
+      const result = await attendanceService.checkIn(currentStaff.id);
       setTodayAttendance(result);
-      alert("✅ Check-in thành công!");
-      loadDashboard();
     } catch (err: any) {
       alert(err.message || "Lỗi check-in");
     } finally {
@@ -267,17 +310,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   };
 
   const handleCheckOut = async () => {
-    const staffId = currentStaffId || staffList[0]?.id;
-    if (!staffId) {
-      alert("Không tìm thấy nhân viên");
-      return;
-    }
+    if (!currentStaff) return;
     setSubmitting(true);
     try {
-      const result = await attendanceService.checkOut(staffId);
+      const result = await attendanceService.checkOut(currentStaff.id);
       setTodayAttendance(result);
-      alert("✅ Check-out thành công!");
-      loadDashboard();
     } catch (err: any) {
       alert(err.message || "Lỗi check-out");
     } finally {
@@ -285,304 +322,382 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
     }
   };
 
-  const handleGoToPOS = () => {
-    if (onNavigate) onNavigate("pos");
+  // ---------------------------------------------------------
+  // HANDLERS – TASKS
+  // ---------------------------------------------------------
+  const toggleTask = (taskId: string) => {
+    setTasks((prev) =>
+      prev.map((t) => (t.id === taskId ? { ...t, done: !t.done } : t))
+    );
   };
 
-  const handleGoToCustomers = () => {
-    if (onNavigate) onNavigate("customers");
+  // ---------------------------------------------------------
+  // HANDLERS – NAVIGATION
+  // ---------------------------------------------------------
+  const navigateTo = (tab: string) => {
+    if (onNavigate) onNavigate(tab);
   };
 
-  const handleGoToOperations = () => {
-    if (onNavigate) onNavigate("operations");
-  };
-
+  // ---------------------------------------------------------
+  // RENDER
+  // ---------------------------------------------------------
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-slate-50">
-        <Spinner className="py-12" />
+        <div className="text-center text-slate-500">Đang tải...</div>
       </div>
     );
   }
 
-  if (error) {
-    return (
-      <div className="p-4 max-w-7xl mx-auto">
-        <div className="p-4 bg-red-50 text-red-700 rounded-xl border border-red-200">
-          <p className="font-semibold">⚠️ {error}</p>
-          <button
-            onClick={loadDashboard}
-            className="mt-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700"
-          >
-            Thử lại
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // ==========================================================
+  // STAFF DASHBOARD
+  // ==========================================================
+  if (!isAdmin) {
+    const staffName = currentStaff?.full_name || "Nhân viên";
+    const now = new Date();
+    const isCheckedIn = todayAttendance?.check_in !== null && todayAttendance?.check_in !== undefined;
+    const isCheckedOut = todayAttendance?.check_out !== null && todayAttendance?.check_out !== undefined;
 
-  // ============================================================
-  // ADMIN DASHBOARD
-  // ============================================================
-  if (isAdmin) {
+    // Thống kê tháng
+    const daysInMonth = monthlyAttendance.filter((a) => a.check_in !== null).length;
+    const leaveDays = monthlyAttendance.filter((a) => a.check_in === null).length;
+    const lateDays = monthlyAttendance.filter((a) => a.status === "LATE").length;
+    const earlyLeave = monthlyAttendance.filter((a) => a.status === "EARLY_LEAVE").length;
+
+    // Lịch tháng
+    const monthStart = startOfMonth(currentMonth);
+    const monthEnd = endOfMonth(currentMonth);
+    const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
+
+    const getDayStatus = (date: Date) => {
+      const dateStr = format(date, "yyyy-MM-dd");
+      const att = monthlyAttendance.find((a) => a.work_date === dateStr);
+      if (!att) return null;
+      if (att.check_in && att.check_out) return "present";
+      if (att.check_in && !att.check_out) return "present";
+      return "absent";
+    };
+
     return (
-      <div className="min-h-screen bg-slate-50 p-4 md:p-6 max-w-7xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">MEE BEAUTY SPA</h1>
-            <p className="text-sm text-slate-500">
-              {formatDateFull(new Date().toISOString())}
-            </p>
-            <p className="text-sm text-slate-600 mt-1">
-              {isAdmin ? 'Chào buổi sáng, Quản lý 👋' : `Xin chào, ${currentStaff?.full_name || 'Nhân viên'} 👋`}
-            </p>
+      <div className="min-h-screen bg-slate-50 pb-20">
+        <div className="max-w-lg mx-auto p-4 space-y-4">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <h1 className="text-xl font-bold text-slate-800">Xin chào, {staffName} 👋</h1>
+            <span className="text-sm text-slate-500">{format(now, "EEEE, dd/MM/yyyy", { locale: vi })}</span>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={loadDashboard}
-              className="p-2 rounded-full hover:bg-slate-200 transition"
-            >
-              🔄
-            </button>
-            <div className="relative">
-              <span className="text-2xl">🔔</span>
-              {actionItems.length > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] rounded-full w-5 h-5 flex items-center justify-center">
-                  {actionItems.length}
-                </span>
+
+          {/* Chấm công */}
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-semibold text-slate-700">⏰ {format(now, "HH:mm", { locale: vi })}</span>
+              <span className="text-xs text-slate-400">{isCheckedOut ? "Đã kết thúc ca" : isCheckedIn ? "Đang làm việc" : "Chưa chấm công"}</span>
+            </div>
+            <div className="flex gap-3">
+              {!isCheckedIn && (
+                <button
+                  onClick={handleCheckIn}
+                  disabled={submitting}
+                  className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md shadow-emerald-600/30 active:scale-95 transition-all"
+                >
+                  🟢 CHẤM CÔNG
+                </button>
+              )}
+              {isCheckedIn && !isCheckedOut && (
+                <button
+                  onClick={handleCheckOut}
+                  disabled={submitting}
+                  className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl shadow-md shadow-rose-600/30 active:scale-95 transition-all"
+                >
+                  🔴 KẾT THÚC CA
+                </button>
+              )}
+              {isCheckedOut && (
+                <div className="flex-1 text-center py-3 bg-slate-100 text-slate-500 font-medium rounded-xl">
+                  ✅ Đã hoàn tất
+                </div>
               )}
             </div>
-          </div>
-        </div>
-
-        {/* Today Overview */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-            <div className="text-xs text-slate-500">👥 Khách</div>
-            <div className="text-2xl font-bold text-slate-900">{todayStats.customers}</div>
-          </div>
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-            <div className="text-xs text-slate-500">📅 Lịch</div>
-            <div className="text-2xl font-bold text-slate-900">{todayStats.orders}</div>
-          </div>
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-            <div className="text-xs text-slate-500">💰 Doanh thu</div>
-            <div className="text-2xl font-bold text-emerald-700">{formatVND(todayStats.revenue)}</div>
-          </div>
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-            <div className="text-xs text-slate-500">👩 KTV</div>
-            <div className="text-2xl font-bold text-slate-900">
-              {todayStats.staffAvailable} / {todayStats.staffOnDuty}
+            <div className="grid grid-cols-4 gap-2 mt-4 text-xs">
+              <div className="text-center p-2 bg-slate-50 rounded-xl">
+                <div className="text-emerald-600 font-bold">{daysInMonth}</div>
+                <div className="text-slate-400">Đã làm</div>
+              </div>
+              <div className="text-center p-2 bg-slate-50 rounded-xl">
+                <div className="text-amber-600 font-bold">{leaveDays}</div>
+                <div className="text-slate-400">Nghỉ</div>
+              </div>
+              <div className="text-center p-2 bg-slate-50 rounded-xl">
+                <div className="text-rose-600 font-bold">{lateDays}</div>
+                <div className="text-slate-400">Đi trễ</div>
+              </div>
+              <div className="text-center p-2 bg-slate-50 rounded-xl">
+                <div className="text-blue-600 font-bold">{earlyLeave}</div>
+                <div className="text-slate-400">Về sớm</div>
+              </div>
             </div>
           </div>
+
+          {/* Công việc hôm nay */}
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
+            <h2 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+              <ClipboardCheck className="w-4 h-4" /> Công việc hôm nay
+            </h2>
+            <div className="space-y-2">
+              {tasks.map((task) => (
+                <label key={task.id} className="flex items-start gap-3 p-2 rounded-xl hover:bg-slate-50 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={task.done}
+                    onChange={() => toggleTask(task.id)}
+                    className="mt-0.5 w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <span className={`text-sm ${task.done ? "line-through text-slate-400" : "text-slate-700"}`}>{task.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Lịch chấm công */}
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
+            <h2 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+              <Calendar className="w-4 h-4" /> Lịch chấm công
+            </h2>
+            <div className="grid grid-cols-7 gap-1 text-center text-xs">
+              {["T2", "T3", "T4", "T5", "T6", "T7", "CN"].map((d) => (
+                <div key={d} className="font-semibold text-slate-400 py-1">{d}</div>
+              ))}
+              {days.map((day) => {
+                const status = getDayStatus(day);
+                let bg = "bg-white hover:bg-slate-50";
+                if (status === "present") bg = "bg-emerald-100 hover:bg-emerald-200";
+                if (status === "absent") bg = "bg-rose-100 hover:bg-rose-200";
+                const todayFlag = isToday(day);
+                const dayNum = format(day, "d");
+                return (
+                  <button
+                    key={day.toISOString()}
+                    onClick={() => setSelectedDate(format(day, "yyyy-MM-dd"))}
+                    className={`p-1.5 rounded-lg ${bg} ${todayFlag ? "ring-2 ring-emerald-500" : ""}`}
+                  >
+                    <div className="font-medium">{dayNum}</div>
+                  </button>
+                );
+              })}
+            </div>
+            {selectedDate && (
+              <div className="mt-3 p-3 bg-slate-50 rounded-xl text-xs">
+                <div className="font-semibold">{format(new Date(selectedDate), "EEEE, dd/MM/yyyy", { locale: vi })}</div>
+                {(() => {
+                  const att = monthlyAttendance.find((a) => a.work_date === selectedDate);
+                  if (!att) return <div className="text-slate-400">Không có dữ liệu</div>;
+                  if (att.check_in) {
+                    return (
+                      <div className="mt-1 space-y-0.5">
+                        <div>Check-in: {format(new Date(att.check_in), "HH:mm")}</div>
+                        {att.check_out && <div>Check-out: {format(new Date(att.check_out), "HH:mm")}</div>}
+                        {att.notes && <div className="text-slate-400">Ghi chú: {att.notes}</div>}
+                      </div>
+                    );
+                  }
+                  return <div className="text-rose-600">Nghỉ</div>;
+                })()}
+              </div>
+            )}
+          </div>
+
+          {/* Thao tác nhanh */}
+          <div className="grid grid-cols-3 gap-3 mt-2">
+            <button
+              onClick={() => navigateTo("pos")}
+              className="flex flex-col items-center justify-center p-3 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all"
+            >
+              <ShoppingCart className="w-6 h-6 text-pink-600" />
+              <span className="text-xs font-medium mt-1">POS</span>
+            </button>
+            <button
+              onClick={() => navigateTo("customers")}
+              className="flex flex-col items-center justify-center p-3 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all"
+            >
+              <Users className="w-6 h-6 text-blue-600" />
+              <span className="text-xs font-medium mt-1">Khách hàng</span>
+            </button>
+            <button
+              onClick={() => navigateTo("extension")}
+              className="flex flex-col items-center justify-center p-3 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all"
+            >
+              <Grid className="w-6 h-6 text-purple-600" />
+              <span className="text-xs font-medium mt-1">Mở rộng</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ==========================================================
+  // ADMIN DASHBOARD
+  // ==========================================================
+  const adminName = currentStaff?.full_name || "Quản lý";
+  const now = new Date();
+
+  return (
+    <div className="min-h-screen bg-slate-50 pb-20">
+      <div className="max-w-2xl mx-auto p-4 space-y-4">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-bold text-slate-800">Xin chào, {adminName} 👋</h1>
+          <span className="text-sm text-slate-500">{format(now, "EEEE, dd/MM/yyyy", { locale: vi })}</span>
         </div>
 
-        {/* Action Required */}
+        {/* Chấm công cho Admin (nếu có) */}
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 flex items-center justify-between">
+          <div>
+            <span className="text-sm font-medium text-slate-700">Chấm công hôm nay</span>
+            {todayAttendance ? (
+              <div className="text-xs text-emerald-600">✅ Đã check-in {format(new Date(todayAttendance.check_in), "HH:mm")}</div>
+            ) : (
+              <div className="text-xs text-amber-600">⏳ Chưa chấm công</div>
+            )}
+          </div>
+          <button
+            onClick={todayAttendance ? handleCheckOut : handleCheckIn}
+            disabled={submitting}
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md shadow-indigo-600/30 active:scale-95 transition-all"
+          >
+            {todayAttendance ? "Kết thúc ca" : "Chấm công"}
+          </button>
+        </div>
+
+        {/* Báo cáo hôm nay */}
+        <div className="grid grid-cols-2 gap-3">
+          <div
+            onClick={() => navigateTo("customers")}
+            className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all cursor-pointer"
+          >
+            <div className="flex items-center justify-between">
+              <Users className="w-5 h-5 text-blue-600" />
+              <span className="text-xs text-slate-400">Hôm nay</span>
+            </div>
+            <div className="mt-2 text-2xl font-bold text-slate-800">{adminStats.customersToday}</div>
+            <div className="text-xs text-slate-500">Khách hàng mới</div>
+          </div>
+          <div
+            onClick={() => navigateTo("invoices")}
+            className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all cursor-pointer"
+          >
+            <div className="flex items-center justify-between">
+              <FileText className="w-5 h-5 text-purple-600" />
+              <span className="text-xs text-slate-400">Hôm nay</span>
+            </div>
+            <div className="mt-2 text-2xl font-bold text-slate-800">{adminStats.invoicesToday}</div>
+            <div className="text-xs text-slate-500">Hóa đơn</div>
+          </div>
+          <div
+            onClick={() => navigateTo("reports")}
+            className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all cursor-pointer"
+          >
+            <div className="flex items-center justify-between">
+              <DollarSign className="w-5 h-5 text-emerald-600" />
+              <span className="text-xs text-slate-400">Hôm nay</span>
+            </div>
+            <div className="mt-2 text-2xl font-bold text-emerald-700">{formatVND(adminStats.revenueToday)}</div>
+            <div className="text-xs text-slate-500">Doanh thu</div>
+          </div>
+          <div
+            onClick={() => navigateTo("staff")}
+            className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all cursor-pointer"
+          >
+            <div className="flex items-center justify-between">
+              <UserCog className="w-5 h-5 text-amber-600" />
+              <span className="text-xs text-slate-400">Hôm nay</span>
+            </div>
+            <div className="mt-2 text-2xl font-bold text-slate-800">{adminStats.staffOnDuty}</div>
+            <div className="text-xs text-slate-500">Nhân viên đang làm</div>
+          </div>
+        </div>
+
+        {/* Việc cần xử lý */}
         {actionItems.length > 0 && (
-          <section>
-            <h2 className="text-lg font-semibold text-slate-800 mb-3">⚠️ Cần xử lý</h2>
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
+            <h2 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-600" /> Việc cần xử lý
+            </h2>
             <div className="space-y-2">
               {actionItems.map((item) => (
                 <div
                   key={item.id}
-                  className="bg-white p-4 rounded-xl border border-amber-200 shadow-sm flex flex-wrap items-center justify-between gap-3"
+                  onClick={() => navigateTo(item.link)}
+                  className="flex items-center justify-between p-3 bg-slate-50 rounded-xl cursor-pointer hover:bg-slate-100 transition-all"
                 >
-                  <span className="text-sm text-slate-800">{item.title}</span>
-                  <Button size="sm" variant="outline" onClick={handleGoToPOS}>
-                    {item.action}
-                  </Button>
+                  <span className="text-sm text-slate-700">{item.label}</span>
+                  <span className="text-xs text-indigo-600 font-medium">Xem →</span>
                 </div>
               ))}
             </div>
-          </section>
+          </div>
         )}
 
-        {/* Live Operations */}
-        <section>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-semibold text-slate-800">🔄 Đang vận hành</h2>
-            <button className="text-sm text-blue-600 hover:underline" onClick={() => onNavigate?.("operations")}>
-              Xem tất cả
-            </button>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {staffStatus.length === 0 ? (
-              <div className="col-span-2 text-center text-slate-500 py-8">
-                Chưa có nhân viên nào đang làm.
-              </div>
-            ) : (
-              staffStatus.map((staff) => {
-                const statusColor =
-                  staff.status === "active"
-                    ? "bg-emerald-100 text-emerald-800"
-                    : staff.status === "busy"
-                    ? "bg-blue-100 text-blue-800"
-                    : "bg-slate-100 text-slate-500";
-                const statusLabel =
-                  staff.status === "active"
-                    ? "🟢 Rảnh"
-                    : staff.status === "busy"
-                    ? "🔵 Đang phục vụ"
-                    : "⚪ Nghỉ / tạm vắng";
-                return (
-                  <div key={staff.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="font-medium text-slate-900">{staff.full_name}</div>
-                        <div className="text-xs text-slate-500">{staff.role}</div>
-                      </div>
-                      <Badge variant="neutral" className={statusColor}>
-                        {statusLabel}
-                      </Badge>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </section>
-
-        {/* Today's Appointments */}
-        <section>
-          <h2 className="text-lg font-semibold text-slate-800 mb-3">📋 Hôm nay</h2>
-          {todayInvoices.length === 0 ? (
-            <div className="bg-white p-8 rounded-xl border border-slate-200 text-center text-slate-500">
-              Hôm nay chưa có lịch hẹn.
-            </div>
+        {/* Hoạt động hôm nay */}
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
+          <h2 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+            <Clock className="w-4 h-4" /> Hoạt động hôm nay
+          </h2>
+          {activities.length === 0 ? (
+            <div className="text-center text-slate-400 text-sm py-4">Chưa có hoạt động nào</div>
           ) : (
-            <div className="space-y-2">
-              {todayInvoices.map((inv) => (
-                <div
-                  key={inv.id}
-                  className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-3"
-                >
-                  <div>
-                    <div className="font-medium text-slate-900">
-                      {inv.customers?.full_name || "Khách vãng lai"}
-                    </div>
-                    <div className="text-xs text-slate-500">
-                      {formatDate(inv.created_at)} · {inv.customers?.phone || ""}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="neutral" className="bg-slate-100">
-                      {inv.status === "PAID" ? "Đã thanh toán" : inv.status}
-                    </Badge>
-                    <span className="text-sm font-medium text-slate-800">
-                      {formatVND(inv.total_amount || 0)}
-                    </span>
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {activities.map((act) => (
+                <div key={act.id} className="flex items-start gap-3 p-2 border-b border-slate-100 last:border-0">
+                  <span className="text-lg">{act.icon}</span>
+                  <div className="flex-1">
+                    <div className="text-sm text-slate-800">{act.label}</div>
+                    <div className="text-xs text-slate-400">{format(new Date(act.time), "HH:mm")}</div>
                   </div>
                 </div>
               ))}
             </div>
           )}
-        </section>
-
-        {/* Quick Actions */}
-        <div className="flex gap-3 bg-white p-3 rounded-2xl shadow-lg border border-slate-200 md:shadow-none md:border-0 md:bg-transparent md:p-0">
-          <Button variant="primary" className="flex-1 md:flex-none" onClick={handleGoToCustomers}>
-            + Thêm khách
-          </Button>
-          <Button variant="secondary" className="flex-1 md:flex-none" onClick={handleGoToPOS}>
-            🛒 POS
-          </Button>
-          <Button variant="outline" className="flex-1 md:flex-none" onClick={handleGoToOperations}>
-            ⚙️ Vận hành
-          </Button>
         </div>
-      </div>
-    );
-  }
 
-  // ============================================================
-  // STAFF DASHBOARD
-  // ============================================================
-  const currentStaffName = staffList.find(s => s.id === currentStaffId)?.full_name || "Nhân viên";
-
-  return (
-    <div className="min-h-screen bg-slate-50 p-4 max-w-lg mx-auto space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">MEE BEAUTY SPA</h1>
-        <p className="text-sm text-slate-500">Xin chào, {currentStaffName} 👋</p>
-        <p className="text-xs text-slate-400 mt-1">{formatDateFull(new Date().toISOString())}</p>
-      </div>
-
-      {/* Attendance */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-medium">Chấm công</span>
-          {todayAttendance?.check_in ? (
-            <Badge variant="success" className="bg-emerald-100 text-emerald-800">
-              🟢 Đã chấm công
-            </Badge>
-          ) : (
-            <Badge variant="neutral">Chưa chấm công</Badge>
-          )}
+        {/* Thao tác nhanh */}
+        <div className="grid grid-cols-5 gap-2 mt-2">
+          <button
+            onClick={() => navigateTo("pos")}
+            className="flex flex-col items-center justify-center p-2 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all"
+          >
+            <ShoppingCart className="w-5 h-5 text-pink-600" />
+            <span className="text-[10px] font-medium mt-1">POS</span>
+          </button>
+          <button
+            onClick={() => navigateTo("customers")}
+            className="flex flex-col items-center justify-center p-2 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all"
+          >
+            <Users className="w-5 h-5 text-blue-600" />
+            <span className="text-[10px] font-medium mt-1">Khách hàng</span>
+          </button>
+          <button
+            onClick={() => navigateTo("staff")}
+            className="flex flex-col items-center justify-center p-2 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all"
+          >
+            <UserCog className="w-5 h-5 text-amber-600" />
+            <span className="text-[10px] font-medium mt-1">Nhân viên</span>
+          </button>
+          <button
+            onClick={() => navigateTo("reports")}
+            className="flex flex-col items-center justify-center p-2 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all"
+          >
+            <BarChart3 className="w-5 h-5 text-emerald-600" />
+            <span className="text-[10px] font-medium mt-1">Báo cáo</span>
+          </button>
+          <button
+            onClick={() => navigateTo("extension")}
+            className="flex flex-col items-center justify-center p-2 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all"
+          >
+            <Grid className="w-5 h-5 text-purple-600" />
+            <span className="text-[10px] font-medium mt-1">Mở rộng</span>
+          </button>
         </div>
-        {todayAttendance?.check_in && (
-          <div className="mt-1 text-xs text-slate-500">
-            Check-in: {formatDate(todayAttendance.check_in)}
-            {todayAttendance.check_out && ` · Check-out: ${formatDate(todayAttendance.check_out)}`}
-          </div>
-        )}
-        <div className="mt-3">
-          {!todayAttendance?.check_in ? (
-            <Button variant="primary" className="w-full py-3 text-base" onClick={handleCheckIn} disabled={submitting}>
-              🟢 Check-in
-            </Button>
-          ) : todayAttendance?.check_out ? (
-            <div className="text-center text-sm text-slate-500">✅ Ca hôm nay đã kết thúc</div>
-          ) : (
-            <Button variant="secondary" className="w-full py-3 text-base" onClick={handleCheckOut} disabled={submitting}>
-              🔴 Check-out
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Current Status */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-        <div className="text-sm font-medium text-slate-700">Trạng thái của bạn</div>
-        <div className="mt-2 flex items-center gap-2">
-          <span className="text-2xl">🟢</span>
-          <span className="text-lg font-semibold text-slate-800">Đang rảnh</span>
-        </div>
-        {currentService && (
-          <div className="mt-2 border-t pt-2 text-xs text-slate-600">
-            <div>Đang phục vụ: {currentService.customers?.full_name}</div>
-            <div>{currentService.catalog_items?.name}</div>
-            <div className="text-slate-400">{formatDate(currentService.performed_at)}</div>
-          </div>
-        )}
-      </div>
-
-      {/* Next Appointment */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-        <div className="text-sm font-medium text-slate-700">Khách tiếp theo</div>
-        {nextAppointment ? (
-          <div className="mt-3">
-            <div className="text-xl font-bold text-slate-900">
-              {nextAppointment.customers?.full_name || "Khách"}
-            </div>
-            <div className="text-sm text-slate-600">{nextAppointment.catalog_items?.name}</div>
-            <div className="text-xs text-slate-400 mt-1">{formatDate(nextAppointment.performed_at)}</div>
-            <div className="mt-3 flex gap-2">
-              <Button size="sm" variant="outline" className="flex-1">Xem khách</Button>
-              <Button size="sm" variant="secondary" className="flex-1">Bắt đầu</Button>
-            </div>
-          </div>
-        ) : (
-          <div className="mt-2 text-sm text-slate-500">Bạn hiện không có lịch khách.</div>
-        )}
-      </div>
-
-      {/* POS Button */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-lg">
-        <Button variant="primary" className="w-full py-4 text-lg shadow-lg shadow-emerald-600/20" onClick={handleGoToPOS}>
-          🛒 MỞ POS
-        </Button>
       </div>
     </div>
   );
