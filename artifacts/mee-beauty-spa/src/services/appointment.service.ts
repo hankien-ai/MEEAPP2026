@@ -1,3 +1,4 @@
+// src/services/appointment.service.ts
 import { supabase, DEFAULT_ORG_ID, DEFAULT_BRANCH_ID } from './supabase';
 
 export interface Appointment {
@@ -22,7 +23,15 @@ export const appointmentService = {
   async getAppointments(staffId?: string, date?: string): Promise<Appointment[]> {
     let query = supabase
       .from('appointments')
-      .select('*, customer:customer_id(full_name, phone), staff:staff_id(full_name), service:service_id(name)')
+      .select(`
+        *,
+        customer:customer_id(full_name, phone),
+        staff:staff_id(full_name),
+        service:service_id(
+          catalog_item_id,
+          catalog_item:catalog_items(name, code)
+        )
+      `)
       .eq('organization_id', DEFAULT_ORG_ID)
       .eq('branch_id', DEFAULT_BRANCH_ID);
 

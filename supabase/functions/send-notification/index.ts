@@ -19,7 +19,10 @@ serve(async (req) => {
   try {
     const { staffId, title, body, data } = await req.json();
 
-    // Lấy tất cả subscription của staff
+    if (!staffId) {
+      return new Response(JSON.stringify({ error: 'staffId required' }), { status: 400 });
+    }
+
     const { data: subscriptions, error } = await supabase
       .from('push_subscriptions')
       .select('endpoint, p256dh, auth')

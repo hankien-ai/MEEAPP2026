@@ -14,8 +14,11 @@ import { InvoicesPage } from "./pages/InvoicesPage";
 import ReportsPage from "./pages/ReportsPage";
 import ExtensionPage from "./pages/ExtensionPage";
 import PayrollPage from "./pages/PayrollPage";
-import PayrollDetailPage from "./pages/PayrollDetailPage"; // <-- Import
+import PayrollDetailPage from "./pages/PayrollDetailPage";
+import AppointmentsPage from "./pages/AppointmentsPage";
+import TasksPage from "./pages/TasksPage";
 import { AppShell } from "./components/app-shell";
+import { NotificationBell } from "@/components/NotificationBell";
 
 export function App() {
   const { role, isLoggedIn, visibility, isAdmin, loading, currentStaff } = useAuth();
@@ -42,19 +45,24 @@ export function App() {
     if (isAdmin && visibility.catalog) tabs.push("catalog");
     if (visibility.operations) tabs.push("operations");
     if (isAdmin && visibility.staff) tabs.push("staff");
-    if (isAdmin && visibility.payroll) tabs.push("payroll"); // <-- Thêm payroll
+    if (isAdmin && visibility.payroll) tabs.push("payroll");
     if (isAdmin && visibility.settings) tabs.push("settings");
     if (isAdmin) tabs.push("invoices");
     if (isAdmin) tabs.push("reports");
     if (isAdmin) tabs.push("extension");
+    // Thêm các module mới (luôn hiển thị nếu admin hoặc staff có quyền)
+    if (isAdmin) tabs.push("appointments");
+    if (isAdmin) tabs.push("tasks");
+    // Staff cũng có thể xem lịch và công việc của mình (nếu có quyền)
+    if (visibility.customers) tabs.push("appointments");
+    if (visibility.staff) tabs.push("tasks");
 
-    const visibleTabs = tabs;
+    // Loại bỏ trùng lặp
+    const uniqueTabs = Array.from(new Set(tabs));
 
-    if (!isAdmin && activeTab !== 'dashboard') {
-      const isAllowed = visibleTabs.includes(activeTab);
-      if (!isAllowed) {
-        setActiveTab(visibleTabs[0] || 'dashboard');
-      }
+    // Nếu activeTab không có trong danh sách, chuyển sang tab đầu tiên
+    if (!uniqueTabs.includes(activeTab)) {
+      setActiveTab(uniqueTabs[0] || "dashboard");
     }
   }, [activeTab, isAdmin, isLoggedIn, visibility, loading]);
 
@@ -81,7 +89,12 @@ export function App() {
     if (isAdmin) tabs.push("invoices");
     if (isAdmin) tabs.push("reports");
     if (isAdmin) tabs.push("extension");
-    return tabs;
+    if (isAdmin) tabs.push("appointments");
+    if (isAdmin) tabs.push("tasks");
+    // Staff cũng có thể xem lịch và công việc của mình (nếu có quyền)
+    if (visibility.customers) tabs.push("appointments");
+    if (visibility.staff) tabs.push("tasks");
+    return Array.from(new Set(tabs));
   };
 
   const visibleTabs = getVisibleTabs();
@@ -123,6 +136,8 @@ export function App() {
       case "invoices": return <InvoicesPage />;
       case "reports": return <ReportsPage />;
       case "extension": return <ExtensionPage onNavigate={setActiveTab} />;
+      case "appointments": return <AppointmentsPage />;
+      case "tasks": return <TasksPage />;
       default: return <NotFoundPage />;
     }
   };
@@ -142,7 +157,16 @@ export function App() {
         </div>
       </div>
       <div className="flex items-center gap-2">
-        <button onClick={() => { localStorage.removeItem('mee_role'); window.location.reload(); }} className="text-xs text-slate-500 hover:text-slate-700 px-2 py-1 rounded-lg hover:bg-slate-100">Đăng xuất</button>
+        <NotificationBell />
+        <button
+          onClick={() => {
+            localStorage.removeItem('mee_role');
+            window.location.reload();
+          }}
+          className="text-xs text-slate-500 hover:text-slate-700 px-2 py-1 rounded-lg hover:bg-slate-100"
+        >
+          Đăng xuất
+        </button>
       </div>
     </header>
   );

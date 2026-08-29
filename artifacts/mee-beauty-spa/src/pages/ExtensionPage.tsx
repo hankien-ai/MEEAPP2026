@@ -13,7 +13,10 @@ import {
   FileText,
   LayoutDashboard,
   Check,
-  Zap
+  Zap,
+  Calendar,         // Thêm
+  ClipboardCheck,   // Thêm
+  Grid,
 } from 'lucide-react';
 import { Button, Spinner } from '@/components/primitives';
 
@@ -41,6 +44,9 @@ const ALL_MODULES: ExtensionModule[] = [
   { id: 'dashboard', title: 'Dashboard', icon: LayoutDashboard, tabKey: 'dashboard', category: 'Tổng quan', description: 'Trang chính' },
   { id: 'reports', title: 'Báo cáo', icon: BarChart3, tabKey: 'reports', category: 'Báo cáo', description: 'Doanh thu, thống kê', adminOnly: true },
   { id: 'settings', title: 'Cài đặt', icon: Settings, tabKey: 'settings', category: 'Cài đặt', description: 'Cài đặt hệ thống', adminOnly: true },
+  // ===== THÊM MỚI =====
+  { id: 'appointments', title: 'Lịch hẹn', icon: Calendar, tabKey: 'appointments', category: 'Quản lý', description: 'Quản lý lịch hẹn khách hàng' },
+  { id: 'tasks', title: 'Công việc', icon: ClipboardCheck, tabKey: 'tasks', category: 'Quản lý', description: 'Quản lý công việc nhân viên' },
 ];
 
 const ExtensionPage: React.FC<ExtensionPageProps> = ({ onNavigate }) => {

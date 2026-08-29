@@ -1,3 +1,4 @@
+// src/services/notification.service.ts
 import { supabase, DEFAULT_ORG_ID, DEFAULT_BRANCH_ID } from './supabase';
 
 export interface Notification {
