@@ -12,6 +12,8 @@ import { attendanceService } from "../services/attendance.service";
 import { payrollService } from "../services/payroll.service";
 import { Button, Card, Badge, Spinner, Input } from "../components/primitives";
 import { StaffDetailPage } from "./StaffDetailPage";
+import { useAuth } from "@/context/AuthContext";
+import { authService } from "@/services/auth.service";
 
 // ============================================================
 // HELPER COMPONENTS & ICONS
@@ -40,14 +42,14 @@ const Avatar: React.FC<{ name: string; className?: string }> = ({ name, classNam
 // ============================================================
 
 interface StaffPageProps {
-  userRole?: string; // 'owner' hoặc 'staff'
+  userRole?: string; // 'owner' hoặc 'staff' - giữ để tương thích nhưng sẽ dùng useAuth
 }
 
 // ============================================================
 // SUB-COMPONENTS
 // ============================================================
 
-// ---- Staff List (sửa lại để dùng div thay vì Card) ----
+// ---- Staff List ----
 const StaffList: React.FC<{
   staffList: StaffMemberDomain[];
   loading: boolean;
@@ -56,6 +58,7 @@ const StaffList: React.FC<{
   onEdit: (staff: StaffMemberDomain) => void;
   onToggleStatus: (id: string, status: "ACTIVE" | "INACTIVE") => void;
   onArchive: (id: string, name: string) => void;
+  onResetPin: (staffId: string) => void; // 👈 MỚI
   onRefresh: () => void;
   isAdmin: boolean;
   onSelectStaff: (staffId: string) => void;
@@ -67,6 +70,7 @@ const StaffList: React.FC<{
   onEdit,
   onToggleStatus,
   onArchive,
+  onResetPin,
   onRefresh,
   isAdmin,
   onSelectStaff,
@@ -97,7 +101,6 @@ const StaffList: React.FC<{
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {staffList.map((staff) => (
-            // 🔥 SỬA: Dùng div thay vì Card để onClick hoạt động
             <div
               key={staff.id}
               className="p-4 rounded-2xl border border-slate-100 bg-white shadow-xs hover:shadow-md transition-all flex flex-col justify-between cursor-pointer"
@@ -143,7 +146,7 @@ const StaffList: React.FC<{
               </div>
 
               {isAdmin && (
-                <div className="mt-4 pt-3 border-t border-slate-100 grid grid-cols-3 gap-1.5">
+                <div className="mt-4 pt-3 border-t border-slate-100 grid grid-cols-2 gap-1.5">
                   <Button
                     size="sm"
                     variant="outline"
@@ -167,6 +170,14 @@ const StaffList: React.FC<{
                     className="w-full text-xs rounded-xl h-9 font-medium"
                   >
                     🗑 Lưu trữ
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={(e) => { e.stopPropagation(); onResetPin(staff.id); }}
+                    className="w-full text-xs rounded-xl h-9 font-medium text-amber-600 border-amber-300 hover:bg-amber-50"
+                  >
+                    🔑 Reset PIN
                   </Button>
                 </div>
               )}
@@ -644,8 +655,7 @@ const SalarySettings: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
 // ============================================================
 
 export const StaffPage: React.FC<StaffPageProps> = ({ userRole = "staff" }) => {
-  const isAdmin = userRole === "owner"; // admin
-
+  const { isAdmin } = useAuth(); // 👈 Lấy từ context auth thật
   const [activeSubTab, setActiveSubTab] = useState<"list" | "attendance" | "payroll" | "settings">("list");
 
   // Staff List state
@@ -666,6 +676,8 @@ export const StaffPage: React.FC<StaffPageProps> = ({ userRole = "staff" }) => {
     base_salary: 0,
     status: "ACTIVE",
     started_on: new Date().toISOString().split("T")[0],
+    pin: "",          // 👈 THÊM
+    confirm_pin: "",  // 👈 THÊM
   });
 
   // For attendance/payroll selection
@@ -697,7 +709,7 @@ export const StaffPage: React.FC<StaffPageProps> = ({ userRole = "staff" }) => {
     loadData();
   }, [loadData]);
 
-  // Staff CRUD handlers
+  // ---- Staff CRUD handlers ----
   const handleOpenModal = (staff?: StaffMemberDomain) => {
     if (staff) {
       setEditingStaff(staff);
@@ -708,6 +720,8 @@ export const StaffPage: React.FC<StaffPageProps> = ({ userRole = "staff" }) => {
         base_salary: staff.base_salary || 0,
         status: staff.status,
         started_on: staff.started_on ? staff.started_on.split("T")[0] : "",
+        pin: "",
+        confirm_pin: "",
       });
     } else {
       setEditingStaff(null);
@@ -718,6 +732,8 @@ export const StaffPage: React.FC<StaffPageProps> = ({ userRole = "staff" }) => {
         base_salary: 0,
         status: "ACTIVE",
         started_on: new Date().toISOString().split("T")[0],
+        pin: "",
+        confirm_pin: "",
       });
     }
     setIsModalOpen(true);
@@ -732,6 +748,19 @@ export const StaffPage: React.FC<StaffPageProps> = ({ userRole = "staff" }) => {
     e.preventDefault();
     setErrorMessage(null);
     setSuccessMessage(null);
+
+    // 👇 Validate PIN (chỉ khi tạo mới, không cần khi edit)
+    if (!editingStaff) {
+      if (formData.pin.length !== 6 || !/^\d{6}$/.test(formData.pin)) {
+        setErrorMessage("Mã PIN phải gồm 6 chữ số");
+        return;
+      }
+      if (formData.pin !== formData.confirm_pin) {
+        setErrorMessage("Mã PIN và xác nhận không khớp");
+        return;
+      }
+    }
+
     try {
       const payload = {
         full_name: formData.full_name,
@@ -741,13 +770,20 @@ export const StaffPage: React.FC<StaffPageProps> = ({ userRole = "staff" }) => {
         status: formData.status,
         started_on: formData.started_on,
       };
+
+      let staffId: string;
       if (editingStaff) {
         await updateStaff(editingStaff.id, payload);
+        staffId = editingStaff.id;
         setSuccessMessage("Cập nhật nhân viên thành công!");
       } else {
-        await createStaff(payload);
+        const newStaff = await createStaff(payload);
+        staffId = newStaff.id;
+        // 👇 Set PIN cho staff mới
+        await authService.setStaffPin(staffId, formData.pin);
         setSuccessMessage("Thêm mới nhân viên thành công!");
       }
+
       handleCloseModal();
       await loadData();
     } catch (err: any) {
@@ -773,6 +809,27 @@ export const StaffPage: React.FC<StaffPageProps> = ({ userRole = "staff" }) => {
       await loadData();
     } catch (err: any) {
       setErrorMessage(err.message);
+    }
+  };
+
+  // 👇 Reset PIN handler
+  const handleResetPin = async (staffId: string) => {
+    const newPin = window.prompt("Nhập mã PIN mới (6 chữ số):");
+    if (!newPin) return;
+    if (newPin.length !== 6 || !/^\d{6}$/.test(newPin)) {
+      alert("PIN phải gồm 6 chữ số");
+      return;
+    }
+    const confirmPin = window.prompt("Xác nhận mã PIN mới:");
+    if (newPin !== confirmPin) {
+      alert("Mã PIN không khớp");
+      return;
+    }
+    try {
+      await authService.setStaffPin(staffId, newPin);
+      setSuccessMessage("Reset PIN thành công!");
+    } catch (err: any) {
+      setErrorMessage(err.message || "Lỗi reset PIN");
     }
   };
 
@@ -810,13 +867,13 @@ export const StaffPage: React.FC<StaffPageProps> = ({ userRole = "staff" }) => {
 
   return (
     <div className="min-h-screen bg-slate-50/60 pb-12">
-      {/* Sticky iPhone Header Bar */}
+      {/* Sticky Header */}
       <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-200/80 px-4 py-3">
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
           <div>
             <h1 className="text-lg font-bold text-slate-900 leading-tight">Quản lý Nhân viên</h1>
             <p className="text-xs text-slate-400 font-medium">
-              {isAdmin ? "Quyền Quản lý (Owner)" : "Quyền Nhân viên (Staff)"}
+              {isAdmin ? "Quyền Quản lý" : "Quyền Nhân viên"}
             </p>
           </div>
           {activeSubTab === "list" && isAdmin && (
@@ -831,7 +888,7 @@ export const StaffPage: React.FC<StaffPageProps> = ({ userRole = "staff" }) => {
       </header>
 
       <main className="max-w-5xl mx-auto p-4 space-y-4">
-        {/* iOS Style Segmented Control Tab Navigation */}
+        {/* Segmented Control Tab Navigation */}
         <nav className="flex p-1 bg-slate-200/70 backdrop-blur-sm rounded-2xl overflow-x-auto scrollbar-none shadow-inner">
           {availableTabs.map((key) => {
             const labels: Record<string, string> = {
@@ -861,7 +918,6 @@ export const StaffPage: React.FC<StaffPageProps> = ({ userRole = "staff" }) => {
         <div className="bg-white rounded-3xl border border-slate-200/70 p-4 sm:p-6 shadow-2xs">
           {activeSubTab === "list" && (
             <div className="space-y-4">
-              {/* iPhone Style Search & Filter Bar */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-2.5 rounded-2xl border border-slate-100">
                 <div className="relative flex-1">
                   <span className="absolute inset-y-0 left-3 flex items-center text-slate-400 text-sm">🔍</span>
@@ -905,6 +961,7 @@ export const StaffPage: React.FC<StaffPageProps> = ({ userRole = "staff" }) => {
                 onEdit={handleOpenModal}
                 onToggleStatus={handleToggleStatus}
                 onArchive={handleArchive}
+                onResetPin={handleResetPin}
                 onRefresh={loadData}
                 isAdmin={isAdmin}
                 onSelectStaff={handleSelectStaff}
@@ -985,11 +1042,10 @@ export const StaffPage: React.FC<StaffPageProps> = ({ userRole = "staff" }) => {
         </div>
       </main>
 
-      {/* iOS Bottom Sheet / Hybrid Modal Add & Edit Staff */}
+      {/* Modal Add/Edit Staff */}
       {isAdmin && isModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 transition-opacity animate-in fade-in">
           <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto space-y-4 border border-slate-100">
-            {/* Modal Header */}
             <div className="flex justify-between items-center pb-3 border-b border-slate-100">
               <h2 className="text-lg font-bold text-slate-900">
                 {editingStaff ? "✏️ Cập nhật thông tin" : "➕ Thêm nhân viên mới"}
@@ -1083,7 +1139,52 @@ export const StaffPage: React.FC<StaffPageProps> = ({ userRole = "staff" }) => {
                 </div>
               </div>
 
-              {/* Action Buttons */}
+              {/* 👇 Thêm trường PIN (chỉ khi tạo mới) */}
+              {!editingStaff && (
+                <>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">
+                      Mã PIN (6 chữ số) *
+                    </label>
+                    <input
+                      type="password"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={formData.pin}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          pin: e.target.value.replace(/\D/g, "").slice(0, 6),
+                        })
+                      }
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                      placeholder="••••••"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">
+                      Xác nhận mã PIN *
+                    </label>
+                    <input
+                      type="password"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={formData.confirm_pin}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          confirm_pin: e.target.value.replace(/\D/g, "").slice(0, 6),
+                        })
+                      }
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                      placeholder="••••••"
+                      required
+                    />
+                  </div>
+                </>
+              )}
+
               <div className="flex gap-2.5 pt-4 border-t border-slate-100">
                 <button
                   type="button"

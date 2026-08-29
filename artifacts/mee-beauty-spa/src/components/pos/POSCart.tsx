@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+// src/components/pos/POSCart.tsx
+import React from 'react';
 import { CartItem, Staff } from '@/types/pos';
 
 interface Props {
@@ -14,7 +15,7 @@ interface Props {
   overallDiscountValue?: number;
   isAdmin?: boolean;
   loggedStaffName?: string;
-  onUpdateUseNow?: (cartItemId: string, useNow: boolean) => void; // 🔥 Mới
+  onUpdateUseNow?: (cartItemId: string, useNow: boolean) => void;
 }
 
 export const POSCart: React.FC<Props> = ({
@@ -155,7 +156,7 @@ export const POSCart: React.FC<Props> = ({
                     )}
                   </div>
 
-                  {/* 🔥 Checkbox cho package: Sử dụng buổi đầu */}
+                  {/* Checkbox cho package: Sử dụng buổi đầu */}
                   {isPackage && (
                     <div className="flex items-center gap-2 mt-2">
                       <input
@@ -203,9 +204,7 @@ export const POSCart: React.FC<Props> = ({
                     >
                       <option value="">-- Chọn NV Sale --</option>
                       {staffList.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.full_name}
-                        </option>
+                        <option key={s.id} value={s.id}>{s.full_name}</option>
                       ))}
                     </select>
                   ) : (
@@ -215,8 +214,8 @@ export const POSCart: React.FC<Props> = ({
                   )}
                 </div>
 
-                {/* KTV */}
-                {isService && (
+                {/* KTV - chỉ hiển thị nếu là SERVICE */}
+                {isService ? (
                   <div>
                     <label className="text-[11px] text-slate-500 block mb-0.5">KTV Thực hiện:</label>
                     {isAdmin ? (
@@ -227,9 +226,7 @@ export const POSCart: React.FC<Props> = ({
                       >
                         <option value="">-- Chọn KTV --</option>
                         {staffList.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.full_name}
-                          </option>
+                          <option key={s.id} value={s.id}>{s.full_name}</option>
                         ))}
                       </select>
                     ) : (
@@ -246,8 +243,7 @@ export const POSCart: React.FC<Props> = ({
                       </div>
                     )}
                   </div>
-                )}
-                {!isService && (
+                ) : (
                   <div className="text-[11px] text-slate-400 flex items-center italic">
                     (Sản phẩm/Gói không chọn KTV)
                   </div>

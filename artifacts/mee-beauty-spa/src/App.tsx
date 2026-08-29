@@ -16,29 +16,47 @@ import ExtensionPage from "./pages/ExtensionPage";
 import { AppShell } from "./components/app-shell";
 
 export function App() {
-  const { role, isLoggedIn, visibility } = useAuth();
+  const { role, isLoggedIn, visibility, isAdmin, loading, currentStaff } = useAuth();
   const [activeTab, setActiveTab] = useState<string>("dashboard");
 
-  // Chỉ đặt lại tab khi role thay đổi
   useEffect(() => {
     setActiveTab("dashboard");
   }, [role]);
 
-  const isAdmin = role === 'admin';
-
-  // Route protection – kiểm tra quyền truy cập
   useEffect(() => {
-    if (!isLoggedIn) return;
-    const tabs = getVisibleTabs();
+    if (!isLoggedIn || loading) return;
+
+    const tabs: string[] = [];
+    if (visibility.dashboard) tabs.push("dashboard");
+    if (visibility.customers) tabs.push("customers");
+    if (visibility.pos) tabs.push("pos");
+    if (isAdmin && visibility.catalog) tabs.push("catalog");
+    if (visibility.operations) tabs.push("operations");
+    if (isAdmin && visibility.staff) tabs.push("staff");
+    if (isAdmin && visibility.settings) tabs.push("settings");
+    if (isAdmin) tabs.push("invoices");
+    if (isAdmin) tabs.push("reports");
+    if (isAdmin) tabs.push("extension");
+
+    const visibleTabs = tabs;
+
     if (!isAdmin && activeTab !== 'dashboard') {
-      const isAllowed = tabs.includes(activeTab);
+      const isAllowed = visibleTabs.includes(activeTab);
       if (!isAllowed) {
-        setActiveTab(tabs[0] || 'dashboard');
+        setActiveTab(visibleTabs[0] || 'dashboard');
       }
     }
-  }, [activeTab, isAdmin, isLoggedIn, visibility]);
+  }, [activeTab, isAdmin, isLoggedIn, visibility, loading]);
 
   if (!isLoggedIn) return <LoginPage />;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-slate-50">
+        <div className="text-center text-slate-500">Đang tải...</div>
+      </div>
+    );
+  }
 
   const getVisibleTabs = (): string[] => {
     const tabs: string[] = [];
@@ -78,7 +96,15 @@ export function App() {
     <header className="bg-white border-b border-gray-200 px-4 sm:px-6 py-3 flex items-center justify-between sticky top-0 z-30 shadow-xs">
       <div className="flex items-center gap-3">
         <div className="h-8 w-8 rounded-xl bg-pink-600 flex items-center justify-center text-white font-black text-sm shadow-md shadow-pink-600/20">M</div>
-        <div><h1 className="text-base font-bold text-gray-900 leading-tight">Mee Beauty Spa</h1><p className="text-[9px] text-gray-400 hidden sm:block">{isAdmin ? 'Quản lý' : 'Nhân viên'}</p></div>
+        <p className="text-[9px] text-gray-400 hidden sm:block">
+          {isAdmin ? 'Quản lý' : currentStaff?.full_name || 'Nhân viên'}
+        </p>
+        <div>
+          <h1 className="text-base font-bold text-gray-900 leading-tight">Mee Beauty Spa</h1>
+          <p className="text-[9px] text-gray-400 hidden sm:block">
+            {isAdmin ? 'Quản lý' : currentStaff?.full_name || 'Nhân viên'}
+          </p>
+        </div>
       </div>
       <div className="flex items-center gap-2">
         <button onClick={() => { localStorage.removeItem('mee_role'); window.location.reload(); }} className="text-xs text-slate-500 hover:text-slate-700 px-2 py-1 rounded-lg hover:bg-slate-100">Đăng xuất</button>

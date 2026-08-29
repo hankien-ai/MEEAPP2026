@@ -12,6 +12,7 @@ import {
 } from "@/types/pos";
 import { POSService } from "@/services/pos-service";
 import { customerService } from "@/services/customer.service";
+import { authService } from "@/services/auth.service";
 import { POSCustomerSelect } from "@/components/pos/POSCustomerSelect";
 import { POSCustomerBenefits } from "@/components/pos/POSCustomerBenefits";
 import { POSKTVSelector } from "@/components/pos/POSKTVSelector";
@@ -138,7 +139,7 @@ const InvoiceHistoryModal: React.FC<InvoiceHistoryModalProps> = ({
 // ============================================================
 
 export const POSPage: React.FC = () => {
-  const { role } = useAuth();
+  const { role, currentStaff } = useAuth();
   const isAdminUser = role === 'admin';
 
   // Data states
@@ -207,14 +208,31 @@ export const POSPage: React.FC = () => {
     }
   };
 
+  // 👇 SYNC STAFF TỪ AUTHCONTEXT
+  useEffect(() => {
+    const staff = currentStaff || authService.getCurrentStaff();
+    if (staff) {
+      setLoggedStaff({
+        id: staff.id,
+        full_name: staff.full_name,
+        role: staff.role,
+      });
+      setSelectedSellerId(staff.id);
+      console.log("🔍 POS updated staff:", staff.full_name);
+    } else {
+      setLoggedStaff(null);
+      setSelectedSellerId(undefined);
+    }
+  }, [currentStaff]);
+
+  // 👇 LOAD DATA - KHÔNG GỌI getLoggedInStaff
   const loadData = async () => {
     setLoading(true);
-    const [sData, pData, pkgData, staffData, logged] = await Promise.all([
+    const [sData, pData, pkgData, staffData] = await Promise.all([
       POSService.fetchServices(),
       POSService.fetchProducts(),
       POSService.fetchPackages(),
       POSService.fetchStaffList(),
-      POSService.getLoggedInStaff(),
     ]);
 
     const retailProducts = pData.filter(p => p.product_type === 'RETAIL');
@@ -223,8 +241,17 @@ export const POSPage: React.FC = () => {
     setProducts(retailProducts);
     setPackages(pkgData);
     setStaffList(staffData);
-    setLoggedStaff(logged);
-    setSelectedSellerId(logged?.id);
+
+    // Dùng staff từ AuthContext
+    const staff = currentStaff || authService.getCurrentStaff();
+    if (staff) {
+      setLoggedStaff({
+        id: staff.id,
+        full_name: staff.full_name,
+        role: staff.role,
+      });
+      setSelectedSellerId(staff.id);
+    }
     setLoading(false);
   };
 
@@ -562,6 +589,7 @@ export const POSPage: React.FC = () => {
     setCartItems(prev => [...prev, newItem]);
     showAlert("success", `Đã thêm "${serviceName}" (Quà tặng) vào giỏ`);
   };
+
   // ========== CART OPERATIONS ==========
   const handleUpdateQuantity = (cartItemId: string, newQty: number) => {
     if (newQty <= 0) {
@@ -905,16 +933,22 @@ export const POSPage: React.FC = () => {
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1 text-xs">
             <span className="text-slate-500">NV:</span>
-            <select
-              value={selectedSellerId || ""}
-              onChange={(e) => setSelectedSellerId(e.target.value || undefined)}
-              className="border border-slate-300 rounded px-2 py-1 text-xs bg-white focus:ring-1 focus:ring-emerald-500 max-w-[100px]"
-            >
-              <option value="">-- Chọn --</option>
-              {staffList.map((s) => (
-                <option key={s.id} value={s.id}>{s.full_name}</option>
-              ))}
-            </select>
+            {isAdmin ? (
+              <select
+                value={selectedSellerId || ""}
+                onChange={(e) => setSelectedSellerId(e.target.value || undefined)}
+                className="border border-slate-300 rounded px-2 py-1 text-xs bg-white focus:ring-1 focus:ring-emerald-500 max-w-[100px]"
+              >
+                <option value="">-- Chọn --</option>
+                {staffList.map((s) => (
+                  <option key={s.id} value={s.id}>{s.full_name}</option>
+                ))}
+              </select>
+            ) : (
+              <span className="text-xs font-medium text-slate-700 px-2 py-1">
+                {loggedStaff?.full_name || "Chưa xác định"}
+              </span>
+            )}
           </div>
 
           <button

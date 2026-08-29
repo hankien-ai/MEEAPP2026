@@ -31,7 +31,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   userRole = "staff",
   onNavigate 
 }) => {
-  const { role } = useAuth();
+  const { currentStaff, role } = useAuth();
   const isAdmin = role === 'admin' || userRole === 'owner';
 
   const [loading, setLoading] = useState(true);
@@ -334,7 +334,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
             <p className="text-sm text-slate-500">
               {formatDateFull(new Date().toISOString())}
             </p>
-            <p className="text-sm text-slate-600 mt-1">Chào buổi sáng, Quản lý 👋</p>
+            <p className="text-sm text-slate-600 mt-1">
+              {isAdmin ? 'Chào buổi sáng, Quản lý 👋' : `Xin chào, ${currentStaff?.full_name || 'Nhân viên'} 👋`}
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <button

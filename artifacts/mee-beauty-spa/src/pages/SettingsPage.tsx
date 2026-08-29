@@ -1,165 +1,618 @@
-// src/pages/InvoicesPage.tsx
+// src/pages/SettingsPage.tsx
 import React, { useState, useEffect } from 'react';
-import { supabase } from '@/services/supabase';
-import { useAuth } from '@/context/AuthContext';
-import { format } from 'date-fns';
-import { vi } from 'date-fns/locale';
-import { Eye, Search } from 'lucide-react';
-import { Badge, Spinner } from '@/components/primitives';
-import { InvoiceDetailModal } from '@/components/InvoiceDetailModal';
-import { maskPhone } from '@/lib/utils';
+import { useAuth, VisibilitySettings } from '@/context/AuthContext';
+import { Switch } from '@/components/ui/switch';
+import { Shield, Lock, Unlock, Banknote, QrCode, Plus, Pencil, Trash2, CheckCircle, XCircle, Users, Save, RotateCcw } from 'lucide-react';
+import { Button, Card, Modal, Input, Select } from '@/components/primitives';
+import { paymentSettingsService, vietnamBanks } from '@/services/payment-settings.service';
+import { settingsService, DEFAULT_STAFF_PERMISSIONS } from '@/services/settings.service';
+import { supabase, DEFAULT_ORG_ID, DEFAULT_BRANCH_ID } from '@/services/supabase';
+import { ALL_MODULES } from '@/constants/modules';
 
-export const InvoicesPage: React.FC = () => {
-  const { role } = useAuth();
-  const isAdmin = role === 'admin';
-  const [invoices, setInvoices] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
-  const [isInvoiceDetailOpen, setIsInvoiceDetailOpen] = useState(false);
+interface SettingsPageProps {
+  onNavigate?: (tab: string) => void;
+}
+
+export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
+  const { role, visibility, setVisibility, isAdmin } = useAuth(); // 👈 lấy isAdmin từ context
+  const [localSettings, setLocalSettings] = useState<VisibilitySettings>(visibility);
+
+  // Staff permissions state
+  const [staffPermissions, setStaffPermissions] = useState<string[]>(DEFAULT_STAFF_PERMISSIONS);
+  const [loadingPermissions, setLoadingPermissions] = useState(false);
+  const [savingPermissions, setSavingPermissions] = useState(false);
+  const [permMessage, setPermMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Bank settings state (PIN + QR)
+  const [bankSettings, setBankSettings] = useState({
+    bankCode: '',
+    bankName: '',
+    accountNumber: '',
+    accountName: '',
+  });
+  const [bankLoading, setBankLoading] = useState(false);
+  const [bankError, setBankError] = useState('');
+  const [bankSuccess, setBankSuccess] = useState('');
+  const [pinInput, setPinInput] = useState('');
+  const [pinVerified, setPinVerified] = useState(false);
+  const [showPinInput, setShowPinInput] = useState(true);
+  const [pinError, setPinError] = useState('');
+  const [hasPin, setHasPin] = useState(false);
+
+  // QR list
+  const [qrList, setQrList] = useState<any[]>([]);
+  const [qrLoading, setQrLoading] = useState(false);
+  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
+  const [editingQrId, setEditingQrId] = useState<string | null>(null);
+  const [qrForm, setQrForm] = useState({ bank_code: '', bank_name: '', account_number: '', account_name: '', label: '', is_default: false });
+  const [qrError, setQrError] = useState('');
+  const [qrSubmitting, setQrSubmitting] = useState(false);
 
   useEffect(() => {
-    loadInvoices();
-  }, []);
+    setLocalSettings(visibility);
+    loadBankSettings();
+    loadQRs();
+    loadStaffPermissions();
+  }, [visibility]);
 
-  const loadInvoices = async () => {
-    setLoading(true);
+  // ============ Staff Permissions ============
+  const loadStaffPermissions = async () => {
+    setLoadingPermissions(true);
     try {
-      let query = supabase
-        .from('invoices')
-        .select(`
-          *,
-          customers:customer_id (id, full_name, phone),
-          seller: seller_staff_id (id, full_name),
-          items: invoice_items (*)
-        `)
-        .order('created_at', { ascending: false });
-
-      // 👇 STAFF: chỉ xem invoice hôm nay (theo giờ Việt Nam UTC+7)
-      if (!isAdmin) {
-        const now = new Date();
-        // Tạo startOfToday và endOfToday theo giờ Việt Nam
-        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-        const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-
-        query = query
-          .gte('created_at', startOfToday.toISOString())
-          .lte('created_at', endOfToday.toISOString());
-
-        // Nếu staff, chỉ xem invoice của mình (tạm thời lấy staff đầu tiên)
-        const { data: staffData } = await supabase.from('staff').select('id').limit(1).single();
-        if (staffData) {
-          query = query.eq('seller_staff_id', staffData.id);
-        }
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      setInvoices(data || []);
+      const perms = await settingsService.getStaffPermissions();
+      setStaffPermissions(perms);
     } catch (err) {
-      console.error(err);
+      console.error('Lỗi load staff permissions:', err);
+      setStaffPermissions(DEFAULT_STAFF_PERMISSIONS);
     } finally {
-      setLoading(false);
+      setLoadingPermissions(false);
     }
   };
 
-  const handleOpenInvoice = (id: string) => {
-    setSelectedInvoiceId(id);
-    setIsInvoiceDetailOpen(true);
+  const toggleStaffPermission = (modId: string) => {
+    setStaffPermissions(prev =>
+      prev.includes(modId)
+        ? prev.filter(id => id !== modId)
+        : [...prev, modId]
+    );
+  };
+
+  const saveStaffPermissions = async () => {
+    setSavingPermissions(true);
+    setPermMessage(null);
+    try {
+      await settingsService.setStaffPermissions(staffPermissions);
+      setPermMessage({ type: 'success', text: 'Đã lưu quyền nhân viên thành công!' });
+      await loadStaffPermissions();
+    } catch (err: any) {
+      setPermMessage({ type: 'error', text: err.message || 'Lỗi lưu quyền' });
+    } finally {
+      setSavingPermissions(false);
+    }
+  };
+
+  const resetStaffPermissions = () => {
+    if (window.confirm('Khôi phục quyền mặc định cho nhân viên?')) {
+      setStaffPermissions(DEFAULT_STAFF_PERMISSIONS);
+    }
+  };
+
+  // ============ Bank Settings ============
+  const loadBankSettings = async () => {
+    try {
+      const settings = await paymentSettingsService.getSettings();
+      if (settings) {
+        setBankSettings({
+          bankCode: settings.bank_code || '',
+          bankName: settings.bank_name || '',
+          accountNumber: settings.account_number || '',
+          accountName: settings.account_name || '',
+        });
+        setHasPin(!!settings.pin_hash);
+      } else {
+        setHasPin(false);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const loadQRs = async () => {
+    setQrLoading(true);
+    const { data, error } = await supabase
+      .from('payment_settings')
+      .select('*')
+      .eq('organization_id', DEFAULT_ORG_ID)
+      .eq('branch_id', DEFAULT_BRANCH_ID)
+      .order('is_default', { ascending: false });
+    if (!error) setQrList(data || []);
+    setQrLoading(false);
+  };
+
+  const handleToggle = (key: keyof VisibilitySettings) => {
+    const updated = { ...localSettings, [key]: !localSettings[key] };
+    setLocalSettings(updated);
+    setVisibility(updated);
+  };
+
+  const handleVerifyPin = async () => {
+    if (!pinInput) { setPinError('Vui lòng nhập PIN'); return; }
+    try {
+      const valid = await paymentSettingsService.verifyPin(pinInput);
+      if (valid) {
+        setPinVerified(true);
+        setShowPinInput(false);
+        setPinError('');
+        setPinInput('');
+        setBankSuccess('');
+      } else {
+        setPinError('PIN không đúng. Vui lòng thử lại.');
+      }
+    } catch (err) {
+      setPinError('Lỗi xác minh PIN');
+    }
+  };
+
+  const handleSetPin = async () => {
+    if (!pinInput || pinInput.length < 4) { setPinError('PIN phải có ít nhất 4 số'); return; }
+    try {
+      await paymentSettingsService.setPin(pinInput);
+      setHasPin(true);
+      setPinVerified(true);
+      setShowPinInput(false);
+      setPinInput('');
+      setPinError('');
+      setBankSuccess('✅ Đã tạo PIN thành công!');
+    } catch (err: any) {
+      setPinError(err.message || 'Lỗi tạo PIN');
+    }
+  };
+
+  const handleSaveBank = async () => {
+    if (!bankSettings.bankCode || !bankSettings.accountNumber || !bankSettings.accountName) {
+      setBankError('Vui lòng điền đầy đủ thông tin');
+      return;
+    }
+    setBankLoading(true);
+    setBankError('');
+    setBankSuccess('');
+    try {
+      await paymentSettingsService.saveSettings({
+        bank_code: bankSettings.bankCode,
+        bank_name: bankSettings.bankName,
+        account_number: bankSettings.accountNumber,
+        account_name: bankSettings.accountName,
+      });
+      setBankSuccess('✅ Đã lưu cấu hình thành công!');
+      await loadQRs();
+    } catch (err: any) {
+      setBankError(err.message || 'Lỗi lưu cấu hình');
+    } finally {
+      setBankLoading(false);
+    }
+  };
+
+  // QR Handlers
+  const openQrModal = (qr?: any) => {
+    if (qr) {
+      setEditingQrId(qr.id);
+      setQrForm({
+        bank_code: qr.bank_code,
+        bank_name: qr.bank_name,
+        account_number: qr.account_number,
+        account_name: qr.account_name,
+        label: qr.label || '',
+        is_default: qr.is_default || false,
+      });
+    } else {
+      setEditingQrId(null);
+      setQrForm({ bank_code: '', bank_name: '', account_number: '', account_name: '', label: '', is_default: false });
+    }
+    setQrError('');
+    setIsQrModalOpen(true);
+  };
+
+  const closeQrModal = () => {
+    setIsQrModalOpen(false);
+    setEditingQrId(null);
+  };
+
+  const handleSaveQr = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!qrForm.bank_code || !qrForm.account_number || !qrForm.account_name) {
+      setQrError('Vui lòng điền đầy đủ thông tin');
+      return;
+    }
+    setQrSubmitting(true);
+    setQrError('');
+    try {
+      const payload = {
+        organization_id: DEFAULT_ORG_ID,
+        branch_id: DEFAULT_BRANCH_ID,
+        bank_code: qrForm.bank_code,
+        bank_name: qrForm.bank_name,
+        account_number: qrForm.account_number,
+        account_name: qrForm.account_name,
+        label: qrForm.label || qrForm.bank_name,
+        is_default: qrForm.is_default,
+      };
+
+      if (editingQrId) {
+        const { error } = await supabase
+          .from('payment_settings')
+          .update({ ...payload, updated_at: new Date().toISOString() })
+          .eq('id', editingQrId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('payment_settings').insert(payload);
+        if (error) throw error;
+      }
+
+      if (qrForm.is_default) {
+        await supabase
+          .from('payment_settings')
+          .update({ is_default: false })
+          .eq('organization_id', DEFAULT_ORG_ID)
+          .eq('branch_id', DEFAULT_BRANCH_ID)
+          .neq('id', editingQrId || '');
+      }
+
+      await loadQRs();
+      closeQrModal();
+      setBankSuccess('✅ Cập nhật QR thành công!');
+    } catch (err: any) {
+      setQrError(err.message);
+    } finally {
+      setQrSubmitting(false);
+    }
+  };
+
+  const handleDeleteQr = async (id: string) => {
+    if (!window.confirm('Bạn có chắc muốn xóa QR này?')) return;
+    try {
+      const { error } = await supabase.from('payment_settings').delete().eq('id', id);
+      if (error) throw error;
+      await loadQRs();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleSetDefaultQr = async (id: string) => {
+    try {
+      await supabase
+        .from('payment_settings')
+        .update({ is_default: false })
+        .eq('organization_id', DEFAULT_ORG_ID)
+        .eq('branch_id', DEFAULT_BRANCH_ID);
+      const { error } = await supabase
+        .from('payment_settings')
+        .update({ is_default: true })
+        .eq('id', id);
+      if (error) throw error;
+      await loadQRs();
+    } catch (err: any) {
+      alert(err.message);
+    }
   };
 
   const formatVND = (val: number) => new Intl.NumberFormat('vi-VN').format(val) + ' đ';
-  const formatDate = (date: string) => format(new Date(date), 'dd/MM/yyyy HH:mm', { locale: vi });
 
-  if (loading) return <Spinner className="py-12" />;
+  // 👇 CHỈ ADMIN MỚI ĐƯỢC TRUY CẬP
+  if (!isAdmin) {
+    return (
+      <div className="p-6 text-center text-slate-500">
+        <p className="text-sm">Bạn không có quyền truy cập cài đặt.</p>
+      </div>
+    );
+  }
 
-  const filtered = invoices.filter(inv =>
-    inv.customers?.full_name?.toLowerCase().includes(search.toLowerCase()) ||
-    inv.invoice_code?.toLowerCase().includes(search.toLowerCase()) ||
-    inv.id.toLowerCase().includes(search.toLowerCase())
-  );
+  const modules: { key: keyof VisibilitySettings; label: string }[] = [
+    { key: 'dashboard', label: 'Dashboard' },
+    { key: 'pos', label: 'POS' },
+    { key: 'customers', label: 'Khách hàng' },
+    { key: 'operations', label: 'Vận hành' },
+    { key: 'catalog', label: 'Danh mục' },
+    { key: 'inventory', label: 'Tồn kho' },
+    { key: 'staff', label: 'Nhân viên' },
+    { key: 'payroll', label: 'Bảng lương' },
+    { key: 'expenses', label: 'Chi phí' },
+    { key: 'settings', label: 'Cài đặt' },
+    { key: 'invoices', label: 'Hóa đơn' },
+    { key: 'reports', label: 'Báo cáo' },
+    { key: 'extension', label: 'Mở rộng' },
+  ];
 
   return (
-    <div className="max-w-6xl mx-auto p-4 space-y-4">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-slate-900">Lịch sử hóa đơn</h1>
-        <button onClick={loadInvoices} className="text-sm text-blue-600 hover:underline">
-          🔄 Làm mới
-        </button>
-        {!isAdmin && (
-          <span className="text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded">
-            Chỉ hiển thị hóa đơn hôm nay
-          </span>
-        )}
-      </div>
-
-      <div className="relative">
-        <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-        <input
-          type="text"
-          placeholder="Tìm theo tên khách hàng hoặc mã hóa đơn..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-pink-500"
-        />
-      </div>
-
-      {filtered.length === 0 ? (
-        <div className="text-center py-8 text-slate-500">Không có hóa đơn nào</div>
-      ) : (
+    <div className="max-w-3xl mx-auto p-4 space-y-6">
+      {/* Quyền & Hiển thị */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
+        <div className="flex items-center gap-2 border-b pb-3">
+          <Shield className="w-5 h-5 text-indigo-600" />
+          <h2 className="text-lg font-bold text-slate-900">Quyền & Hiển thị</h2>
+        </div>
         <div className="space-y-3">
-          {filtered.map(inv => (
-            <div
-              key={inv.id}
-              className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 hover:shadow-md transition-all cursor-pointer"
-              onClick={() => handleOpenInvoice(inv.id)}
-            >
-              <div className="flex flex-wrap justify-between items-start gap-2">
-                <div>
-                  <div className="font-semibold text-slate-900">
-                    {inv.customers?.full_name || 'Khách vãng lai'}
-                  </div>
-                  <div className="text-xs text-slate-500">
-                    {formatDate(inv.created_at)} · Mã: {inv.invoice_code || inv.id.slice(0, 8)}
-                  </div>
-                  <div className="text-xs text-slate-500 mt-0.5">
-                    Nhân viên: {inv.seller?.full_name || 'N/A'}
-                  </div>
-                  {/* 👇 Phone mask cho staff */}
-                  <div className="text-xs text-slate-400 mt-0.5">
-                    SĐT: {maskPhone(inv.customers?.phone, isAdmin)}
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="font-bold text-emerald-700">{formatVND(inv.total_amount)}</div>
-                  <Badge variant={
-                    inv.status === 'PAID' ? 'success' :
-                    inv.status === 'PARTIALLY_PAID' ? 'warning' :
-                    inv.status === 'DRAFT' ? 'neutral' :
-                    'danger'
-                  }>
-                    {inv.status === 'PAID' ? 'Đã thanh toán' :
-                     inv.status === 'PARTIALLY_PAID' ? 'Nợ một phần' :
-                     inv.status === 'DRAFT' ? 'Nháp' :
-                     inv.status === 'VOID' ? 'Hủy' : inv.status}
-                  </Badge>
-                </div>
-              </div>
-              <div className="mt-2 text-xs text-slate-400 flex items-center gap-1">
-                <Eye className="w-3.5 h-3.5" /> Nhấn để xem chi tiết
-              </div>
+          {modules.map((mod) => (
+            <div key={mod.key} className="flex items-center justify-between py-2 border-b border-slate-100 last:border-0">
+              <span className="text-sm font-medium text-slate-700">{mod.label}</span>
+              <Switch
+                checked={localSettings[mod.key]}
+                onCheckedChange={() => handleToggle(mod.key)}
+              />
             </div>
           ))}
         </div>
-      )}
+      </div>
 
-      <InvoiceDetailModal
-        isOpen={isInvoiceDetailOpen}
-        invoiceId={selectedInvoiceId}
-        onClose={() => setIsInvoiceDetailOpen(false)}
-      />
+      {/* Quyền truy cập nhân viên */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
+        <div className="flex items-center gap-2 border-b pb-3">
+          <Users className="w-5 h-5 text-blue-600" />
+          <h2 className="text-lg font-bold text-slate-900">Quyền truy cập nhân viên</h2>
+        </div>
+
+        {permMessage && (
+          <div className={`p-3 rounded-lg text-sm ${permMessage.type === 'success' ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-800'}`}>
+            {permMessage.text}
+          </div>
+        )}
+
+        <p className="text-sm text-slate-500">Chọn các module mà nhân viên được phép truy cập.</p>
+
+        <div className="space-y-2">
+          {ALL_MODULES.map(mod => {
+            const isEnabled = staffPermissions.includes(mod.id);
+            return (
+              <div key={mod.id} className="flex items-center gap-3 p-2 border-b border-slate-100 last:border-0">
+                <input
+                  type="checkbox"
+                  checked={isEnabled}
+                  onChange={() => toggleStaffPermission(mod.id)}
+                  className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                />
+                <mod.icon className="w-4 h-4 text-slate-500" />
+                <span className="text-sm font-medium text-slate-700">{mod.label}</span>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="flex gap-3 pt-2 border-t">
+          <Button variant="outline" size="sm" onClick={resetStaffPermissions}>
+            <RotateCcw className="w-4 h-4 mr-1" /> Mặc định
+          </Button>
+          <Button variant="secondary" size="sm" onClick={saveStaffPermissions} isLoading={savingPermissions}>
+            <Save className="w-4 h-4 mr-1" /> Lưu quyền
+          </Button>
+        </div>
+      </div>
+
+      {/* Thanh toán chuyển khoản + QR Management */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
+        <div className="flex items-center gap-2 border-b pb-3">
+          <Banknote className="w-5 h-5 text-emerald-600" />
+          <h2 className="text-lg font-bold text-slate-900">Thanh toán chuyển khoản & QR</h2>
+        </div>
+
+        {showPinInput ? (
+          <div className="space-y-4">
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-700 flex items-center gap-2">
+              <Lock className="w-4 h-4" />
+              {hasPin ? '🔒 Khu vực bảo mật - Nhập PIN quản lý' : '🔐 Thiết lập PIN quản lý lần đầu'}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                {hasPin ? 'PIN quản lý' : 'Tạo PIN mới (4-6 số)'}
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  value={pinInput}
+                  onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ''))}
+                  className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500"
+                  placeholder="Nhập PIN..."
+                />
+                <Button
+                  variant="secondary"
+                  onClick={hasPin ? handleVerifyPin : handleSetPin}
+                >
+                  {hasPin ? 'Xác nhận' : 'Tạo PIN'}
+                </Button>
+              </div>
+              {pinError && <p className="text-sm text-red-600 mt-1">{pinError}</p>}
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-sm text-emerald-700 flex items-center gap-2">
+              <Unlock className="w-4 h-4" />
+              ✅ Đã xác minh PIN - Bạn có thể cập nhật thông tin ngân hàng và quản lý QR
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Ngân hàng</label>
+                <select
+                  value={bankSettings.bankCode}
+                  onChange={(e) => {
+                    const selected = vietnamBanks.find(b => b.code === e.target.value);
+                    setBankSettings({
+                      ...bankSettings,
+                      bankCode: e.target.value,
+                      bankName: selected ? selected.name : '',
+                    });
+                  }}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="">-- Chọn ngân hàng --</option>
+                  {vietnamBanks.map(b => (
+                    <option key={b.code} value={b.code}>{b.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Số tài khoản</label>
+                <input
+                  type="text"
+                  value={bankSettings.accountNumber}
+                  onChange={(e) => setBankSettings({ ...bankSettings, accountNumber: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500"
+                  placeholder="Nhập số tài khoản"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-slate-700 mb-1">Tên chủ tài khoản</label>
+                <input
+                  type="text"
+                  value={bankSettings.accountName}
+                  onChange={(e) => setBankSettings({ ...bankSettings, accountName: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500"
+                  placeholder="Nhập tên chủ tài khoản"
+                />
+              </div>
+            </div>
+            {bankError && <p className="text-sm text-red-600">{bankError}</p>}
+            {bankSuccess && <p className="text-sm text-emerald-600">{bankSuccess}</p>}
+            <Button variant="secondary" onClick={handleSaveBank} isLoading={bankLoading}>
+              💾 Lưu cấu hình ngân hàng
+            </Button>
+
+            {/* QR List */}
+            <div className="border-t pt-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                  <QrCode className="w-4 h-4" /> Danh sách QR
+                </h3>
+                <Button size="sm" variant="outline" onClick={() => openQrModal()}>
+                  <Plus className="w-3.5 h-3.5" /> Thêm QR
+                </Button>
+              </div>
+              {qrLoading ? (
+                <div className="text-center py-4 text-sm text-slate-400">Đang tải...</div>
+              ) : qrList.length === 0 ? (
+                <div className="text-center py-4 text-sm text-slate-400">Chưa có QR nào.</div>
+              ) : (
+                <div className="space-y-2">
+                  {qrList.map(qr => (
+                    <div key={qr.id} className={`flex items-center justify-between p-3 rounded-lg border ${qr.is_default ? 'border-emerald-500 bg-emerald-50/30' : 'border-slate-200'}`}>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{qr.label || qr.bank_name}</span>
+                          {qr.is_default && <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">Mặc định</span>}
+                        </div>
+                        <div className="text-xs text-slate-500">{qr.bank_name} - {qr.account_number}</div>
+                        <div className="text-xs text-slate-400">Chủ TK: {qr.account_name}</div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {!qr.is_default && (
+                          <Button size="sm" variant="outline" onClick={() => handleSetDefaultQr(qr.id)} className="text-[10px]">
+                            <CheckCircle className="w-3.5 h-3.5" /> Mặc định
+                          </Button>
+                        )}
+                        <Button size="sm" variant="outline" onClick={() => openQrModal(qr)} className="p-1.5">
+                          <Pencil className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button size="sm" variant="danger" onClick={() => handleDeleteQr(qr.id)} className="p-1.5">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setPinVerified(false);
+                  setShowPinInput(true);
+                  setPinInput('');
+                  setBankSuccess('');
+                }}
+              >
+                🔒 Khóa lại
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* QR Modal */}
+      <Modal isOpen={isQrModalOpen} onClose={closeQrModal} title={editingQrId ? 'Sửa QR' : 'Thêm QR mới'}>
+        <form onSubmit={handleSaveQr} className="space-y-4">
+          {qrError && <div className="p-2 bg-red-50 text-red-700 text-sm rounded">{qrError}</div>}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Tên QR (hiển thị)</label>
+            <input
+              type="text"
+              value={qrForm.label}
+              onChange={(e) => setQrForm({ ...qrForm, label: e.target.value })}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+              placeholder="VD: Vietcombank - MEE"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Ngân hàng</label>
+            <select
+              value={qrForm.bank_code}
+              onChange={(e) => {
+                const bank = vietnamBanks.find(b => b.code === e.target.value);
+                setQrForm({
+                  ...qrForm,
+                  bank_code: e.target.value,
+                  bank_name: bank ? bank.name : '',
+                });
+              }}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+            >
+              <option value="">-- Chọn --</option>
+              {vietnamBanks.map(b => <option key={b.code} value={b.code}>{b.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Số tài khoản</label>
+            <input
+              type="text"
+              value={qrForm.account_number}
+              onChange={(e) => setQrForm({ ...qrForm, account_number: e.target.value })}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+              placeholder="VD: 1234567890"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Chủ tài khoản</label>
+            <input
+              type="text"
+              value={qrForm.account_name}
+              onChange={(e) => setQrForm({ ...qrForm, account_name: e.target.value })}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+              placeholder="VD: MEE BEAUTY SPA"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={qrForm.is_default}
+              onChange={(e) => setQrForm({ ...qrForm, is_default: e.target.checked })}
+              className="w-4 h-4 rounded border-slate-300"
+            />
+            <label className="text-sm font-medium text-slate-700">Đặt làm mặc định</label>
+          </div>
+          <div className="flex justify-end gap-2 pt-4 border-t">
+            <Button variant="outline" onClick={closeQrModal}>Hủy</Button>
+            <Button type="submit" isLoading={qrSubmitting}>
+              {editingQrId ? 'Cập nhật' : 'Thêm mới'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };
 
-export default InvoicesPage;
+export default SettingsPage;

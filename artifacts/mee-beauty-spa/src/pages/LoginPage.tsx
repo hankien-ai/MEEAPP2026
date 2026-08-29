@@ -1,88 +1,147 @@
 // src/pages/LoginPage.tsx
-import React from 'react';
-import { useAuth, UserRole } from '@/context/AuthContext';
-import { Users, UserCog, Sparkles, ShieldCheck } from 'lucide-react';
+import React, { useState } from 'react';
+import { useAuth } from '@/context/AuthContext';
 
 export const LoginPage: React.FC = () => {
-  const { login } = useAuth();
+  const { loginAdmin, loginStaff, loading } = useAuth();
+  const [activeTab, setActiveTab] = useState<'admin' | 'staff'>('admin');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [pin, setPin] = useState('');
+  const [error, setError] = useState('');
+  const [loginSuccess, setLoginSuccess] = useState(false);
 
-  const handleLogin = (role: UserRole) => {
-    login(role);
+  React.useEffect(() => {
+    if (loginSuccess) {
+      console.log("✅ Redirecting to dashboard...");
+      window.location.href = '/';
+    }
+  }, [loginSuccess]);
+
+  const handleAdminLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    try {
+      console.log("🔐 Đang gọi loginAdmin...");
+      await loginAdmin(email, password);
+      console.log("✅ LoginAdmin thành công!");
+      setLoginSuccess(true);
+    } catch (err: any) {
+      console.error("❌ LoginAdmin error:", err);
+      setError(err.message || 'Đăng nhập thất bại.');
+    }
+  };
+
+  const handleStaffLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    if (pin.length !== 6 || !/^\d{6}$/.test(pin)) {
+      setError('Mã PIN phải gồm 6 chữ số');
+      return;
+    }
+    try {
+      await loginStaff(pin);
+      console.log("✅ Staff login thành công!");
+      setLoginSuccess(true);
+    } catch (err: any) {
+      setError(err.message || 'Sai mã PIN');
+    }
   };
 
   return (
-    <div className="relative min-h-screen w-full flex items-center justify-center p-4 sm:p-6 overflow-hidden select-none font-sans">
-      {/* 1. Ảnh nền Spa chất lượng cao */}
-      <div 
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat scale-105 animate-pulse duration-[10000ms]"
-        style={{
-          backgroundImage: `url('https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&q=80&w=1920')`,
-        }}
-      />
-
-      {/* 2. Lớp phủ Gradient làm dịu ảnh & tăng độ tương phản */}
-      <div className="absolute inset-0 bg-gradient-to-tr from-slate-950/85 via-emerald-950/70 to-slate-900/80 backdrop-blur-[2px]" />
-
-      {/* 3. Hiệu ứng ánh sáng huyền ảo xung quanh */}
-      <div className="absolute top-1/4 -left-20 w-96 h-96 bg-emerald-500/20 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-1/4 -right-20 w-96 h-96 bg-teal-400/20 rounded-full blur-3xl pointer-events-none" />
-
-      {/* 4. Thẻ đăng nhập Glassmorphism */}
-      <div className="relative z-10 w-full max-w-md">
-        <div className="bg-slate-900/40 backdrop-blur-2xl rounded-3xl p-8 sm:p-10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-white/15 text-white">
-
-          {/* Logo & Header */}
-          <div className="flex flex-col items-center text-center">
-            <div className="relative mb-5 group">
-              <div className="absolute -inset-1 rounded-full bg-gradient-to-r from-emerald-400 via-teal-300 to-amber-300 blur-md opacity-70 group-hover:opacity-100 transition duration-500 animate-pulse" />
-              <div className="relative w-20 h-20 rounded-full bg-slate-900/90 border border-emerald-400/40 flex items-center justify-center shadow-inner">
-                <Sparkles className="w-9 h-9 text-emerald-300" />
-              </div>
-            </div>
-
-            <h1 className="text-3xl font-extrabold tracking-tight font-serif">
-              MEE <span className="bg-gradient-to-r from-emerald-300 via-teal-200 to-amber-200 bg-clip-text text-transparent">Beauty</span> Spa
-            </h1>
-            <p className="text-xs uppercase tracking-[0.25em] text-emerald-200/80 mt-2 font-medium">
-              Hệ thống Quản lý Vận hành
-            </p>
-          </div>
-
-          {/* Khối nút đăng nhập */}
-          <div className="mt-8 space-y-4">
-            {/* Nút Quản lý */}
-            <button
-              onClick={() => handleLogin('admin')}
-              className="group relative w-full py-4 px-6 rounded-2xl font-semibold text-sm sm:text-base text-white bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-500 shadow-lg shadow-emerald-950/50 hover:shadow-emerald-500/30 border border-emerald-400/30 active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-3 overflow-hidden"
-            >
-              {/* Hiệu ứng ánh sáng quét qua nút */}
-              <div className="absolute inset-0 w-1/2 h-full bg-white/15 skew-x-12 -translate-x-full group-hover:translate-x-[300%] transition-transform duration-1000 ease-in-out" />
-              <UserCog className="w-5 h-5 text-emerald-200 group-hover:rotate-12 transition-transform duration-300" />
-              <span>Vào với Quản lý</span>
-            </button>
-
-            {/* Nút Nhân viên */}
-            <button
-              onClick={() => handleLogin('staff')}
-              className="group relative w-full py-4 px-6 rounded-2xl font-semibold text-sm sm:text-base text-slate-100 bg-white/10 hover:bg-white/20 backdrop-blur-md shadow-md border border-white/15 hover:border-white/30 active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-3"
-            >
-              <Users className="w-5 h-5 text-teal-300 group-hover:scale-110 transition-transform duration-300" />
-              <span>Vào với Nhân viên</span>
-            </button>
-          </div>
-
-          {/* Ghi chú Demo */}
-          <div className="mt-8 pt-5 border-t border-white/10 text-center">
-            <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs">
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              <span>Phiên bản Demo – Chọn vai trò để trải nghiệm</span>
-            </div>
-          </div>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-tr from-slate-900 to-emerald-900 p-4">
+      <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-8 w-full max-w-md border border-white/20 shadow-2xl">
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-white">MEE Beauty Spa</h1>
+          <p className="text-emerald-200 text-sm mt-2">Đăng nhập hệ thống</p>
         </div>
 
-        {/* Footer Bản quyền */}
-        <div className="mt-6 text-center text-xs text-white/50 tracking-wider">
-          <p>© MEE Beauty Spa. All rights reserved.</p>
+        <div className="flex rounded-xl bg-white/10 p-1 mb-6">
+          <button
+            onClick={() => { setActiveTab('admin'); setError(''); setLoginSuccess(false); }}
+            className={`flex-1 py-2 text-sm font-semibold rounded-lg transition ${
+              activeTab === 'admin' ? 'bg-white text-slate-900' : 'text-white/70 hover:text-white'
+            }`}
+          >
+            Quản lý
+          </button>
+          <button
+            onClick={() => { setActiveTab('staff'); setError(''); setLoginSuccess(false); }}
+            className={`flex-1 py-2 text-sm font-semibold rounded-lg transition ${
+              activeTab === 'staff' ? 'bg-white text-slate-900' : 'text-white/70 hover:text-white'
+            }`}
+          >
+            Nhân viên
+          </button>
+        </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 text-red-200 rounded-lg text-sm">
+            {error}
+          </div>
+        )}
+
+        {activeTab === 'admin' && (
+          <form onSubmit={handleAdminLogin} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-white/80">Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full mt-1 px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                placeholder="admin@example.com"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-white/80">Mật khẩu</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full mt-1 px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                placeholder="••••••••"
+                required
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition disabled:opacity-50"
+            >
+              {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
+            </button>
+          </form>
+        )}
+
+        {activeTab === 'staff' && (
+          <form onSubmit={handleStaffLogin} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-white/80">Mã PIN (6 chữ số)</label>
+              <input
+                type="password"
+                inputMode="numeric"
+                maxLength={6}
+                value={pin}
+                onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                className="w-full mt-1 px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white text-center text-2xl tracking-widest placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                placeholder="••••••"
+                required
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition disabled:opacity-50"
+            >
+              {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
+            </button>
+          </form>
+        )}
+
+        <div className="mt-6 text-center text-xs text-white/30">
+          © MEE Beauty Spa. Hệ thống quản lý.
         </div>
       </div>
     </div>

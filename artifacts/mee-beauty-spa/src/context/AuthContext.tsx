@@ -1,8 +1,11 @@
 // src/context/AuthContext.tsx
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { settingsService, DEFAULT_STAFF_PERMISSIONS } from '@/services/settings.service';
+import { authService } from '@/services/auth.service';
+import { settingsService } from '@/services/settings.service';
+import { supabase } from '@/services/supabase';
 
 export type UserRole = 'admin' | 'staff';
+export type AuthType = 'admin' | 'staff' | null;
 
 export interface VisibilitySettings {
   dashboard: boolean;
@@ -52,120 +55,148 @@ const adminVisibility: VisibilitySettings = {
   extension: true,
 };
 
-const moduleToVisibilityKey: Record<string, keyof VisibilitySettings> = {
-  dashboard: 'dashboard',
-  pos: 'pos',
-  customers: 'customers',
-  operations: 'operations',
-  catalog: 'catalog',
-  inventory: 'inventory',
-  staff: 'staff',
-  payroll: 'payroll',
-  expenses: 'expenses',
-  settings: 'settings',
-  invoices: 'invoices',
-  reports: 'reports',
-  extension: 'extension',
-};
-
 interface AuthContextType {
-  role: UserRole;
-  setRole: (role: UserRole) => void;
-  visibility: VisibilitySettings;
-  setVisibility: (settings: VisibilitySettings) => void;
+  currentStaff: any | null;
+  role: UserRole | null;
+  authType: AuthType;
+  isAuthenticated: boolean;
   isLoggedIn: boolean;
-  login: (role: UserRole) => Promise<void>;
-  logout: () => void;
-  loadStaffPermissions: () => Promise<void>;
+  isAdmin: boolean;
+  isStaff: boolean;
+  visibility: VisibilitySettings;
+  loginAdmin: (email: string, password: string) => Promise<void>;
+  loginStaff: (pin: string) => Promise<void>;
+  logout: () => Promise<void>;
+  loading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [role, setRole] = useState<UserRole>('staff');
+  const [currentStaff, setCurrentStaff] = useState<any | null>(null);
+  const [authType, setAuthType] = useState<AuthType>(null);
   const [visibility, setVisibility] = useState<VisibilitySettings>(defaultVisibility);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const loadStaffPermissions = async () => {
+  // Derive role từ currentStaff
+  const role: UserRole | null = currentStaff
+    ? (currentStaff.role === 'Admin' || currentStaff.role === 'admin' ? 'admin' : 'staff')
+    : null;
+
+  const buildVisibility = async (staff: any): Promise<VisibilitySettings> => {
+    if (!staff) return defaultVisibility;
+    if (staff.role === 'Admin' || staff.role === 'admin') {
+      return adminVisibility;
+    }
     try {
       const permissions = await settingsService.getStaffPermissions();
-      const newVisibility = { ...defaultVisibility };
+      const newVis = { ...defaultVisibility };
+      const keyMap: Record<string, keyof VisibilitySettings> = {
+        dashboard: 'dashboard',
+        pos: 'pos',
+        customers: 'customers',
+        operations: 'operations',
+        catalog: 'catalog',
+        inventory: 'inventory',
+        staff: 'staff',
+        payroll: 'payroll',
+        expenses: 'expenses',
+        settings: 'settings',
+        invoices: 'invoices',
+        reports: 'reports',
+        extension: 'extension',
+      };
       permissions.forEach((modId: string) => {
-        const key = moduleToVisibilityKey[modId];
-        if (key) {
-          newVisibility[key] = true;
-        }
+        const key = keyMap[modId];
+        if (key) newVis[key] = true;
       });
-      setVisibility(newVisibility);
-      localStorage.setItem('mee_visibility', JSON.stringify(newVisibility));
+      return newVis;
     } catch (err) {
-      console.error('loadStaffPermissions error:', err);
-      setVisibility(defaultVisibility);
+      console.error('Lỗi tải quyền nhân viên:', err);
+      return defaultVisibility;
     }
   };
 
+  // ✅ KHÔNG TỰ ĐỘNG LOGIN KHI REFRESH TRANG
   useEffect(() => {
-    const savedRole = localStorage.getItem('mee_role') as UserRole | null;
-    const savedVisibility = localStorage.getItem('mee_visibility');
-
-    if (savedRole) {
-      setRole(savedRole);
-      setIsLoggedIn(true);
-
-      if (savedVisibility) {
-        try {
-          setVisibility(JSON.parse(savedVisibility));
-        } catch (e) {
-          if (savedRole === 'admin') {
-            setVisibility(adminVisibility);
-          } else {
-            loadStaffPermissions();
-          }
-        }
-      } else {
-        if (savedRole === 'admin') {
-          setVisibility(adminVisibility);
-        } else {
-          loadStaffPermissions();
-        }
-      }
-    }
+    setLoading(false);
   }, []);
 
-  const login = async (newRole: UserRole) => {
-    setRole(newRole);
-    setIsLoggedIn(true);
-    localStorage.setItem('mee_role', newRole);
+  const loginAdmin = async (email: string, password: string) => {
+    setLoading(true);
+    try {
+      authService.clearStaffSession();
+      const data = await authService.loginAdmin(email, password);
 
-    if (newRole === 'admin') {
-      setVisibility(adminVisibility);
-      localStorage.setItem('mee_visibility', JSON.stringify(adminVisibility));
-    } else {
-      await loadStaffPermissions();
+      const { data: staff, error } = await supabase
+        .from('staff')
+        .select('*')
+        .eq('auth_user_id', data.user.id)
+        .single();
+
+      if (error || !staff) {
+        throw new Error('Không tìm thấy thông tin nhân viên.');
+      }
+
+      setCurrentStaff(staff);
+      setAuthType('admin');
+      const vis = await buildVisibility(staff);
+      setVisibility(vis);
+    } catch (err) {
+      console.error('Lỗi loginAdmin:', err);
+      throw err;
+    } finally {
+      setLoading(false);
     }
   };
 
-  const logout = () => {
-    setIsLoggedIn(false);
-    localStorage.removeItem('mee_role');
+  const loginStaff = async (pin: string) => {
+    setLoading(true);
+    try {
+      await supabase.auth.signOut().catch(() => {});
+      const data = await authService.loginStaff(pin);
+
+      setCurrentStaff(data.staff);
+      setAuthType('staff');
+      const vis = await buildVisibility(data.staff);
+      setVisibility(vis);
+    } catch (err) {
+      console.error('Lỗi loginStaff:', err);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSetVisibility = (settings: VisibilitySettings) => {
-    setVisibility(settings);
-    localStorage.setItem('mee_visibility', JSON.stringify(settings));
+  const logout = async () => {
+    setLoading(true);
+    try {
+      await authService.logout();
+      setCurrentStaff(null);
+      setAuthType(null);
+      setVisibility(defaultVisibility);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  const isLoggedIn = !!currentStaff;
 
   return (
     <AuthContext.Provider
       value={{
+        currentStaff,
         role,
-        setRole,
-        visibility,
-        setVisibility: handleSetVisibility,
+        authType,
+        isAuthenticated: isLoggedIn,
         isLoggedIn,
-        login,
+        isAdmin: role === 'admin',
+        isStaff: role === 'staff',
+        visibility,
+        loginAdmin,
+        loginStaff,
         logout,
-        loadStaffPermissions,
+        loading,
       }}
     >
       {children}
@@ -175,6 +206,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) throw new Error('useAuth must be used within AuthProvider');
+  if (!context) throw new Error('useAuth phải được sử dụng trong AuthProvider');
   return context;
 };
