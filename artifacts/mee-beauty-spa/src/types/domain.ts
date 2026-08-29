@@ -287,23 +287,30 @@ export interface Attendance {
 // PAYROLL & BONUS/PENALTY & SETTINGS
 // ============================================================
 
+// Thêm vào interface Payroll (khoảng dòng 90)
 export interface Payroll {
   id: string;
   staff_id: string;
   month: number;
   year: number;
   base_salary: number;
-  total_working_days: number;      // Tổng số ngày trong tháng
-  actual_working_days: number;     // Số ngày có check-in
-  leave_days_taken: number;        // Số ngày nghỉ (không check-in)
-  allowed_leave_days: number;      // Số ngày nghỉ được phép
-  excess_leave_days: number;       // Số ngày nghỉ vượt quá cho phép
-  excess_leave_deduction: number;  // Tiền trừ do nghỉ vượt
-  total_commission: number;        // Tổng hoa hồng trong tháng
-  total_bonus: number;             // Tổng thưởng
-  total_penalty: number;           // Tổng phạt
-  net_salary: number;              // Lương thực nhận
-  status: PayrollStatus;           // DRAFT, LOCKED, PAID
+  total_working_days: number;
+  actual_working_days: number;
+  leave_days_taken: number;
+  allowed_leave_days: number;
+  excess_leave_days: number;
+  excess_leave_deduction: number;
+  total_commission: number;          // Giữ lại
+  sale_commission: number;           // Mới
+  performance_commission: number;    // Mới
+  total_bonus: number;
+  total_penalty: number;
+  allowance: number;                 // Mới
+  tip: number;                       // Mới
+  advance: number;                   // Mới
+  deduction: number;                 // Mới
+  net_salary: number;
+  status: PayrollStatus;
   organization_id?: string;
   branch_id?: string;
   created_at: string;

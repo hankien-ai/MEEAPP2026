@@ -1,12 +1,16 @@
+// src/pages/PayrollPage.tsx
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/context/AuthContext';
 import { payrollService } from '../services/payroll.service';
 import { Button, Card, Spinner, Badge } from '../components/primitives';
-import { useNavigate } from 'react-router-dom';
 
 const formatVND = (val: number) => new Intl.NumberFormat('vi-VN').format(val) + ' đ';
 
 export const PayrollPage: React.FC = () => {
   const navigate = useNavigate();
+  const { isAdmin, currentStaff } = useAuth();
+
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
   const [payrollList, setPayrollList] = useState<any[]>([]);
@@ -22,7 +26,11 @@ export const PayrollPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await payrollService.getPayrollList(month, year);
+      let staffId: string | undefined;
+      if (!isAdmin && currentStaff) {
+        staffId = currentStaff.id;
+      }
+      const data = await payrollService.getPayrollList(month, year, staffId);
       setPayrollList(data);
     } catch (err: any) {
       setError(err.message || 'Lỗi tải bảng lương');
@@ -35,14 +43,19 @@ export const PayrollPage: React.FC = () => {
     setCalculating(true);
     setError(null);
     try {
-      // Lấy danh sách staff
-      const { data: staffs } = await supabase.from('staff').select('id');
-      if (staffs) {
-        for (const staff of staffs) {
-          await payrollService.calculateMonthlySalary(staff.id, month, year);
-        }
-        await loadPayroll();
+      // Lấy danh sách staff (nếu admin) hoặc chỉ tính cho staff hiện tại
+      let staffs: any[] = [];
+      if (isAdmin) {
+        const { data } = await supabase.from('staff').select('id').eq('status', 'ACTIVE');
+        staffs = data || [];
+      } else if (currentStaff) {
+        staffs = [{ id: currentStaff.id }];
       }
+
+      for (const staff of staffs) {
+        await payrollService.calculateMonthlySalary(staff.id, month, year);
+      }
+      await loadPayroll();
     } catch (err: any) {
       setError(err.message || 'Lỗi tính lương');
     } finally {
@@ -67,14 +80,18 @@ export const PayrollPage: React.FC = () => {
   return (
     <div className="p-4 max-w-4xl mx-auto space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-xl font-bold">Bảng lương</h1>
+        <h1 className="text-xl font-bold">
+          {isAdmin ? 'Bảng lương' : 'Bảng lương của tôi'}
+        </h1>
         <div className="flex items-center gap-2">
           <button onClick={handlePrevMonth} className="p-1 border rounded">&lt;</button>
           <span className="text-sm font-semibold">Tháng {month}/{year}</span>
           <button onClick={handleNextMonth} className="p-1 border rounded">&gt;</button>
-          <Button size="sm" onClick={handleCalculateAll} isLoading={calculating}>
-            Tính lương
-          </Button>
+          {isAdmin && (
+            <Button size="sm" onClick={handleCalculateAll} isLoading={calculating}>
+              Tính lương
+            </Button>
+          )}
         </div>
       </div>
 

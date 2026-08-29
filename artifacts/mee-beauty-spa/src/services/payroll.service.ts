@@ -1,32 +1,48 @@
+// src/services/payroll.service.ts
 import { supabase, DEFAULT_ORG_ID, DEFAULT_BRANCH_ID } from "./supabase";
-import { Payroll, PayrollDetail } from "../types/domain";
+import { attendanceService } from './attendance.service';
+import { Payroll, PayrollStatus } from "../types/domain";
 
 // Helper: số ngày trong tháng
 function getDaysInMonth(month: number, year: number): number {
   return new Date(year, month, 0).getDate();
 }
 
-// Helper: lấy tổng commission của nhân viên trong tháng
-async function getTotalCommission(staffId: string, month: number, year: number): Promise<number> {
+// Helper: lấy sale commission
+async function getSaleCommission(staffId: string, month: number, year: number): Promise<number> {
   const startDate = new Date(year, month - 1, 1).toISOString();
   const endDate = new Date(year, month, 0, 23, 59, 59).toISOString();
 
   const { data, error } = await supabase
-    .from('commission_logs')
+    .from('staff_commissions')
     .select('amount')
     .eq('staff_id', staffId)
+    .eq('commission_type', 'SALES')
     .gte('created_at', startDate)
     .lte('created_at', endDate);
 
-  if (error) {
-    console.error('Error fetching commission:', error);
-    return 0;
-  }
-
+  if (error) return 0;
   return data?.reduce((sum, row) => sum + (row.amount || 0), 0) || 0;
 }
 
-// Helper: lấy tổng bonus của nhân viên trong tháng
+// Helper: lấy performance commission
+async function getPerformanceCommission(staffId: string, month: number, year: number): Promise<number> {
+  const startDate = new Date(year, month - 1, 1).toISOString();
+  const endDate = new Date(year, month, 0, 23, 59, 59).toISOString();
+
+  const { data, error } = await supabase
+    .from('staff_commissions')
+    .select('amount')
+    .eq('staff_id', staffId)
+    .eq('commission_type', 'PERFORMANCE')
+    .gte('created_at', startDate)
+    .lte('created_at', endDate);
+
+  if (error) return 0;
+  return data?.reduce((sum, row) => sum + (row.amount || 0), 0) || 0;
+}
+
+// Helper: lấy tổng bonus
 async function getTotalBonus(staffId: string, month: number, year: number): Promise<number> {
   const startDate = new Date(year, month - 1, 1).toISOString().split('T')[0];
   const endDate = new Date(year, month, 0).toISOString().split('T')[0];
@@ -43,7 +59,7 @@ async function getTotalBonus(staffId: string, month: number, year: number): Prom
   return data?.reduce((sum, row) => sum + (row.amount || 0), 0) || 0;
 }
 
-// Helper: lấy tổng penalty của nhân viên trong tháng
+// Helper: lấy tổng penalty
 async function getTotalPenalty(staffId: string, month: number, year: number): Promise<number> {
   const startDate = new Date(year, month - 1, 1).toISOString().split('T')[0];
   const endDate = new Date(year, month, 0).toISOString().split('T')[0];
@@ -69,7 +85,7 @@ async function getAllowedLeaveDays(organizationId: string, branchId: string): Pr
     .eq('branch_id', branchId)
     .maybeSingle();
 
-  if (error || !data) return 2; // mặc định 2 ngày
+  if (error || !data) return 2;
   return data.default_allowed_leave_days || 2;
 }
 
@@ -98,7 +114,7 @@ export const payrollService = {
     const attendances = await attendanceService.getMonthlyAttendance(staffId, month, year);
     const daysInMonth = getDaysInMonth(month, year);
 
-    // 3. Đếm số ngày làm việc (có check_in)
+    // 3. Đếm số ngày làm việc
     const workingDays = attendances.filter(a => a.check_in !== null).length;
     const leaveDays = daysInMonth - workingDays;
 
@@ -113,14 +129,32 @@ export const payrollService = {
     const excessLeaveDeduction = excessLeaveDays * dailyRate;
 
     // 7. Lấy commission, bonus, penalty
-    const totalCommission = await getTotalCommission(staffId, month, year);
+    const saleComm = await getSaleCommission(staffId, month, year);
+    const perfComm = await getPerformanceCommission(staffId, month, year);
     const totalBonus = await getTotalBonus(staffId, month, year);
     const totalPenalty = await getTotalPenalty(staffId, month, year);
 
-    // 8. Tính lương thực nhận
-    const netSalary = baseSalary - excessLeaveDeduction + totalCommission + totalBonus - totalPenalty;
+    // 8. Các khoản mới mặc định 0 (sẽ được cập nhật sau qua hàm updatePayroll)
+    const allowance = 0;
+    const tip = 0;
+    const advance = 0;
+    const deduction = 0;
 
-    // 9. Lưu vào bảng payroll
+    const totalCommission = saleComm + perfComm;
+
+    // 9. Tính lương thực nhận
+    const netSalary = baseSalary
+      - excessLeaveDeduction
+      + saleComm
+      + perfComm
+      + totalBonus
+      + allowance
+      + tip
+      - totalPenalty
+      - advance
+      - deduction;
+
+    // 10. Lưu vào bảng payroll
     const payrollData = {
       staff_id: staffId,
       month,
@@ -133,15 +167,21 @@ export const payrollService = {
       excess_leave_days: excessLeaveDays,
       excess_leave_deduction: excessLeaveDeduction,
       total_commission: totalCommission,
+      sale_commission: saleComm,
+      performance_commission: perfComm,
       total_bonus: totalBonus,
       total_penalty: totalPenalty,
+      allowance: allowance,
+      tip: tip,
+      advance: advance,
+      deduction: deduction,
       net_salary: netSalary,
-      status: 'DRAFT',
+      status: 'DRAFT' as PayrollStatus,
       organization_id: organizationId,
       branch_id: branchId,
     };
 
-    // Upsert: nếu đã có payroll cho tháng này thì update, không thì insert
+    // Upsert
     const { data: existing } = await supabase
       .from('payroll')
       .select('id')
@@ -190,18 +230,51 @@ export const payrollService = {
   },
 
   /**
-   * Lấy danh sách payroll của tất cả nhân viên trong tháng
+   * Lấy danh sách payroll (có thể lọc theo staffId)
    */
-  async getPayrollList(month: number, year: number): Promise<Payroll[]> {
-    const { data, error } = await supabase
+  async getPayrollList(month: number, year: number, staffId?: string): Promise<Payroll[]> {
+    let query = supabase
       .from('payroll')
       .select('*, staff:staff_id(full_name, role)')
       .eq('month', month)
-      .eq('year', year)
-      .order('created_at', { ascending: false });
+      .eq('year', year);
 
+    if (staffId) {
+      query = query.eq('staff_id', staffId);
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false });
     if (error) throw error;
     return data || [];
+  },
+
+  /**
+   * Cập nhật các khoản phát sinh cho một payroll (chỉ admin)
+   */
+  async updatePayroll(
+    payrollId: string,
+    data: {
+      allowance?: number;
+      tip?: number;
+      advance?: number;
+      deduction?: number;
+    }
+  ): Promise<Payroll> {
+    const { data: updated, error } = await supabase
+      .from('payroll')
+      .update({
+        allowance: data.allowance ?? 0,
+        tip: data.tip ?? 0,
+        advance: data.advance ?? 0,
+        deduction: data.deduction ?? 0,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', payrollId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return updated;
   },
 
   /**
@@ -218,7 +291,6 @@ export const payrollService = {
     if (error) throw error;
     if (data) return data;
 
-    // Nếu chưa có, tạo mới
     const { data: newSetting, error: insertErr } = await supabase
       .from('salary_settings')
       .insert({
@@ -292,5 +364,5 @@ export const payrollService = {
 
     if (error) throw error;
     return data || [];
-  },
+  }
 };
