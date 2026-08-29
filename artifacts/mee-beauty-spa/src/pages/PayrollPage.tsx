@@ -1,14 +1,17 @@
 // src/pages/PayrollPage.tsx
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { payrollService } from '../services/payroll.service';
+import { supabase } from '../services/supabase';
 import { Button, Card, Spinner, Badge } from '../components/primitives';
 
 const formatVND = (val: number) => new Intl.NumberFormat('vi-VN').format(val) + ' đ';
 
-export const PayrollPage: React.FC = () => {
-  const navigate = useNavigate();
+interface PayrollPageProps {
+  onViewDetail: (staffId: string, month: number, year: number) => void;
+}
+
+export const PayrollPage: React.FC<PayrollPageProps> = ({ onViewDetail }) => {
   const { isAdmin, currentStaff } = useAuth();
 
   const [month, setMonth] = useState(new Date().getMonth() + 1);
@@ -43,7 +46,6 @@ export const PayrollPage: React.FC = () => {
     setCalculating(true);
     setError(null);
     try {
-      // Lấy danh sách staff (nếu admin) hoặc chỉ tính cho staff hiện tại
       let staffs: any[] = [];
       if (isAdmin) {
         const { data } = await supabase.from('staff').select('id').eq('status', 'ACTIVE');
@@ -64,7 +66,7 @@ export const PayrollPage: React.FC = () => {
   };
 
   const handleViewDetail = (staffId: string) => {
-    navigate(`/payroll-detail/${staffId}?month=${month}&year=${year}`);
+    onViewDetail(staffId, month, year);
   };
 
   const handlePrevMonth = () => {

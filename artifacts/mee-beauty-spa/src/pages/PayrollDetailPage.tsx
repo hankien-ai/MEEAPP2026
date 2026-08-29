@@ -1,9 +1,8 @@
 // src/pages/PayrollDetailPage.tsx
 import React, { useState, useEffect } from 'react';
-import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { payrollService } from '../services/payroll.service';
-import { Button, Card, Spinner, Badge } from '../components/primitives';
+import { Button, Card, Spinner } from '../components/primitives';
 import { ArrowLeft } from 'lucide-react';
 
 const formatVND = (val: number) => new Intl.NumberFormat('vi-VN').format(val) + ' đ';
@@ -37,13 +36,14 @@ function generateExplanation(p: any): string {
   return lines.join('\n');
 }
 
-export const PayrollDetailPage: React.FC = () => {
-  const navigate = useNavigate();
-  const { staffId } = useParams<{ staffId: string }>();
-  const [searchParams] = useSearchParams();
-  const month = parseInt(searchParams.get('month') || String(new Date().getMonth() + 1));
-  const year = parseInt(searchParams.get('year') || String(new Date().getFullYear()));
+interface PayrollDetailPageProps {
+  staffId: string;
+  month: number;
+  year: number;
+  onBack: () => void;
+}
 
+export const PayrollDetailPage: React.FC<PayrollDetailPageProps> = ({ staffId, month, year, onBack }) => {
   const { isAdmin, currentStaff } = useAuth();
 
   const [payroll, setPayroll] = useState<any>(null);
@@ -73,7 +73,7 @@ export const PayrollDetailPage: React.FC = () => {
         setLoading(false);
         return;
       }
-      const data = await payrollService.getPayroll(staffId!, month, year);
+      const data = await payrollService.getPayroll(staffId, month, year);
       if (!data) {
         setError('Không tìm thấy dữ liệu lương cho tháng này.');
         setLoading(false);
@@ -121,15 +121,10 @@ export const PayrollDetailPage: React.FC = () => {
     + payroll.allowance
     + payroll.tip;
 
-  const totalDeductions = payroll.excess_leave_deduction
-    + payroll.total_penalty
-    + payroll.advance
-    + payroll.deduction;
-
   return (
     <div className="p-4 max-w-2xl mx-auto space-y-4">
       <div className="flex items-center gap-3">
-        <button onClick={() => navigate('/payroll')} className="p-2 hover:bg-slate-100 rounded-lg">
+        <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-lg">
           <ArrowLeft className="w-5 h-5" />
         </button>
         <h1 className="text-xl font-bold">Chi tiết lương tháng {month}/{year}</h1>

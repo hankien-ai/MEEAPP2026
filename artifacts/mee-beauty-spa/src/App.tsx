@@ -13,11 +13,20 @@ import POSPage from "./pages/POSPage";
 import { InvoicesPage } from "./pages/InvoicesPage";
 import ReportsPage from "./pages/ReportsPage";
 import ExtensionPage from "./pages/ExtensionPage";
+import PayrollPage from "./pages/PayrollPage";
+import PayrollDetailPage from "./pages/PayrollDetailPage"; // <-- Import
 import { AppShell } from "./components/app-shell";
 
 export function App() {
   const { role, isLoggedIn, visibility, isAdmin, loading, currentStaff } = useAuth();
   const [activeTab, setActiveTab] = useState<string>("dashboard");
+
+  // State cho Payroll detail (dùng để hiển thị chi tiết mà không cần router)
+  const [payrollDetail, setPayrollDetail] = useState<{
+    staffId: string;
+    month: number;
+    year: number;
+  } | null>(null);
 
   useEffect(() => {
     setActiveTab("dashboard");
@@ -33,6 +42,7 @@ export function App() {
     if (isAdmin && visibility.catalog) tabs.push("catalog");
     if (visibility.operations) tabs.push("operations");
     if (isAdmin && visibility.staff) tabs.push("staff");
+    if (isAdmin && visibility.payroll) tabs.push("payroll"); // <-- Thêm payroll
     if (isAdmin && visibility.settings) tabs.push("settings");
     if (isAdmin) tabs.push("invoices");
     if (isAdmin) tabs.push("reports");
@@ -66,6 +76,7 @@ export function App() {
     if (isAdmin && visibility.catalog) tabs.push("catalog");
     if (visibility.operations) tabs.push("operations");
     if (isAdmin && visibility.staff) tabs.push("staff");
+    if (isAdmin && visibility.payroll) tabs.push("payroll");
     if (isAdmin && visibility.settings) tabs.push("settings");
     if (isAdmin) tabs.push("invoices");
     if (isAdmin) tabs.push("reports");
@@ -76,7 +87,30 @@ export function App() {
   const visibleTabs = getVisibleTabs();
   const currentActiveTab = visibleTabs.includes(activeTab) ? activeTab : (visibleTabs.length > 0 ? visibleTabs[0] : "dashboard");
 
+  // Hàm xử lý khi bấm vào một dòng payroll để xem chi tiết
+  const handleViewPayrollDetail = (staffId: string, month: number, year: number) => {
+    setPayrollDetail({ staffId, month, year });
+  };
+
+  // Hàm quay lại danh sách payroll
+  const handleBackFromDetail = () => {
+    setPayrollDetail(null);
+  };
+
   const renderContent = () => {
+    // Nếu đang ở chế độ xem chi tiết payroll, ưu tiên render Detail
+    if (payrollDetail) {
+      return (
+        <PayrollDetailPage
+          staffId={payrollDetail.staffId}
+          month={payrollDetail.month}
+          year={payrollDetail.year}
+          onBack={handleBackFromDetail}
+        />
+      );
+    }
+
+    // Ngược lại render các tab bình thường
     switch (currentActiveTab) {
       case "dashboard": return <DashboardPage userRole={role} onNavigate={setActiveTab} />;
       case "customers": return <CustomersPage />;
@@ -84,6 +118,7 @@ export function App() {
       case "operations": return <OperationsPage userRole={role} />;
       case "staff": return <StaffPage userRole={role} />;
       case "pos": return <POSPage />;
+      case "payroll": return <PayrollPage onViewDetail={handleViewPayrollDetail} />;
       case "settings": return <SettingsPage onNavigate={setActiveTab} />;
       case "invoices": return <InvoicesPage />;
       case "reports": return <ReportsPage />;
