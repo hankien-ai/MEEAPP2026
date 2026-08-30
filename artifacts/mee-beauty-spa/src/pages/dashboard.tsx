@@ -33,12 +33,13 @@ import {
   Grid,
   Plus,
   Bell,
+  Building2, // Thêm để dùng cho Branch Selector
 } from "lucide-react";
 
 const formatVND = (val: number) => new Intl.NumberFormat("vi-VN").format(val) + " đ";
 
 // ==========================================================
-// MODAL TẠO LỊCH HẸN (ĐƠN GIẢN)
+// MODAL TẠO LỊCH HẸN (Đơn giản)
 // ==========================================================
 const AppointmentModal: React.FC<{
   isOpen: boolean;
@@ -54,7 +55,7 @@ const AppointmentModal: React.FC<{
     start_time: "09:00",
     end_time: "10:00",
     note: "",
-    is_new_customer: false, // tag đơn giản
+    is_new_customer: false,
   });
   const [loading, setLoading] = useState(false);
   const [searchCustomer, setSearchCustomer] = useState("");
@@ -102,7 +103,7 @@ const AppointmentModal: React.FC<{
           </button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Khách hàng - có tìm kiếm */}
+          {/* Khách hàng */}
           <div>
             <label className="block text-sm font-medium text-slate-700">Khách hàng</label>
             <input
@@ -142,7 +143,7 @@ const AppointmentModal: React.FC<{
             )}
           </div>
 
-          {/* Tag đơn giản: Khách mới / Khách cũ */}
+          {/* Tag */}
           <div>
             <label className="block text-sm font-medium text-slate-700">Tag khách hàng</label>
             <div className="flex gap-2 mt-1">
@@ -402,6 +403,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ userRole, onNaviga
   const [activities, setActivities] = useState<any[]>([]);
   const [actionItems, setActionItems] = useState<any[]>([]);
 
+  // Branch selector
+  const [branches, setBranches] = useState<any[]>([]);
+  const [selectedBranch, setSelectedBranch] = useState<string>("");
+
   // ==========================================================
   // LOAD DATA
   // ==========================================================
@@ -427,19 +432,16 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ userRole, onNaviga
       const attMonth = await attendanceService.getMonthlyAttendance(staffId, month, year);
       setMonthlyAttendance(attMonth);
 
-      // Load staff, customer, service lists (for admin)
-      const [staffData, customerData, serviceData] = await Promise.all([
+      // Load staff, customer lists
+      const [staffData, customerData] = await Promise.all([
         supabase.from("staff").select("id, full_name").eq("status", "ACTIVE"),
         supabase.from("customers").select("id, full_name").order("created_at", { ascending: false }).limit(20),
-        supabase.from("catalog_items").select("id, name").eq("item_type", "SERVICE").eq("status", "ACTIVE"),
       ]);
       setStaffList(staffData.data || []);
       setCustomerList(customerData.data || []);
-      setServiceList(serviceData.data || []);
 
       // Appointments & Tasks
       if (isAdmin) {
-        // Admin thấy tất cả
         const [apps, tasks] = await Promise.all([
           appointmentService.getAppointments(undefined, todayStr),
           taskService.getTasks(),
@@ -447,7 +449,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ userRole, onNaviga
         setTodayAppointments(apps);
         setTodayTasks(tasks.filter((t) => t.status !== "COMPLETED"));
       } else {
-        // Staff chỉ thấy của mình
         const [apps, tasks] = await Promise.all([
           appointmentService.getAppointments(staffId, todayStr),
           taskService.getTasks(staffId),
@@ -459,6 +460,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ userRole, onNaviga
       // Admin extra data
       if (isAdmin) {
         await loadAdminData(todayStr);
+        // Load branches
+        const { data: branchData } = await supabase.from('branches').select('id, name');
+        if (branchData && branchData.length > 0) {
+          setBranches(branchData);
+          setSelectedBranch(branchData[0].id);
+        }
       }
     } catch (err) {
       console.error("Lỗi tải dashboard:", err);
@@ -632,8 +639,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ userRole, onNaviga
     const payload = {
       customer_id: data.customer_id,
       staff_id: data.staff_id,
-      service_id: data.service_id || null,
-      service_name: data.service_name || null,
       appointment_date: data.appointment_date,
       start_time: data.start_time,
       end_time: data.end_time,
@@ -643,22 +648,21 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ userRole, onNaviga
     };
     const result = await appointmentService.createAppointment(payload);
 
-    // Tạo notification cho staff
     const staff = staffList.find((s) => s.id === data.staff_id);
+    const customer = customerList.find((c) => c.id === data.customer_id);
     await notificationService.createNotification({
       staff_id: data.staff_id,
       type: "APPOINTMENT",
       title: "📅 Lịch hẹn mới",
-      message: `Bạn có lịch với khách ${customerList.find(c => c.id === data.customer_id)?.full_name} lúc ${data.start_time}`,
+      message: `Bạn có lịch với khách ${customer?.full_name} lúc ${data.start_time}`,
       reference_type: "appointment",
       reference_id: result.id,
     });
 
-    // Gửi push notification
     await pushService.sendPushNotification(
       data.staff_id,
       "📅 Lịch hẹn mới",
-      `Bạn có lịch với khách ${customerList.find(c => c.id === data.customer_id)?.full_name} lúc ${data.start_time}`,
+      `Bạn có lịch với khách ${customer?.full_name} lúc ${data.start_time}`,
       { type: "appointment", id: result.id }
     );
 
@@ -749,7 +753,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ userRole, onNaviga
     return (
       <div className="min-h-screen bg-slate-50 pb-20">
         <div className="max-w-lg mx-auto p-4 space-y-4">
-          {/* Header */}
           <div className="flex items-center justify-between">
             <h1 className="text-xl font-bold text-slate-800">Xin chào, {staffName} 👋</h1>
             <span className="text-sm text-slate-500">{format(now, "EEEE, dd/MM/yyyy", { locale: vi })}</span>
@@ -820,7 +823,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ userRole, onNaviga
                     <span className="text-xs font-semibold text-emerald-600">{app.start_time?.slice(0, 5)}</span>
                     <div className="flex-1">
                       <div className="text-sm font-medium text-slate-800">{app.customer?.full_name || "Khách"}</div>
-                      <div className="text-xs text-slate-500">{app.service_name || "Dịch vụ"}</div>
+                      <div className="text-xs text-slate-500">{app.service_name || app.service?.name || "Dịch vụ"}</div>
                     </div>
                   </div>
                 ))}
@@ -937,7 +940,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ userRole, onNaviga
   }
 
   // ==========================================================
-  // ADMIN DASHBOARD
+  // ADMIN DASHBOARD (ĐÃ SỬA)
   // ==========================================================
   const adminName = currentStaff?.full_name || "Quản lý";
   const now = new Date();
@@ -951,42 +954,27 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ userRole, onNaviga
           <span className="text-sm text-slate-500">{format(now, "EEEE, dd/MM/yyyy", { locale: vi })}</span>
         </div>
 
-        {/* Chấm công Admin */}
+        {/* Branch Selector */}
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 flex items-center justify-between">
-          <div>
-            <span className="text-sm font-medium text-slate-700">Chấm công hôm nay</span>
-            {todayAttendance ? (
-              <div className="text-xs text-emerald-600">✅ Đã check-in {format(new Date(todayAttendance.check_in), "HH:mm")}</div>
-            ) : (
-              <div className="text-xs text-amber-600">⏳ Chưa chấm công</div>
-            )}
+          <div className="flex items-center gap-2">
+            <Building2 className="w-5 h-5 text-slate-500" />
+            <span className="text-sm font-medium text-slate-700">Chi nhánh</span>
           </div>
-          <button
-            onClick={todayAttendance ? handleCheckOut : handleCheckIn}
-            disabled={submitting}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md shadow-indigo-600/30 active:scale-95 transition-all"
+          <select
+            value={selectedBranch}
+            onChange={(e) => setSelectedBranch(e.target.value)}
+            className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500"
           >
-            {todayAttendance ? "Kết thúc ca" : "Chấm công"}
-          </button>
+            {branches.map((b) => (
+              <option key={b.id} value={b.id}>{b.name}</option>
+            ))}
+            {branches.length === 0 && (
+              <option value="">Chi nhánh chính</option>
+            )}
+          </select>
         </div>
 
-        {/* Nút tạo nhanh */}
-        <div className="grid grid-cols-2 gap-3">
-          <button
-            onClick={() => setShowAppointmentModal(true)}
-            className="flex items-center justify-center gap-2 p-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md shadow-indigo-600/30 active:scale-95 transition-all"
-          >
-            <Calendar className="w-5 h-5" /> Tạo lịch hẹn
-          </button>
-          <button
-            onClick={() => setShowTaskModal(true)}
-            className="flex items-center justify-center gap-2 p-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md shadow-emerald-600/30 active:scale-95 transition-all"
-          >
-            <ClipboardCheck className="w-5 h-5" /> Giao việc
-          </button>
-        </div>
-
-        {/* Báo cáo hôm nay */}
+        {/* Báo cáo hôm nay – Card có thể click */}
         <div className="grid grid-cols-2 gap-3">
           <div
             onClick={() => onNavigate?.("customers")}
@@ -1019,7 +1007,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ userRole, onNaviga
               <span className="text-xs text-slate-400">Hôm nay</span>
             </div>
             <div className="mt-2 text-2xl font-bold text-emerald-700">{formatVND(adminStats.revenueToday)}</div>
-            <div className="text-xs text-slate-500">Doanh thu</div>
+            <div className="text-xs text-slate-500">Doanh thu → Xem báo cáo</div>
           </div>
           <div
             onClick={() => onNavigate?.("staff")}
@@ -1142,7 +1130,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ userRole, onNaviga
         onSave={handleCreateAppointment}
         staffList={staffList}
         customerList={customerList}
-        serviceList={serviceList}
       />
       <TaskModal
         isOpen={showTaskModal}
