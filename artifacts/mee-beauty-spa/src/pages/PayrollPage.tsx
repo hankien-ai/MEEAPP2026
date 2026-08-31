@@ -1,14 +1,13 @@
-// src/pages/PayrollPage.tsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { payrollService } from '../services/payroll.service';
-import { supabase } from '../services/supabase';
 import { Button, Card, Spinner, Badge } from '../components/primitives';
+import { supabase } from '../services/supabase';
 
 const formatVND = (val: number) => new Intl.NumberFormat('vi-VN').format(val) + ' đ';
 
 interface PayrollPageProps {
-  onViewDetail: (staffId: string, month: number, year: number) => void;
+  onViewDetail?: (staffId: string, month: number, year: number) => void;
 }
 
 export const PayrollPage: React.FC<PayrollPageProps> = ({ onViewDetail }) => {
@@ -53,7 +52,6 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ onViewDetail }) => {
       } else if (currentStaff) {
         staffs = [{ id: currentStaff.id }];
       }
-
       for (const staff of staffs) {
         await payrollService.calculateMonthlySalary(staff.id, month, year);
       }
@@ -66,7 +64,12 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ onViewDetail }) => {
   };
 
   const handleViewDetail = (staffId: string) => {
-    onViewDetail(staffId, month, year);
+    if (onViewDetail) {
+      onViewDetail(staffId, month, year);
+    } else {
+      // fallback: dùng window.location nếu không có onViewDetail (chỉ để debug)
+      window.location.href = `/payroll-detail/${staffId}?month=${month}&year=${year}`;
+    }
   };
 
   const handlePrevMonth = () => {

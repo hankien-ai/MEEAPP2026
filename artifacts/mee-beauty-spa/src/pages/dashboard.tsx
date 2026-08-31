@@ -1,4 +1,5 @@
 // src/pages/dashboard.tsx
+import { DEFAULT_ORG_ID, DEFAULT_BRANCH_ID } from "@/services/supabase";
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/services/supabase";
@@ -634,7 +635,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ userRole, onNaviga
 
   // ==========================================================
   // HANDLERS – APPOINTMENT & TASK
-  // ==========================================================
+  // ==========================================================  
+  // Thêm import
   const handleCreateAppointment = async (data: any) => {
     const payload = {
       customer_id: data.customer_id,
@@ -645,9 +647,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ userRole, onNaviga
       note: data.note,
       status: "SCHEDULED",
       created_by: currentStaff?.id,
+      organization_id: DEFAULT_ORG_ID,   // ← THÊM
+      branch_id: DEFAULT_BRANCH_ID,      // ← THÊM
     };
     const result = await appointmentService.createAppointment(payload);
-
+    
     const staff = staffList.find((s) => s.id === data.staff_id);
     const customer = customerList.find((c) => c.id === data.customer_id);
     await notificationService.createNotification({
@@ -958,7 +962,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ userRole, onNaviga
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Building2 className="w-5 h-5 text-slate-500" />
-            <span className="text-sm font-medium text-slate-700">Chi nhánh</span>
+            <span className="text-sm font-medium text-slate-700">Chi nhánh chính</span>
           </div>
           <select
             value={selectedBranch}
@@ -972,6 +976,22 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ userRole, onNaviga
               <option value="">Chi nhánh chính</option>
             )}
           </select>
+        </div>
+
+        {/* Nút tạo nhanh – đặt ngay dưới Branch Selector */}
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={() => setShowAppointmentModal(true)}
+            className="flex items-center justify-center gap-2 p-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md shadow-indigo-600/30 active:scale-95 transition-all"
+          >
+            <Calendar className="w-5 h-5" /> Tạo lịch hẹn
+          </button>
+          <button
+            onClick={() => setShowTaskModal(true)}
+            className="flex items-center justify-center gap-2 p-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md shadow-emerald-600/30 active:scale-95 transition-all"
+          >
+            <ClipboardCheck className="w-5 h-5" /> Giao việc
+          </button>
         </div>
 
         {/* Báo cáo hôm nay – Card có thể click */}
