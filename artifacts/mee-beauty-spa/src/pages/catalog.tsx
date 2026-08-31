@@ -1089,4 +1089,4 @@ function PackageFormModal({ isOpen, onClose, editingPackage, availableServices, 
       </div>
     </div>
   );
-} 
+}
