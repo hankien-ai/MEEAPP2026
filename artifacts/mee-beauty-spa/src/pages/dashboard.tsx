@@ -379,6 +379,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ userRole, onNaviga
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [showTaskModal, setShowTaskModal] = useState(false);
 
+  // Admin stats và các dữ liệu khác
   const [adminStats, setAdminStats] = useState({
     customersToday: 0,
     invoicesToday: 0,
@@ -407,177 +408,212 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ userRole, onNaviga
       if (!staffId) return;
 
       const todayStr = format(new Date(), "yyyy-MM-dd");
-
-      const attToday = await attendanceService.getTodayAttendance(staffId);
-      setTodayAttendance(attToday);
       const month = currentMonth.getMonth() + 1;
       const year = currentMonth.getFullYear();
-      const attMonth = await attendanceService.getMonthlyAttendance(staffId, month, year);
-      setMonthlyAttendance(attMonth);
 
-      const [staffData, customerData] = await Promise.all([
+      // === Gom tất cả request KHÔNG PHỤ THUỘC vào Promise.all ===
+      const [
+        attToday,
+        attMonth,
+        staffData,
+        customerData,
+        branchData,
+      ] = await Promise.all([
+        attendanceService.getTodayAttendance(staffId),
+        attendanceService.getMonthlyAttendance(staffId, month, year),
         supabase.from("staff").select("id, full_name").eq("status", "ACTIVE"),
         supabase.from("customers").select("id, full_name").order("created_at", { ascending: false }).limit(20),
+        isAdmin ? supabase.from('branches').select('id, name') : Promise.resolve({ data: [] }),
       ]);
+
+      // Lưu dữ liệu chính
+      setTodayAttendance(attToday);
+      setMonthlyAttendance(attMonth);
       setStaffList(staffData.data || []);
       setCustomerList(customerData.data || []);
-
-      if (isAdmin) {
-        const [apps, tasks] = await Promise.all([
-          appointmentService.getAppointments(undefined, todayStr),
-          taskService.getTasks(),
-        ]);
-        setTodayAppointments(apps);
-        setTodayTasks(tasks.filter((t) => t.status !== "COMPLETED"));
-      } else {
-        const [apps, tasks] = await Promise.all([
-          appointmentService.getAppointments(staffId, todayStr),
-          taskService.getTasks(staffId),
-        ]);
-        setTodayAppointments(apps);
-        setTodayTasks(tasks.filter((t) => t.status !== "COMPLETED"));
+      if (isAdmin && branchData.data && branchData.data.length > 0) {
+        setBranches(branchData.data);
+        setSelectedBranch(branchData.data[0].id);
       }
 
+      // === Phần dữ liệu cần thiết cho admin (nhưng vẫn song song) ===
       if (isAdmin) {
-        await loadAdminData(todayStr);
-        const { data: branchData } = await supabase.from('branches').select('id, name');
-        if (branchData && branchData.length > 0) {
-          setBranches(branchData);
-          setSelectedBranch(branchData[0].id);
+        // Gom tất cả request admin vào một Promise.all
+        const adminResults = await Promise.all([
+          // 1. Đếm khách hàng mới
+          supabase
+            .from("customers")
+            .select("id", { count: "exact", head: true })
+            .gte("created_at", new Date(todayStr).toISOString())
+            .lte("created_at", new Date(todayStr + "T23:59:59.999Z").toISOString()),
+          // 2. Lấy hóa đơn trong ngày
+          supabase
+            .from("invoices")
+            .select("total_amount, status")
+            .gte("created_at", new Date(todayStr).toISOString())
+            .lte("created_at", new Date(todayStr + "T23:59:59.999Z").toISOString())
+            .in("status", ["PAID", "PARTIALLY_PAID"]),
+          // 3. Staff đang làm
+          supabase
+            .from("attendance")
+            .select("staff_id")
+            .eq("work_date", todayStr)
+            .not("check_in", "is", null)
+            .is("check_out", null),
+          // 4. Check-in gần nhất
+          supabase
+            .from("attendance")
+            .select(`staff_id, check_in, staff:staff_id (full_name)`)
+            .eq("work_date", todayStr)
+            .not("check_in", "is", null)
+            .order("check_in", { ascending: false })
+            .limit(5),
+          // 5. Khách hàng mới nhất
+          supabase
+            .from("customers")
+            .select("full_name, created_at")
+            .gte("created_at", `${todayStr}T00:00:00`)
+            .lte("created_at", `${todayStr}T23:59:59`)
+            .order("created_at", { ascending: false })
+            .limit(5),
+          // 6. Hóa đơn mới nhất
+          supabase
+            .from("invoices")
+            .select("id, total_amount, created_at")
+            .gte("created_at", `${todayStr}T00:00:00`)
+            .lte("created_at", `${todayStr}T23:59:59`)
+            .in("status", ["PAID", "PARTIALLY_PAID"])
+            .order("created_at", { ascending: false })
+            .limit(5),
+          // 7. Hóa đơn DRAFT/PARTIALLY_PAID
+          supabase
+            .from("invoices")
+            .select("id, status")
+            .in("status", ["DRAFT", "PARTIALLY_PAID"])
+            .limit(5),
+        ]);
+
+        // Parse kết quả
+        const [
+          { count: customersCount },
+          invoicesData,
+          staffOnDutyData,
+          checkinsData,
+          newCustomersData,
+          paidInvoicesData,
+          draftInvoicesData,
+        ] = adminResults;
+
+        // Tính toán admin stats
+        const revenue = invoicesData.data?.reduce((sum, inv) => sum + (inv.total_amount || 0), 0) || 0;
+        const invoiceCount = invoicesData.data?.length || 0;
+        const staffOnDuty = staffOnDutyData.data?.length || 0;
+
+        setAdminStats({
+          customersToday: customersCount || 0,
+          invoicesToday: invoiceCount,
+          revenueToday: revenue,
+          staffOnDuty: staffOnDuty,
+        });
+
+        // Xây dựng activities
+        const activities: any[] = [];
+        if (checkinsData.data) {
+          checkinsData.data.forEach((item: any) => {
+            activities.push({
+              id: `att-${item.staff_id}`,
+              type: "checkin",
+              label: `${item.staff?.full_name || "Nhân viên"} đã check-in`,
+              time: item.check_in,
+              icon: "🟢",
+            });
+          });
         }
+        if (newCustomersData.data) {
+          newCustomersData.data.forEach((c: any) => {
+            activities.push({
+              id: `cust-${c.id}`,
+              type: "new_customer",
+              label: `Khách hàng mới: ${c.full_name}`,
+              time: c.created_at,
+              icon: "👤",
+            });
+          });
+        }
+        if (paidInvoicesData.data) {
+          paidInvoicesData.data.forEach((inv: any) => {
+            activities.push({
+              id: `inv-${inv.id}`,
+              type: "invoice_paid",
+              label: `Hóa đơn ${inv.id.slice(0, 6)} - ${formatVND(inv.total_amount)}`,
+              time: inv.created_at,
+              icon: "💳",
+            });
+          });
+        }
+        activities.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+        setActivities(activities.slice(0, 10));
+
+        // Xây dựng action items
+        const items: any[] = [];
+        // Sử dụng staffData đã lấy để tính toán staff chưa check-in
+        const checkedInIds = new Set(staffOnDutyData.data?.map((c: any) => c.staff_id) || []);
+        const notCheckedIn = staffData.data?.filter((s: any) => !checkedInIds.has(s.id)) || [];
+        if (notCheckedIn.length > 0) {
+          items.push({
+            id: "att-missing",
+            label: `${notCheckedIn.length} nhân viên chưa check-in hôm nay`,
+            link: "staff",
+            severity: "warning",
+          });
+        }
+        if (draftInvoicesData.data && draftInvoicesData.data.length > 0) {
+          items.push({
+            id: "inv-pending",
+            label: `${draftInvoicesData.data.length} hóa đơn chưa hoàn tất`,
+            link: "invoices",
+            severity: "info",
+          });
+        }
+        setActionItems(items);
       }
+
+      // === Phần dữ liệu không cần thiết cho initial render (appointments, tasks) sẽ được tải sau ===
+      // Nhưng vẫn gọi để có dữ liệu hiển thị sau khi UI đã sẵn sàng.
+      // Chúng ta sẽ tách thành một hàm riêng và gọi sau setLoading(false)
+      // Tuy nhiên, để đơn giản và vẫn đảm bảo có dữ liệu, chúng ta vẫn gọi nhưng không chặn render.
+
+      // Bắt đầu tải appointments và tasks (không await để không chặn)
+      const loadAppointmentsAndTasks = async () => {
+        try {
+          if (isAdmin) {
+            const [apps, tasks] = await Promise.all([
+              appointmentService.getAppointments(undefined, todayStr),
+              taskService.getTasks(),
+            ]);
+            setTodayAppointments(apps);
+            setTodayTasks(tasks.filter((t) => t.status !== "COMPLETED"));
+          } else {
+            const [apps, tasks] = await Promise.all([
+              appointmentService.getAppointments(staffId, todayStr),
+              taskService.getTasks(staffId),
+            ]);
+            setTodayAppointments(apps);
+            setTodayTasks(tasks.filter((t) => t.status !== "COMPLETED"));
+          }
+        } catch (err) {
+          console.error("Lỗi tải appointments/tasks:", err);
+        }
+      };
+
+      // Gọi loadAppointmentsAndTasks nhưng không chặn
+      loadAppointmentsAndTasks();
+
     } catch (err) {
       console.error("Lỗi tải dashboard:", err);
     } finally {
       setLoading(false);
     }
-  };
-
-  const loadAdminData = async (todayStr: string) => {
-    const startOfDay = new Date(todayStr).toISOString();
-    const endOfDay = new Date(todayStr + "T23:59:59.999Z").toISOString();
-
-    const { count: customersCount } = await supabase
-      .from("customers")
-      .select("id", { count: "exact", head: true })
-      .gte("created_at", startOfDay)
-      .lte("created_at", endOfDay);
-
-    const { data: invoices } = await supabase
-      .from("invoices")
-      .select("total_amount, status")
-      .gte("created_at", startOfDay)
-      .lte("created_at", endOfDay)
-      .in("status", ["PAID", "PARTIALLY_PAID"]);
-    const revenue = invoices?.reduce((sum, inv) => sum + (inv.total_amount || 0), 0) || 0;
-    const invoiceCount = invoices?.length || 0;
-
-    const { data: staffOnDuty } = await supabase
-      .from("attendance")
-      .select("staff_id")
-      .eq("work_date", todayStr)
-      .not("check_in", "is", null)
-      .is("check_out", null);
-
-    setAdminStats({
-      customersToday: customersCount || 0,
-      invoicesToday: invoiceCount,
-      revenueToday: revenue,
-      staffOnDuty: staffOnDuty?.length || 0,
-    });
-
-    const activities: any[] = [];
-    const { data: checkins } = await supabase
-      .from("attendance")
-      .select(`staff_id, check_in, staff:staff_id (full_name)`)
-      .eq("work_date", todayStr)
-      .not("check_in", "is", null)
-      .order("check_in", { ascending: false })
-      .limit(5);
-    if (checkins) {
-      checkins.forEach((item) => {
-        activities.push({
-          id: `att-${item.staff_id}`,
-          type: "checkin",
-          label: `${item.staff?.full_name || "Nhân viên"} đã check-in`,
-          time: item.check_in,
-          icon: "🟢",
-        });
-      });
-    }
-
-    const { data: newCustomers } = await supabase
-      .from("customers")
-      .select("full_name, created_at")
-      .gte("created_at", `${todayStr}T00:00:00`)
-      .lte("created_at", `${todayStr}T23:59:59`)
-      .order("created_at", { ascending: false })
-      .limit(5);
-    if (newCustomers) {
-      newCustomers.forEach((c) => {
-        activities.push({
-          id: `cust-${c.id}`,
-          type: "new_customer",
-          label: `Khách hàng mới: ${c.full_name}`,
-          time: c.created_at,
-          icon: "👤",
-        });
-      });
-    }
-
-    const { data: paidInvoices } = await supabase
-      .from("invoices")
-      .select("id, total_amount, created_at")
-      .gte("created_at", `${todayStr}T00:00:00`)
-      .lte("created_at", `${todayStr}T23:59:59`)
-      .in("status", ["PAID", "PARTIALLY_PAID"])
-      .order("created_at", { ascending: false })
-      .limit(5);
-    if (paidInvoices) {
-      paidInvoices.forEach((inv) => {
-        activities.push({
-          id: `inv-${inv.id}`,
-          type: "invoice_paid",
-          label: `Hóa đơn ${inv.id.slice(0, 6)} - ${formatVND(inv.total_amount)}`,
-          time: inv.created_at,
-          icon: "💳",
-        });
-      });
-    }
-    activities.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
-    setActivities(activities.slice(0, 10));
-
-    const items: any[] = [];
-    const { data: activeStaff } = await supabase.from("staff").select("id, full_name").eq("status", "ACTIVE");
-    const { data: checkedIn } = await supabase
-      .from("attendance")
-      .select("staff_id")
-      .eq("work_date", todayStr)
-      .not("check_in", "is", null);
-    const checkedInIds = new Set(checkedIn?.map((c) => c.staff_id) || []);
-    const notCheckedIn = activeStaff?.filter((s) => !checkedInIds.has(s.id)) || [];
-    if (notCheckedIn.length > 0) {
-      items.push({
-        id: "att-missing",
-        label: `${notCheckedIn.length} nhân viên chưa check-in hôm nay`,
-        link: "staff",
-        severity: "warning",
-      });
-    }
-    const { data: draftInvoices } = await supabase
-      .from("invoices")
-      .select("id, status")
-      .in("status", ["DRAFT", "PARTIALLY_PAID"])
-      .limit(5);
-    if (draftInvoices && draftInvoices.length > 0) {
-      items.push({
-        id: "inv-pending",
-        label: `${draftInvoices.length} hóa đơn chưa hoàn tất`,
-        link: "invoices",
-        severity: "info",
-      });
-    }
-    setActionItems(items);
   };
 
   // ==========================================================
