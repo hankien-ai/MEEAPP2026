@@ -43,7 +43,18 @@ import {
   isValidPhone,
   isPhoneExists,
 } from "../services/customer.service";
-import { User, Package, Camera, ArrowLeft, Gift, Box, Plus } from "lucide-react";
+import { User, Package, Camera, ArrowLeft, Plus, Search, Gift } from "lucide-react";
+
+// ============================================================
+// HÀM BỎ DẤU (removeAccents)
+// ============================================================
+function removeAccents(str: string): string {
+  return str
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D");
+}
 
 // ============================================================
 // HELPERS
@@ -70,31 +81,6 @@ export function CustomerProfilePage({
 }: CustomerProfilePageProps) {
   const { role } = useAuth();
   const isAdmin = role === 'admin';
-
-  // State cho vuốt quay lại
-  const touchStartX = useRef<number | null>(null);
-  const touchStartY = useRef<number | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
-    const touch = e.touches[0];
-    touchStartX.current = touch.clientX;
-    touchStartY.current = touch.clientY;
-  };
-
-  const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
-    if (touchStartX.current === null || touchStartY.current === null) return;
-    const touch = e.changedTouches[0];
-    const deltaX = touch.clientX - touchStartX.current;
-    const deltaY = touch.clientY - touchStartY.current;
-    // Vuốt từ trái sang phải, khoảng cách tối thiểu 80px, và gần như ngang (|deltaY| < 100)
-    if (deltaX > 80 && Math.abs(deltaY) < 100 && touchStartX.current < 50) {
-      // Vuốt từ cạnh trái sang phải
-      if (onBack) onBack();
-    }
-    touchStartX.current = null;
-    touchStartY.current = null;
-  };
 
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -423,25 +409,14 @@ export function CustomerProfilePage({
     setIsUploadModalOpen(true);
   };
 
+  // ============================================================
+  // RENDER PROFILE (KHÔNG CÓ SWIPE-BACK)
+  // ============================================================
   return (
-    <div
-      ref={containerRef}
-      className="space-y-4 max-w-full"
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
-    >
-      {/* HEADER - có nút back nếu có onBack */}
+    <div className="space-y-4 max-w-full">
+      {/* HEADER - gọn */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
         <div className="flex items-center gap-3">
-          {onBack && (
-            <button
-              onClick={onBack}
-              className="p-2 -ml-2 rounded-full hover:bg-gray-100 active:bg-gray-200 transition-colors"
-              aria-label="Quay lại"
-            >
-              <ArrowLeft className="w-5 h-5 text-gray-600" />
-            </button>
-          )}
           <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
             <User className="w-5 h-5" />
           </div>
@@ -1310,6 +1285,16 @@ export function CustomersPage() {
     loadData();
   }, []);
 
+  // Client-side search với removeAccents
+  const filteredCustomers = customers.filter((c) => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return true;
+    const keyword = removeAccents(q);
+    const name = removeAccents((c.full_name || c.name || "").toLowerCase());
+    const phone = (c.phone || "").toLowerCase();
+    return name.includes(keyword) || phone.includes(q); // phone chỉ có số, không cần bỏ dấu
+  });
+
   const handleCreateCustomer = async (e: FormEvent) => {
     e.preventDefault();
     setAddError(null);
@@ -1370,14 +1355,6 @@ export function CustomersPage() {
     setSelectedTab("packages");
   };
 
-  const filteredCustomers = customers.filter((c) => {
-    const q = searchQuery.toLowerCase().trim();
-    if (!q) return true;
-    const nameStr = (c.full_name || c.name || "").toLowerCase();
-    const phoneStr = (c.phone || "").toLowerCase();
-    return nameStr.includes(q) || phoneStr.includes(q);
-  });
-
   // Nếu có customerId được chọn, render profile
   if (selectedCustomerId) {
     return (
@@ -1389,34 +1366,11 @@ export function CustomersPage() {
     );
   }
 
-  // Hàm bỏ dấu cho tìm kiếm
-  const removeAccents = (str: string) => {
-    return str
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/đ/g, "d")
-      .replace(/Đ/g, "D");
-  };
-
-  // Lọc khách hàng với tìm kiếm không dấu
-  const filteredCustomersNoAccent = customers.filter((c) => {
-    const q = removeAccents(searchQuery.toLowerCase().trim());
-    if (!q) return true;
-    const name = removeAccents((c.full_name || c.name || "").toLowerCase());
-    const phone = (c.phone || "").toLowerCase();
-    return name.includes(q) || phone.includes(q);
-  });
-
   return (
     <div className="space-y-4 max-w-full">
       <PageHeader
         title="Quản lý Khách hàng"
         description="Danh sách hồ sơ khách hàng, gói liệu trình và nhật ký hình ảnh"
-        action={
-          <Button onClick={() => setIsAddModalOpen(true)}>
-            + Thêm khách hàng
-          </Button>
-        }
       />
 
       <Panel>
@@ -1424,19 +1378,22 @@ export function CustomersPage() {
           title="Danh sách khách hàng"
           action={
             <div className="flex items-center gap-3 w-full sm:w-auto">
-              <div className="flex-1 sm:w-72">
+              <div className="relative flex-1 sm:w-72">
+                <span className="absolute inset-y-0 left-3 flex items-center text-gray-400">
+                  <Search className="w-4 h-4" />
+                </span>
                 <Input
-                  placeholder="🔍 Tìm theo tên hoặc số điện thoại..."
+                  placeholder="Tìm khách hàng..."
                   value={searchQuery}
                   onChange={(e: ChangeEvent<HTMLInputElement>) =>
                     setSearchQuery(e.target.value)
                   }
-                  className="text-base py-3 px-4 rounded-xl border-2 focus:ring-2 focus:ring-blue-500"
+                  className="pl-9 text-base py-2.5 border-2 border-gray-200 focus:border-blue-500 rounded-xl"
                 />
               </div>
               <Button
                 onClick={() => setIsAddModalOpen(true)}
-                className="rounded-full w-12 h-12 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/30 active:scale-95 transition-all text-2xl font-bold"
+                className="w-12 h-12 rounded-full flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-200 active:scale-95 transition-transform"
                 title="Thêm khách hàng"
               >
                 <Plus className="w-6 h-6" />
@@ -1447,7 +1404,7 @@ export function CustomersPage() {
         <PanelContent>
           {loading ? (
             <Spinner className="py-8" />
-          ) : filteredCustomersNoAccent.length === 0 ? (
+          ) : filteredCustomers.length === 0 ? (
             <EmptyState
               title="Không tìm thấy khách hàng"
               description="Thử tìm kiếm với từ khóa khác hoặc thêm hồ sơ khách hàng mới."
@@ -1459,7 +1416,7 @@ export function CustomersPage() {
             />
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {filteredCustomersNoAccent.map((item) => {
+              {filteredCustomers.map((item) => {
                 const badges = customerBadges[item.id] || { hasPackage: false, hasGift: false };
                 return (
                   <div
@@ -1468,7 +1425,7 @@ export function CustomersPage() {
                       setSelectedCustomerId(item.id);
                       setSelectedTab("info");
                     }}
-                    className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm hover:shadow-md transition-all cursor-pointer"
+                    className="bg-white rounded-xl border border-gray-200 p-3 shadow-sm hover:shadow-md transition-all cursor-pointer"
                   >
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
@@ -1486,7 +1443,7 @@ export function CustomersPage() {
                                   e.stopPropagation();
                                   handleQuickPackage(item.id);
                                 }}
-                                className="w-9 h-9 rounded-full border border-blue-300 bg-blue-50 text-blue-600 hover:bg-blue-100 flex items-center justify-center transition-colors"
+                                className="w-9 h-9 rounded-full border-2 border-blue-200 text-blue-500 hover:bg-blue-50 transition-colors flex items-center justify-center"
                                 title="Xem gói dịch vụ"
                               >
                                 <Gift className="w-5 h-5" />
@@ -1497,14 +1454,14 @@ export function CustomersPage() {
                                 e.stopPropagation();
                                 handleQuickPhoto(item.id);
                               }}
-                              className="w-9 h-9 rounded-full border border-gray-300 bg-gray-50 text-gray-600 hover:bg-gray-100 flex items-center justify-center transition-colors"
+                              className="w-9 h-9 rounded-full border-2 border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors flex items-center justify-center"
                               title="Chụp ảnh nhanh"
                             >
                               <Camera className="w-5 h-5" />
                             </button>
                           </div>
                         </div>
-                        <p className="text-sm text-gray-500 mt-1">
+                        <p className="text-sm text-gray-500">
                           {maskPhone(item.phone || "", isAdmin)}
                         </p>
                       </div>
