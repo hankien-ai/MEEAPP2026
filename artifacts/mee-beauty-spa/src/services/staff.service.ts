@@ -7,33 +7,64 @@ import {
 } from "../types/domain";
 import { format, eachDayOfInterval } from "date-fns";
 
+// ============================================================
+// HÀM BỎ DẤU (removeAccents)
+// ============================================================
+function removeAccents(str: string): string {
+  return str
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D");
+}
+
+// ============================================================
+// FETCH STAFF – CÓ HỖ TRỢ ARCHIVED VÀ TÌM KIẾM KHÔNG DẤU
+// ============================================================
 export const fetchStaff = async (
   searchQuery?: string,
   includeInactive: boolean = true,
+  includeArchived: boolean = false,
 ): Promise<StaffMemberDomain[]> => {
   let query = supabase
     .from("staff")
     .select("*")
     .eq("organization_id", DEFAULT_ORG_ID)
-    .eq("branch_id", DEFAULT_BRANCH_ID)
-    .is("archived_at", null)
-    .order("created_at", { ascending: false });
+    .eq("branch_id", DEFAULT_BRANCH_ID);
 
+  // Lọc archived
+  if (!includeArchived) {
+    query = query.is("archived_at", null);
+  }
+
+  // Lọc trạng thái
   if (!includeInactive) {
     query = query.eq("status", "ACTIVE");
   }
 
+  // Lấy tất cả dữ liệu (không lọc search ở DB)
+  const { data, error } = await query.order("created_at", { ascending: false });
+  if (error) throw new Error(`Lỗi khi lấy dữ liệu nhân viên: ${error.message}`);
+
+  let results = data as StaffMemberDomain[];
+
+  // Client-side search (không dấu)
   if (searchQuery && searchQuery.trim() !== "") {
-    const q = searchQuery.trim();
-    query = query.or(
-      `full_name.ilike.%${q}%,phone.ilike.%${q}%,role.ilike.%${q}%`,
-    );
+    const keyword = removeAccents(searchQuery.trim().toLowerCase());
+    results = results.filter((staff) => {
+      const name = removeAccents(staff.full_name.toLowerCase());
+      const phone = staff.phone || "";
+      const role = removeAccents(staff.role.toLowerCase());
+      return name.includes(keyword) || phone.includes(keyword) || role.includes(keyword);
+    });
   }
 
-  const { data, error } = await query;
-  if (error) throw new Error(`Lỗi khi lấy dữ liệu nhân viên: ${error.message}`);
-  return (data as StaffMemberDomain[]) || [];
+  return results;
 };
+
+// ============================================================
+// CÁC HÀM KHÁC (GIỮ NGUYÊN)
+// ============================================================
 
 export const getStaffById = async (id: string): Promise<StaffMemberDomain> => {
   const { data, error } = await supabase
@@ -103,7 +134,9 @@ export const archiveStaff = async (id: string): Promise<StaffMemberDomain> => {
   return data as StaffMemberDomain;
 };
 
-// ============ STAFF DETAIL STATS ============
+// ============================================================
+// STAFF DETAIL STATS
+// ============================================================
 
 export interface StaffDetailStats {
   total_working_days: number;

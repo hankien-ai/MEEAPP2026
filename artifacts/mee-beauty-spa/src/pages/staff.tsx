@@ -7,18 +7,18 @@ import {
   updateStaffStatus,
   archiveStaff,
 } from "../services/staff.service";
-import { StaffMemberDomain, CreateStaffInput } from "../types/domain";
+import { StaffMemberDomain } from "../types/domain";
 import { attendanceService } from "../services/attendance.service";
 import { payrollService } from "../services/payroll.service";
 import { Button, Card, Badge, Spinner, Input } from "../components/primitives";
 import { StaffDetailPage } from "./StaffDetailPage";
 import { useAuth } from "@/context/AuthContext";
 import { authService } from "@/services/auth.service";
+import { Pencil, Trash2, Key, Plus, RefreshCw, Search } from "lucide-react";
 
 // ============================================================
-// HELPER COMPONENTS & ICONS
+// AVATAR
 // ============================================================
-
 const Avatar: React.FC<{ name: string; className?: string }> = ({ name, className = "" }) => {
   const initials = name
     .split(" ")
@@ -38,18 +38,8 @@ const Avatar: React.FC<{ name: string; className?: string }> = ({ name, classNam
 };
 
 // ============================================================
-// PROPS
+// STAFF LIST – UI ĐƠN GIẢN
 // ============================================================
-
-interface StaffPageProps {
-  userRole?: string;
-}
-
-// ============================================================
-// SUB-COMPONENTS
-// ============================================================
-
-// ---- Staff List (UI đơn giản hóa) ----
 const StaffList: React.FC<{
   staffList: StaffMemberDomain[];
   loading: boolean;
@@ -59,7 +49,6 @@ const StaffList: React.FC<{
   onToggleStatus: (id: string, status: "ACTIVE" | "INACTIVE") => void;
   onArchive: (id: string, name: string) => void;
   onResetPin: (staffId: string) => void;
-  onRefresh: () => void;
   isAdmin: boolean;
   onSelectStaff: (staffId: string) => void;
 }> = ({
@@ -71,7 +60,6 @@ const StaffList: React.FC<{
   onToggleStatus,
   onArchive,
   onResetPin,
-  onRefresh,
   isAdmin,
   onSelectStaff,
 }) => {
@@ -99,7 +87,8 @@ const StaffList: React.FC<{
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {staffList.map((staff) => {
-            const isActive = staff.status === "ACTIVE";
+            const isActive = staff.status === "ACTIVE" && !staff.archived_at;
+            const isInactive = staff.status === "INACTIVE" || staff.archived_at;
             return (
               <div
                 key={staff.id}
@@ -122,27 +111,30 @@ const StaffList: React.FC<{
                   </div>
 
                   {isAdmin && (
-                    <div className="flex items-center gap-1 shrink-0">
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      {/* SỬA */}
                       <button
                         onClick={(e) => { e.stopPropagation(); onEdit(staff); }}
-                        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        className="p-1.5 rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50 transition-colors"
                         title="Sửa"
                       >
-                        ✏️
+                        <Pencil className="w-3.5 h-3.5" />
                       </button>
+                      {/* LƯU TRỮ */}
                       <button
                         onClick={(e) => { e.stopPropagation(); onArchive(staff.id, staff.full_name); }}
-                        className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
+                        className="p-1.5 rounded-lg border border-rose-200 text-rose-500 hover:bg-rose-50 transition-colors"
                         title="Lưu trữ"
                       >
-                        🗑
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
+                      {/* RESET PIN */}
                       <button
                         onClick={(e) => { e.stopPropagation(); onResetPin(staff.id); }}
-                        className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                        className="p-1.5 rounded-lg border border-amber-200 text-amber-600 hover:bg-amber-50 transition-colors"
                         title="Reset PIN"
                       >
-                        🔑
+                        <Key className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   )}
@@ -156,7 +148,9 @@ const StaffList: React.FC<{
   );
 };
 
-// ---- Attendance Check ----
+// ============================================================
+// ATTENDANCE CHECK (giữ nguyên)
+// ============================================================
 const AttendanceCheck: React.FC<{
   staffId: string;
   staffName: string;
@@ -342,7 +336,9 @@ const AttendanceCheck: React.FC<{
   );
 };
 
-// ---- Payroll List ----
+// ============================================================
+// PAYROLL LIST (giữ nguyên)
+// ============================================================
 const PayrollList: React.FC<{
   staffId?: string;
   isAdmin: boolean;
@@ -389,7 +385,7 @@ const PayrollList: React.FC<{
         await payrollService.calculateMonthlySalary(selectedStaff, month, year);
         await loadPayroll();
       } else {
-        const staffs = await fetchStaff("", true);
+        const staffs = await fetchStaff("", true, true);
         if (staffs && staffs.length > 0) {
           for (const staff of staffs) {
             await payrollService.calculateMonthlySalary(staff.id, month, year);
@@ -505,7 +501,9 @@ const PayrollList: React.FC<{
   );
 };
 
-// ---- Salary Settings ----
+// ============================================================
+// SALARY SETTINGS (giữ nguyên)
+// ============================================================
 const SalarySettings: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
   const [settings, setSettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -620,20 +618,19 @@ const SalarySettings: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
 // ============================================================
 // MAIN STAFF PAGE
 // ============================================================
-
-export const StaffPage: React.FC<StaffPageProps> = ({ userRole = "staff" }) => {
+export const StaffPage: React.FC<{ userRole?: string }> = ({ userRole = "staff" }) => {
   const { isAdmin } = useAuth();
   const [activeSubTab, setActiveSubTab] = useState<"list" | "attendance" | "payroll" | "settings">("list");
 
   // Staff List state
   const [staffList, setStaffList] = useState<StaffMemberDomain[]>([]);
   const [search, setSearch] = useState("");
-  const [includeInactive, setIncludeInactive] = useState(false); // Mặc định chỉ hiện active
+  const [includeInactive, setIncludeInactive] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // Modal State (Add/Edit Staff)
+  // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState<StaffMemberDomain | null>(null);
   const [formData, setFormData] = useState<any>({
@@ -647,20 +644,17 @@ export const StaffPage: React.FC<StaffPageProps> = ({ userRole = "staff" }) => {
     confirm_pin: "",
   });
 
-  // For attendance/payroll selection
   const [selectedStaffId, setSelectedStaffId] = useState<string>("");
-
-  // For detail view
   const [selectedDetailStaffId, setSelectedDetailStaffId] = useState<string | null>(null);
-
-  // Predefined roles
   const roles = ["Admin", "Cửa hàng trưởng", "Kỹ thuật viên", "Trưởng ca"];
 
+  // ---- LOAD DATA ----
   const loadData = useCallback(async () => {
     setLoading(true);
     setErrorMessage(null);
     try {
-      const data = await fetchStaff(search, includeInactive);
+      // Gọi fetchStaff với includeArchived = includeInactive (khi check "Hiện tạm ngưng" thì hiện cả archived)
+      const data = await fetchStaff("", includeInactive, includeInactive);
       setStaffList(data);
       if (data.length > 0 && !selectedStaffId) {
         setSelectedStaffId(data[0].id);
@@ -670,11 +664,32 @@ export const StaffPage: React.FC<StaffPageProps> = ({ userRole = "staff" }) => {
     } finally {
       setLoading(false);
     }
-  }, [search, includeInactive]);
+  }, [includeInactive]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // ---- Client-side search (có removeAccents) ----
+  const filteredStaff = React.useMemo(() => {
+    if (!search.trim()) return staffList;
+    const q = search.trim().toLowerCase();
+    // Hàm removeAccents đã được import từ service? Tôi sẽ copy lại ở đây
+    const removeAccents = (str: string) => {
+      return str
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/đ/g, "d")
+        .replace(/Đ/g, "D");
+    };
+    const keyword = removeAccents(q);
+    return staffList.filter((staff) => {
+      const name = removeAccents(staff.full_name.toLowerCase());
+      const phone = staff.phone || "";
+      const role = removeAccents(staff.role.toLowerCase());
+      return name.includes(keyword) || phone.includes(keyword) || role.includes(keyword);
+    });
+  }, [staffList, search]);
 
   // ---- Staff CRUD handlers ----
   const handleOpenModal = (staff?: StaffMemberDomain) => {
@@ -806,12 +821,6 @@ export const StaffPage: React.FC<StaffPageProps> = ({ userRole = "staff" }) => {
     loadData();
   };
 
-  useEffect(() => {
-    if (staffList.length > 0 && !selectedStaffId) {
-      setSelectedStaffId(staffList[0].id);
-    }
-  }, [staffList]);
-
   // Admin-only tabs vs Staff tabs
   const adminTabs = ["list", "attendance", "payroll", "settings"];
   const staffTabs = ["list", "attendance"];
@@ -831,8 +840,8 @@ export const StaffPage: React.FC<StaffPageProps> = ({ userRole = "staff" }) => {
 
   return (
     <div className="min-h-screen bg-slate-50/60 pb-12">
-      {/* Sticky Header */}
-      <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-200/80 px-4 py-3">
+      {/* HEADER – KHÔNG STICKY */}
+      <header className="bg-white/80 backdrop-blur-md border-b border-slate-200/80 px-4 py-3">
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
           <div>
             <h1 className="text-lg font-bold text-slate-900 leading-tight">Quản lý Nhân viên</h1>
@@ -840,14 +849,6 @@ export const StaffPage: React.FC<StaffPageProps> = ({ userRole = "staff" }) => {
               {isAdmin ? "Quyền Quản lý" : "Quyền Nhân viên"}
             </p>
           </div>
-          {activeSubTab === "list" && isAdmin && (
-            <Button
-              onClick={() => handleOpenModal()}
-              className="rounded-2xl text-xs font-bold px-3.5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20 active:scale-95 transition-transform"
-            >
-              + Thêm mới
-            </Button>
-          )}
         </div>
       </header>
 
@@ -882,19 +883,22 @@ export const StaffPage: React.FC<StaffPageProps> = ({ userRole = "staff" }) => {
         <div className="bg-white rounded-3xl border border-slate-200/70 p-4 sm:p-6 shadow-2xs">
           {activeSubTab === "list" && (
             <div className="space-y-4">
+              {/* Thanh tìm kiếm + nút thêm mới */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-2.5 rounded-2xl border border-slate-100">
                 <div className="relative flex-1">
-                  <span className="absolute inset-y-0 left-3 flex items-center text-slate-400 text-sm">🔍</span>
+                  <span className="absolute inset-y-0 left-3 flex items-center text-slate-400">
+                    <Search className="w-4 h-4" />
+                  </span>
                   <input
                     type="text"
                     placeholder="Tìm theo tên, SĐT, vị trí..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 bg-white rounded-xl border border-slate-200 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-400"
+                    className="w-full pl-9 pr-3 py-2.5 bg-white rounded-xl border border-slate-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-400"
                   />
                 </div>
 
-                <div className="flex items-center justify-between sm:justify-end gap-3 px-1">
+                <div className="flex items-center justify-between sm:justify-end gap-3 px-1 w-full sm:w-auto">
                   {isAdmin && (
                     <label className="flex items-center gap-2 text-xs font-medium text-slate-600 cursor-pointer select-none">
                       <input
@@ -906,19 +910,19 @@ export const StaffPage: React.FC<StaffPageProps> = ({ userRole = "staff" }) => {
                       <span>Hiện tạm ngưng</span>
                     </label>
                   )}
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={loadData}
-                    className="rounded-xl text-xs font-semibold h-8 px-2.5 border-slate-200 hover:bg-slate-100"
-                  >
-                    🔄
-                  </Button>
+                  {isAdmin && activeSubTab === "list" && (
+                    <Button
+                      onClick={() => handleOpenModal()}
+                      className="rounded-xl text-xs font-bold px-3.5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20 active:scale-95 transition-transform flex items-center gap-1"
+                    >
+                      <Plus className="w-4 h-4" /> Thêm mới
+                    </Button>
+                  )}
                 </div>
               </div>
 
               <StaffList
-                staffList={staffList}
+                staffList={filteredStaff}
                 loading={loading}
                 errorMessage={errorMessage}
                 successMessage={successMessage}
@@ -926,7 +930,6 @@ export const StaffPage: React.FC<StaffPageProps> = ({ userRole = "staff" }) => {
                 onToggleStatus={handleToggleStatus}
                 onArchive={handleArchive}
                 onResetPin={handleResetPin}
-                onRefresh={loadData}
                 isAdmin={isAdmin}
                 onSelectStaff={handleSelectStaff}
               />
