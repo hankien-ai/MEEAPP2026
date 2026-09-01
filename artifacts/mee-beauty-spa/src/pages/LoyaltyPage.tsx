@@ -4,7 +4,8 @@ import { useAuth } from '@/context/AuthContext';
 import { settingsService } from '@/services/settings.service';
 import { notificationService } from '@/services/notification.service';
 import { supabase } from '@/services/supabase';
-import { Button, Card, Input, Select, Switch } from '@/components/primitives';
+import { Button, Card, Input, Select } from '@/components/primitives';
+import { Switch } from '@/components/ui/switch';
 import { Search, Bell, Gift } from 'lucide-react';
 
 type LoyaltyMode = 'OFF' | 'SESSIONS' | 'POINTS';
@@ -93,7 +94,6 @@ export default function LoyaltyPage() {
       const name = customer?.full_name || 'Khách hàng';
       const message = customMessage || `🎁 ${name} đã đủ điều kiện nhận thưởng Loyalty.`;
 
-      // Lấy tất cả staff active để gửi notification
       const { data: staffs } = await supabase
         .from('staff')
         .select('id')
@@ -166,7 +166,7 @@ export default function LoyaltyPage() {
             </div>
             <Switch
               checked={config.enabled}
-              onChange={(checked) => setConfig({ ...config, enabled: checked })}
+              onCheckedChange={(checked) => setConfig({ ...config, enabled: checked })}
             />
           </div>
 
