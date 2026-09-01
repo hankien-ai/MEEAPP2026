@@ -20,6 +20,7 @@ import {
   DollarSign,
   ChevronUp,
   ChevronDown,
+  Gift, // 👈 THÊM
 } from 'lucide-react';
 import { Button, Spinner } from '@/components/primitives';
 
@@ -49,6 +50,8 @@ const ALL_MODULES: ExtensionModule[] = [
   { id: 'settings', title: 'Cài đặt', icon: Settings, tabKey: 'settings', description: 'Cài đặt hệ thống', adminOnly: true },
   { id: 'appointments', title: 'Lịch hẹn', icon: Calendar, tabKey: 'appointments', description: 'Quản lý lịch hẹn' },
   { id: 'tasks', title: 'Công việc', icon: ClipboardCheck, tabKey: 'tasks', description: 'Quản lý công việc' },
+  // 👇 THÊM MODULE LOYALTY
+  { id: 'loyalty', title: 'Loyalty', icon: Gift, tabKey: 'loyalty', description: 'Khách hàng thân thiết', adminOnly: true },
 ];
 
 const ExtensionPage: React.FC<ExtensionPageProps> = ({ onNavigate }) => {
