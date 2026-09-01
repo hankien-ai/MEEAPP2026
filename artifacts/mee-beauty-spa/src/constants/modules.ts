@@ -3,6 +3,7 @@ import {
   LayoutDashboard,
   Users,
   ShoppingCart,
+  Gift,
   Package,
   Sliders,
   UserCog,

@@ -19,7 +19,7 @@ import AppointmentsPage from "./pages/AppointmentsPage";
 import TasksPage from "./pages/TasksPage";
 import { AppShell } from "./components/app-shell";
 import { NotificationBell } from "@/components/NotificationBell";
-import LoyaltyPage from "./pages/LoyaltyPage';
+import LoyaltyPage from "./pages/LoyaltyPage";
 
 export function App() {
   const { role, isLoggedIn, visibility, isAdmin, loading, currentStaff } = useAuth();
