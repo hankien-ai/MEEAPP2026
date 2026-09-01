@@ -145,31 +145,105 @@ export function CustomerProfilePage({
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
 
   // ============================================================
-  // CUSTOM SWIPE-BACK – ĐÚNG COMMIT 730b2cc
+  // SWIPE-BACK iOS STYLE
   // ============================================================
   const containerRef = useRef<HTMLDivElement>(null);
-  const touchStartX = useRef<number | null>(null);
-  const touchStartY = useRef<number | null>(null);
+  const [translateX, setTranslateX] = useState(0);
+  const [isSwiping, setIsSwiping] = useState(false);
+  const [isHorizontal, setIsHorizontal] = useState<boolean | null>(null);
+  const touchStartX = useRef(0);
+  const touchStartY = useRef(0);
+  const touchCurrentX = useRef(0);
+  const threshold = 0.25; // 25% màn hình để back
+
+  const resetSwipe = () => {
+    setIsSwiping(false);
+    setIsHorizontal(null);
+    setTranslateX(0);
+    touchStartX.current = 0;
+    touchStartY.current = 0;
+    touchCurrentX.current = 0;
+  };
 
   const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     const touch = e.touches[0];
     touchStartX.current = touch.clientX;
     touchStartY.current = touch.clientY;
+    touchCurrentX.current = touch.clientX;
+    setIsHorizontal(null);
+    setIsSwiping(true);
   };
 
-  const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
-    if (touchStartX.current === null || touchStartY.current === null) return;
-
-    const touch = e.changedTouches[0];
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (!isSwiping || !containerRef.current) return;
+    const touch = e.touches[0];
     const deltaX = touch.clientX - touchStartX.current;
     const deltaY = touch.clientY - touchStartY.current;
 
-    if (deltaX > 80 && Math.abs(deltaY) < 100 && touchStartX.current < 50) {
-      if (onBack) onBack();
+    // Xác định hướng lần đầu
+    if (isHorizontal === null) {
+      if (Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10) {
+        if (Math.abs(deltaX) > Math.abs(deltaY)) {
+          // Kéo ngang
+          setIsHorizontal(true);
+          // Chỉ kích hoạt nếu bắt đầu từ mép trái (<30px) và kéo sang phải
+          if (touchStartX.current < 30 && deltaX > 0) {
+            e.preventDefault();
+          } else {
+            // Không phải swipe từ mép trái, cancel
+            setIsSwiping(false);
+            return;
+          }
+        } else {
+          // Kéo dọc, để scroll tự do
+          setIsHorizontal(false);
+          setIsSwiping(false);
+          return;
+        }
+      }
+      return;
     }
 
-    touchStartX.current = null;
-    touchStartY.current = null;
+    if (!isHorizontal) {
+      setIsSwiping(false);
+      return;
+    }
+
+    // Đã xác định là swipe ngang hợp lệ
+    e.preventDefault();
+    const newX = Math.max(0, deltaX);
+    const screenWidth = window.innerWidth;
+    const maxTranslate = screenWidth * 0.5;
+    const clampedX = Math.min(newX, maxTranslate);
+    setTranslateX(clampedX);
+    touchCurrentX.current = touch.clientX;
+  };
+
+  const handleTouchEnd = () => {
+    if (!isSwiping || !isHorizontal) {
+      resetSwipe();
+      return;
+    }
+
+    const screenWidth = window.innerWidth;
+    const thresholdPx = screenWidth * threshold;
+
+    if (translateX > thresholdPx) {
+      // Đủ ngưỡng → back
+      setTranslateX(screenWidth);
+      setTimeout(() => {
+        if (onBack) onBack();
+        resetSwipe();
+      }, 200);
+    } else {
+      // Chưa đủ → reset
+      setTranslateX(0);
+      resetSwipe();
+    }
+  };
+
+  const handleTouchCancel = () => {
+    resetSwipe();
   };
 
   // ============================================================
@@ -450,8 +524,19 @@ export function CustomerProfilePage({
     <div
       ref={containerRef}
       onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchCancel}
       className="space-y-4 max-w-full"
+      style={{
+        transform: `translateX(${translateX}px)`,
+        transition:
+          isSwiping && isHorizontal
+            ? 'none'
+            : 'transform 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.1)',
+        willChange: 'transform',
+        touchAction: isHorizontal ? 'none' : 'auto',
+      }}
     >
       {/* HEADER - gọn */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
