@@ -144,7 +144,37 @@ export function CustomerProfilePage({
   const [loadingInvoices, setLoadingInvoices] = useState<boolean>(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
 
-  // ========== LOAD DATA ==========
+  // ============================================================
+  // CUSTOM SWIPE-BACK – ĐÚNG COMMIT 730b2cc
+  // ============================================================
+  const containerRef = useRef<HTMLDivElement>(null);
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    const touch = e.touches[0];
+    touchStartX.current = touch.clientX;
+    touchStartY.current = touch.clientY;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (touchStartX.current === null || touchStartY.current === null) return;
+
+    const touch = e.changedTouches[0];
+    const deltaX = touch.clientX - touchStartX.current;
+    const deltaY = touch.clientY - touchStartY.current;
+
+    if (deltaX > 80 && Math.abs(deltaY) < 100 && touchStartX.current < 50) {
+      if (onBack) onBack();
+    }
+
+    touchStartX.current = null;
+    touchStartY.current = null;
+  };
+
+  // ============================================================
+  // LOAD DATA
+  // ============================================================
 
   const loadCustomerDetails = async () => {
     if (!customerId) return;
@@ -239,7 +269,9 @@ export function CustomerProfilePage({
     }
   }, [customerId]);
 
-  // ========== HANDLERS ==========
+  // ============================================================
+  // HANDLERS
+  // ============================================================
 
   const handleUpdateInfo = async (e: FormEvent) => {
     e.preventDefault();
@@ -375,7 +407,9 @@ export function CustomerProfilePage({
     }
   };
 
-  // ========== RENDER ==========
+  // ============================================================
+  // RENDER
+  // ============================================================
 
   if (loading) {
     return <Spinner className="py-12" />;
@@ -410,10 +444,15 @@ export function CustomerProfilePage({
   };
 
   // ============================================================
-  // RENDER PROFILE (KHÔNG CÓ SWIPE-BACK)
+  // RENDER PROFILE (VỚI SWIPE-BACK)
   // ============================================================
   return (
-    <div className="space-y-4 max-w-full">
+    <div
+      ref={containerRef}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      className="space-y-4 max-w-full"
+    >
       {/* HEADER - gọn */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
         <div className="flex items-center gap-3">
@@ -1292,7 +1331,7 @@ export function CustomersPage() {
     const keyword = removeAccents(q);
     const name = removeAccents((c.full_name || c.name || "").toLowerCase());
     const phone = (c.phone || "").toLowerCase();
-    return name.includes(keyword) || phone.includes(q); // phone chỉ có số, không cần bỏ dấu
+    return name.includes(keyword) || phone.includes(q);
   });
 
   const handleCreateCustomer = async (e: FormEvent) => {
