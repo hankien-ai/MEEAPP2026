@@ -142,6 +142,7 @@ const ExtensionPage: React.FC<ExtensionPageProps> = ({ onNavigate }) => {
     if (mod.adminOnly && !isAdmin) return false;
     return true;
   });
+  console.log('visibleModules:', visibleModules);
 
   // Quick modules
   const quickModules = visibleModules.filter((mod) => quickButtons.includes(mod.id));

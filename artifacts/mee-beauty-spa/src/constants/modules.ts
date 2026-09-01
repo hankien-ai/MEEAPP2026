@@ -36,7 +36,8 @@ export const ALL_MODULES: Module[] = [
   { id: 'reports', label: 'Báo cáo', icon: BarChart3, route: '/reports' },
   { id: 'extension', label: 'Mở rộng', icon: Grid, route: '/extension' },
   { id: 'appointments', label: 'Lịch hẹn', icon: Calendar, route: '/appointments' }, // <-- Thêm
-  { id: 'tasks', label: 'Công việc', icon: ClipboardCheck, route: '/tasks' }, // <-- Thêm
+  { id: 'tasks', label: 'Công việc', icon: ClipboardCheck, route: '/tasks' },
+  { id: 'loyalty', label: 'Loyalty', icon: Gift, route: '/loyalty', adminOnly: true },// <-- Thêm
 ];
 
 export type ModuleId = typeof ALL_MODULES[number]['id'];

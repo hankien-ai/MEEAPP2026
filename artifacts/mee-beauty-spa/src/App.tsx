@@ -19,6 +19,7 @@ import AppointmentsPage from "./pages/AppointmentsPage";
 import TasksPage from "./pages/TasksPage";
 import { AppShell } from "./components/app-shell";
 import { NotificationBell } from "@/components/NotificationBell";
+import LoyaltyPage from "./pages/LoyaltyPage';
 
 export function App() {
   const { role, isLoggedIn, visibility, isAdmin, loading, currentStaff } = useAuth();
@@ -94,6 +95,7 @@ export function App() {
     if (isAdmin) tabs.push("extension");
     if (isAdmin) tabs.push("appointments");
     if (isAdmin) tabs.push("tasks");
+    if (isAdmin) tabs.push("loyalty");
     if (visibility.customers) tabs.push("appointments");
     if (visibility.staff) tabs.push("tasks");
     return Array.from(new Set(tabs));
@@ -129,6 +131,7 @@ export function App() {
       case "extension": return <ExtensionPage onNavigate={setActiveTab} />;
       case "appointments": return <AppointmentsPage />;
       case "tasks": return <TasksPage />;
+      case "loyalty": return <LoyaltyPage />;
       default: return <NotFoundPage />;
     }
   };
