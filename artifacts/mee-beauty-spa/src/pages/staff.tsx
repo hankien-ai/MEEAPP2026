@@ -30,7 +30,7 @@ const Avatar: React.FC<{ name: string; className?: string }> = ({ name, classNam
 
   return (
     <div
-      className={`w-11 h-11 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-bold text-sm flex items-center justify-center shrink-0 shadow-sm ${className}`}
+      className={`w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-bold text-sm flex items-center justify-center shrink-0 shadow-sm ${className}`}
     >
       {initials || "NV"}
     </div>
@@ -42,14 +42,14 @@ const Avatar: React.FC<{ name: string; className?: string }> = ({ name, classNam
 // ============================================================
 
 interface StaffPageProps {
-  userRole?: string; // 'owner' hoặc 'staff' - giữ để tương thích nhưng sẽ dùng useAuth
+  userRole?: string;
 }
 
 // ============================================================
 // SUB-COMPONENTS
 // ============================================================
 
-// ---- Staff List ----
+// ---- Staff List (UI đơn giản hóa) ----
 const StaffList: React.FC<{
   staffList: StaffMemberDomain[];
   loading: boolean;
@@ -58,7 +58,7 @@ const StaffList: React.FC<{
   onEdit: (staff: StaffMemberDomain) => void;
   onToggleStatus: (id: string, status: "ACTIVE" | "INACTIVE") => void;
   onArchive: (id: string, name: string) => void;
-  onResetPin: (staffId: string) => void; // 👈 MỚI
+  onResetPin: (staffId: string) => void;
   onRefresh: () => void;
   isAdmin: boolean;
   onSelectStaff: (staffId: string) => void;
@@ -75,8 +75,6 @@ const StaffList: React.FC<{
   isAdmin,
   onSelectStaff,
 }) => {
-  const formatVND = (val: number) => new Intl.NumberFormat("vi-VN").format(val) + " đ";
-
   return (
     <div className="space-y-3">
       {errorMessage && (
@@ -100,14 +98,19 @@ const StaffList: React.FC<{
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {staffList.map((staff) => (
-            <div
-              key={staff.id}
-              className="p-4 rounded-2xl border border-slate-100 bg-white shadow-xs hover:shadow-md transition-all flex flex-col justify-between cursor-pointer"
-              onClick={() => onSelectStaff(staff.id)}
-            >
-              <div>
-                <div className="flex items-start justify-between gap-3">
+          {staffList.map((staff) => {
+            const isActive = staff.status === "ACTIVE";
+            return (
+              <div
+                key={staff.id}
+                className={`p-4 rounded-2xl border transition-all cursor-pointer hover:shadow-md ${
+                  isActive
+                    ? "bg-emerald-50/70 border-emerald-200 hover:border-emerald-300"
+                    : "bg-slate-50/60 border-slate-200 hover:border-slate-300 opacity-80"
+                }`}
+                onClick={() => onSelectStaff(staff.id)}
+              >
+                <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
                     <Avatar name={staff.full_name} />
                     <div>
@@ -117,72 +120,36 @@ const StaffList: React.FC<{
                       <p className="text-xs font-medium text-slate-500 mt-0.5">{staff.role}</p>
                     </div>
                   </div>
-                  <Badge
-                    variant={staff.status === "ACTIVE" ? "success" : "warning"}
-                    className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold"
-                  >
-                    {staff.status === "ACTIVE" ? "Hoạt động" : "Tạm ngưng"}
-                  </Badge>
-                </div>
 
-                <div className="mt-3.5 pt-3 border-t border-slate-100 space-y-1.5 text-xs text-slate-600">
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-400">Số điện thoại:</span>
-                    <a href={`tel:${staff.phone}`} className="font-medium text-blue-600 active:opacity-75">
-                      {staff.phone}
-                    </a>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-400">Lương cơ bản:</span>
-                    <span className="font-semibold text-slate-800">
-                      {staff.base_salary ? formatVND(staff.base_salary) : "Chưa thiết lập"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-400">Ngày bắt đầu:</span>
-                    <span className="font-medium text-slate-700">{staff.started_on || "N/A"}</span>
-                  </div>
+                  {isAdmin && (
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onEdit(staff); }}
+                        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Sửa"
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onArchive(staff.id, staff.full_name); }}
+                        className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
+                        title="Lưu trữ"
+                      >
+                        🗑
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onResetPin(staff.id); }}
+                        className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                        title="Reset PIN"
+                      >
+                        🔑
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
-
-              {isAdmin && (
-                <div className="mt-4 pt-3 border-t border-slate-100 grid grid-cols-2 gap-1.5">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={(e) => { e.stopPropagation(); onEdit(staff); }}
-                    className="w-full text-xs rounded-xl h-9 font-medium"
-                  >
-                    ✏️ Sửa
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={staff.status === "ACTIVE" ? "outline" : "secondary"}
-                    onClick={(e) => { e.stopPropagation(); onToggleStatus(staff.id, staff.status); }}
-                    className="w-full text-xs rounded-xl h-9 font-medium"
-                  >
-                    {staff.status === "ACTIVE" ? "⏸ Tạm ngưng" : "▶️ Bật"}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="danger"
-                    onClick={(e) => { e.stopPropagation(); onArchive(staff.id, staff.full_name); }}
-                    className="w-full text-xs rounded-xl h-9 font-medium"
-                  >
-                    🗑 Lưu trữ
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={(e) => { e.stopPropagation(); onResetPin(staff.id); }}
-                    className="w-full text-xs rounded-xl h-9 font-medium text-amber-600 border-amber-300 hover:bg-amber-50"
-                  >
-                    🔑 Reset PIN
-                  </Button>
-                </div>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -655,13 +622,13 @@ const SalarySettings: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
 // ============================================================
 
 export const StaffPage: React.FC<StaffPageProps> = ({ userRole = "staff" }) => {
-  const { isAdmin } = useAuth(); // 👈 Lấy từ context auth thật
+  const { isAdmin } = useAuth();
   const [activeSubTab, setActiveSubTab] = useState<"list" | "attendance" | "payroll" | "settings">("list");
 
   // Staff List state
   const [staffList, setStaffList] = useState<StaffMemberDomain[]>([]);
   const [search, setSearch] = useState("");
-  const [includeInactive, setIncludeInactive] = useState(true);
+  const [includeInactive, setIncludeInactive] = useState(false); // Mặc định chỉ hiện active
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -676,8 +643,8 @@ export const StaffPage: React.FC<StaffPageProps> = ({ userRole = "staff" }) => {
     base_salary: 0,
     status: "ACTIVE",
     started_on: new Date().toISOString().split("T")[0],
-    pin: "",          // 👈 THÊM
-    confirm_pin: "",  // 👈 THÊM
+    pin: "",
+    confirm_pin: "",
   });
 
   // For attendance/payroll selection
@@ -749,7 +716,6 @@ export const StaffPage: React.FC<StaffPageProps> = ({ userRole = "staff" }) => {
     setErrorMessage(null);
     setSuccessMessage(null);
 
-    // 👇 Validate PIN (chỉ khi tạo mới, không cần khi edit)
     if (!editingStaff) {
       if (formData.pin.length !== 6 || !/^\d{6}$/.test(formData.pin)) {
         setErrorMessage("Mã PIN phải gồm 6 chữ số");
@@ -779,7 +745,6 @@ export const StaffPage: React.FC<StaffPageProps> = ({ userRole = "staff" }) => {
       } else {
         const newStaff = await createStaff(payload);
         staffId = newStaff.id;
-        // 👇 Set PIN cho staff mới
         await authService.setStaffPin(staffId, formData.pin);
         setSuccessMessage("Thêm mới nhân viên thành công!");
       }
@@ -812,7 +777,6 @@ export const StaffPage: React.FC<StaffPageProps> = ({ userRole = "staff" }) => {
     }
   };
 
-  // 👇 Reset PIN handler
   const handleResetPin = async (staffId: string) => {
     const newPin = window.prompt("Nhập mã PIN mới (6 chữ số):");
     if (!newPin) return;
@@ -1139,7 +1103,6 @@ export const StaffPage: React.FC<StaffPageProps> = ({ userRole = "staff" }) => {
                 </div>
               </div>
 
-              {/* 👇 Thêm trường PIN (chỉ khi tạo mới) */}
               {!editingStaff && (
                 <>
                   <div>
