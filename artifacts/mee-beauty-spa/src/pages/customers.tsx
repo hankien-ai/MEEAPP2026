@@ -154,7 +154,7 @@ export function CustomerProfilePage({
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
   const touchCurrentX = useRef(0);
-  const threshold = 0.25; // 25% màn hình để back
+  const threshold = 0.1; // 25% màn hình để back
 
   const resetSwipe = () => {
     setIsSwiping(false);
@@ -187,7 +187,7 @@ export function CustomerProfilePage({
           // Kéo ngang
           setIsHorizontal(true);
           // Chỉ kích hoạt nếu bắt đầu từ mép trái (<30px) và kéo sang phải
-          if (touchStartX.current < 30 && deltaX > 0) {
+          if (touchStartX.current < 40 && deltaX > 0) {
             e.preventDefault();
           } else {
             // Không phải swipe từ mép trái, cancel
