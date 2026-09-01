@@ -249,7 +249,8 @@ export const payrollService = {
   },
 
   /**
-   * Cập nhật các khoản phát sinh cho một payroll (chỉ admin)
+   * Cập nhật các khoản phát sinh cho một payroll và tính lại net_salary
+   * Chỉ admin mới có quyền sử dụng
    */
   async updatePayroll(
     payrollId: string,
@@ -260,13 +261,41 @@ export const payrollService = {
       deduction?: number;
     }
   ): Promise<Payroll> {
+    // 1. Lấy bản ghi payroll hiện tại
+    const { data: current, error: fetchError } = await supabase
+      .from('payroll')
+      .select('*')
+      .eq('id', payrollId)
+      .single();
+    if (fetchError) throw fetchError;
+
+    // 2. Gán giá trị mới hoặc giữ nguyên
+    const newAllowance = data.allowance !== undefined ? data.allowance : current.allowance;
+    const newTip = data.tip !== undefined ? data.tip : current.tip;
+    const newAdvance = data.advance !== undefined ? data.advance : current.advance;
+    const newDeduction = data.deduction !== undefined ? data.deduction : current.deduction;
+
+    // 3. Tính lại net_salary
+    const netSalary = current.base_salary
+      - (current.excess_leave_deduction || 0)
+      + (current.sale_commission || 0)
+      + (current.performance_commission || 0)
+      + (current.total_bonus || 0)
+      + newAllowance
+      + newTip
+      - (current.total_penalty || 0)
+      - newAdvance
+      - newDeduction;
+
+    // 4. Cập nhật payroll
     const { data: updated, error } = await supabase
       .from('payroll')
       .update({
-        allowance: data.allowance ?? 0,
-        tip: data.tip ?? 0,
-        advance: data.advance ?? 0,
-        deduction: data.deduction ?? 0,
+        allowance: newAllowance,
+        tip: newTip,
+        advance: newAdvance,
+        deduction: newDeduction,
+        net_salary: netSalary,
         updated_at: new Date().toISOString()
       })
       .eq('id', payrollId)
