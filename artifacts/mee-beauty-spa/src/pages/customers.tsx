@@ -43,7 +43,7 @@ import {
   isValidPhone,
   isPhoneExists,
 } from "../services/customer.service";
-import { User, Package, Camera, ArrowLeft } from "lucide-react";
+import { User, Package, Camera, ArrowLeft, Gift, Box, Plus } from "lucide-react";
 
 // ============================================================
 // HELPERS
@@ -70,6 +70,31 @@ export function CustomerProfilePage({
 }: CustomerProfilePageProps) {
   const { role } = useAuth();
   const isAdmin = role === 'admin';
+
+  // State cho vuốt quay lại
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    const touch = e.touches[0];
+    touchStartX.current = touch.clientX;
+    touchStartY.current = touch.clientY;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (touchStartX.current === null || touchStartY.current === null) return;
+    const touch = e.changedTouches[0];
+    const deltaX = touch.clientX - touchStartX.current;
+    const deltaY = touch.clientY - touchStartY.current;
+    // Vuốt từ trái sang phải, khoảng cách tối thiểu 80px, và gần như ngang (|deltaY| < 100)
+    if (deltaX > 80 && Math.abs(deltaY) < 100 && touchStartX.current < 50) {
+      // Vuốt từ cạnh trái sang phải
+      if (onBack) onBack();
+    }
+    touchStartX.current = null;
+    touchStartY.current = null;
+  };
 
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -399,10 +424,24 @@ export function CustomerProfilePage({
   };
 
   return (
-    <div className="space-y-4 max-w-full">
-      {/* HEADER - gọn */}
+    <div
+      ref={containerRef}
+      className="space-y-4 max-w-full"
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
+      {/* HEADER - có nút back nếu có onBack */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
         <div className="flex items-center gap-3">
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="p-2 -ml-2 rounded-full hover:bg-gray-100 active:bg-gray-200 transition-colors"
+              aria-label="Quay lại"
+            >
+              <ArrowLeft className="w-5 h-5 text-gray-600" />
+            </button>
+          )}
           <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
             <User className="w-5 h-5" />
           </div>
@@ -1350,6 +1389,24 @@ export function CustomersPage() {
     );
   }
 
+  // Hàm bỏ dấu cho tìm kiếm
+  const removeAccents = (str: string) => {
+    return str
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/đ/g, "d")
+      .replace(/Đ/g, "D");
+  };
+
+  // Lọc khách hàng với tìm kiếm không dấu
+  const filteredCustomersNoAccent = customers.filter((c) => {
+    const q = removeAccents(searchQuery.toLowerCase().trim());
+    if (!q) return true;
+    const name = removeAccents((c.full_name || c.name || "").toLowerCase());
+    const phone = (c.phone || "").toLowerCase();
+    return name.includes(q) || phone.includes(q);
+  });
+
   return (
     <div className="space-y-4 max-w-full">
       <PageHeader
@@ -1366,21 +1423,31 @@ export function CustomersPage() {
         <PanelHeader
           title="Danh sách khách hàng"
           action={
-            <div className="w-full sm:w-72">
-              <Input
-                placeholder="🔍 Tìm theo tên hoặc số điện thoại..."
-                value={searchQuery}
-                onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  setSearchQuery(e.target.value)
-                }
-              />
+            <div className="flex items-center gap-3 w-full sm:w-auto">
+              <div className="flex-1 sm:w-72">
+                <Input
+                  placeholder="🔍 Tìm theo tên hoặc số điện thoại..."
+                  value={searchQuery}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                    setSearchQuery(e.target.value)
+                  }
+                  className="text-base py-3 px-4 rounded-xl border-2 focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <Button
+                onClick={() => setIsAddModalOpen(true)}
+                className="rounded-full w-12 h-12 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/30 active:scale-95 transition-all text-2xl font-bold"
+                title="Thêm khách hàng"
+              >
+                <Plus className="w-6 h-6" />
+              </Button>
             </div>
           }
         />
         <PanelContent>
           {loading ? (
             <Spinner className="py-8" />
-          ) : filteredCustomers.length === 0 ? (
+          ) : filteredCustomersNoAccent.length === 0 ? (
             <EmptyState
               title="Không tìm thấy khách hàng"
               description="Thử tìm kiếm với từ khóa khác hoặc thêm hồ sơ khách hàng mới."
@@ -1392,38 +1459,37 @@ export function CustomersPage() {
             />
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {filteredCustomers.map((item) => {
+              {filteredCustomersNoAccent.map((item) => {
                 const badges = customerBadges[item.id] || { hasPackage: false, hasGift: false };
                 return (
-                  // Container chính bắt sự kiện click
                   <div
                     key={item.id}
                     onClick={() => {
                       setSelectedCustomerId(item.id);
                       setSelectedTab("info");
                     }}
-                    className="bg-white rounded-xl border border-gray-200 p-3 shadow-sm hover:shadow-md transition-all cursor-pointer"
+                    className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm hover:shadow-md transition-all cursor-pointer"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                        <User className="w-4 h-4" />
+                      <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                        <User className="w-5 h-5" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-1">
-                          <p className="font-semibold text-gray-900 truncate text-sm">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-semibold text-gray-900 text-base truncate">
                             {item.full_name || item.name}
                           </p>
-                          <div className="flex items-center gap-1 shrink-0">
+                          <div className="flex items-center gap-2 shrink-0">
                             {badges.hasPackage && (
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleQuickPackage(item.id);
                                 }}
-                                className="text-blue-500 hover:text-blue-700 transition-colors"
+                                className="w-9 h-9 rounded-full border border-blue-300 bg-blue-50 text-blue-600 hover:bg-blue-100 flex items-center justify-center transition-colors"
                                 title="Xem gói dịch vụ"
                               >
-                                <Package className="w-4 h-4" />
+                                <Gift className="w-5 h-5" />
                               </button>
                             )}
                             <button
@@ -1431,14 +1497,14 @@ export function CustomersPage() {
                                 e.stopPropagation();
                                 handleQuickPhoto(item.id);
                               }}
-                              className="text-gray-400 hover:text-gray-600 transition-colors"
+                              className="w-9 h-9 rounded-full border border-gray-300 bg-gray-50 text-gray-600 hover:bg-gray-100 flex items-center justify-center transition-colors"
                               title="Chụp ảnh nhanh"
                             >
-                              <Camera className="w-4 h-4" />
+                              <Camera className="w-5 h-5" />
                             </button>
                           </div>
                         </div>
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm text-gray-500 mt-1">
                           {maskPhone(item.phone || "", isAdmin)}
                         </p>
                       </div>
