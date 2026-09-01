@@ -6,7 +6,7 @@ import { notificationService } from '@/services/notification.service';
 import { supabase } from '@/services/supabase';
 import { Button, Card, Input, Select } from '@/components/primitives';
 import { Switch } from '@/components/ui/switch';
-import { Search, Bell, Gift } from 'lucide-react';
+import { Bell, Gift, Search } from 'lucide-react';
 
 type LoyaltyMode = 'OFF' | 'SESSIONS' | 'POINTS';
 
@@ -29,12 +29,11 @@ const defaultConfig: LoyaltyConfig = {
 };
 
 export default function LoyaltyPage() {
-  const { isAdmin, currentStaff } = useAuth();
+  const { isAdmin } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [config, setConfig] = useState<LoyaltyConfig>(defaultConfig);
 
-  // State cho notification
   const [customers, setCustomers] = useState<any[]>([]);
   const [searchCustomer, setSearchCustomer] = useState('');
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
@@ -74,9 +73,9 @@ export default function LoyaltyPage() {
     setSaving(true);
     try {
       await settingsService.setConfig('loyalty_config', config);
-      alert('Đã lưu cấu hình Loyalty thành công!');
+      alert('✅ Đã lưu cấu hình Loyalty thành công!');
     } catch (err: any) {
-      alert(err.message || 'Lỗi lưu cấu hình');
+      alert(err.message || '❌ Lỗi lưu cấu hình');
     } finally {
       setSaving(false);
     }
@@ -115,12 +114,12 @@ export default function LoyaltyPage() {
         });
       }
 
-      alert(`Đã gửi thông báo cho ${staffs.length} nhân viên.`);
+      alert(`✅ Đã gửi thông báo cho ${staffs.length} nhân viên.`);
       setSelectedCustomerId('');
       setSelectedCustomerName('');
       setCustomMessage('');
     } catch (err: any) {
-      alert(err.message || 'Lỗi gửi thông báo');
+      alert(err.message || '❌ Lỗi gửi thông báo');
     } finally {
       setNotifyLoading(false);
     }
@@ -148,7 +147,7 @@ export default function LoyaltyPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto p-4 space-y-6">
+    <div className="max-w-2xl mx-auto p-4 space-y-6 pb-20">
       <div className="flex items-center gap-3 border-b pb-3">
         <Gift className="w-8 h-8 text-purple-600" />
         <div>
@@ -265,13 +264,12 @@ export default function LoyaltyPage() {
               isLoading={saving}
               className="w-full sm:w-auto"
             >
-              Lưu cấu hình
+              💾 Lưu cấu hình
             </Button>
           </div>
         </div>
       </Card>
 
-      {/* Khu vực tạo thông báo thủ công */}
       <Card>
         <div className="space-y-4">
           <div className="flex items-center gap-2 border-b pb-2">
@@ -283,13 +281,16 @@ export default function LoyaltyPage() {
           <div>
             <label className="block text-sm font-medium text-slate-700">Chọn khách hàng</label>
             <div className="relative">
-              <input
-                type="text"
-                placeholder="Tìm theo tên hoặc số điện thoại..."
-                value={searchCustomer}
-                onChange={(e) => setSearchCustomer(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-purple-500"
-              />
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Tìm theo tên hoặc số điện thoại..."
+                  value={searchCustomer}
+                  onChange={(e) => setSearchCustomer(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
               {searchCustomer && filteredCustomers.length > 0 && (
                 <div className="absolute z-10 w-full mt-1 bg-white border rounded-xl shadow-lg max-h-48 overflow-y-auto">
                   {filteredCustomers.map((c) => (
@@ -311,14 +312,14 @@ export default function LoyaltyPage() {
             </div>
             {selectedCustomerId && (
               <div className="mt-2 p-2 bg-emerald-50 rounded-xl text-sm text-emerald-700 flex items-center justify-between">
-                <span>✅ Đã chọn: {selectedCustomerName}</span>
+                <span>✅ Đã chọn: <strong>{selectedCustomerName}</strong></span>
                 <button
                   onClick={() => {
                     setSelectedCustomerId('');
                     setSelectedCustomerName('');
                     setCustomMessage('');
                   }}
-                  className="text-red-500 text-xs"
+                  className="text-red-500 text-xs font-medium hover:underline"
                 >
                   Xóa
                 </button>

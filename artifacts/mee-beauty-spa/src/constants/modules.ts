@@ -3,7 +3,6 @@ import {
   LayoutDashboard,
   Users,
   ShoppingCart,
-  Gift,
   Package,
   Sliders,
   UserCog,
@@ -12,8 +11,9 @@ import {
   BarChart3,
   Grid,
   DollarSign,
-  Calendar, // <-- Thêm
-  ClipboardCheck, // <-- Thêm
+  Calendar,
+  ClipboardCheck,
+  Gift,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -22,6 +22,7 @@ export interface Module {
   label: string;
   icon: LucideIcon;
   route: string;
+  adminOnly?: boolean;
 }
 
 export const ALL_MODULES: Module[] = [
@@ -30,15 +31,15 @@ export const ALL_MODULES: Module[] = [
   { id: 'pos', label: 'POS', icon: ShoppingCart, route: '/pos' },
   { id: 'catalog', label: 'Danh mục', icon: Package, route: '/catalog' },
   { id: 'operations', label: 'Vận hành', icon: Sliders, route: '/operations' },
-  { id: 'staff', label: 'Nhân viên', icon: UserCog, route: '/staff' },
-  { id: 'payroll', label: 'Bảng lương', icon: DollarSign, route: '/payroll' },
-  { id: 'settings', label: 'Cài đặt', icon: Settings, route: '/settings' },
-  { id: 'invoices', label: 'Hóa đơn', icon: FileText, route: '/invoices' },
-  { id: 'reports', label: 'Báo cáo', icon: BarChart3, route: '/reports' },
+  { id: 'staff', label: 'Nhân viên', icon: UserCog, route: '/staff', adminOnly: true },
+  { id: 'payroll', label: 'Bảng lương', icon: DollarSign, route: '/payroll', adminOnly: true },
+  { id: 'settings', label: 'Cài đặt', icon: Settings, route: '/settings', adminOnly: true },
+  { id: 'invoices', label: 'Hóa đơn', icon: FileText, route: '/invoices', adminOnly: true },
+  { id: 'reports', label: 'Báo cáo', icon: BarChart3, route: '/reports', adminOnly: true },
   { id: 'extension', label: 'Mở rộng', icon: Grid, route: '/extension' },
-  { id: 'appointments', label: 'Lịch hẹn', icon: Calendar, route: '/appointments' }, // <-- Thêm
+  { id: 'appointments', label: 'Lịch hẹn', icon: Calendar, route: '/appointments' },
   { id: 'tasks', label: 'Công việc', icon: ClipboardCheck, route: '/tasks' },
-  { id: 'loyalty', label: 'Loyalty', icon: Gift, route: '/loyalty', adminOnly: true },// <-- Thêm
+  { id: 'loyalty', label: 'Loyalty', icon: Gift, route: '/loyalty', adminOnly: true },
 ];
 
 export type ModuleId = typeof ALL_MODULES[number]['id'];

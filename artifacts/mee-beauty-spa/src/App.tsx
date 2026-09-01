@@ -13,13 +13,13 @@ import POSPage from "./pages/POSPage";
 import { InvoicesPage } from "./pages/InvoicesPage";
 import ReportsPage from "./pages/ReportsPage";
 import ExtensionPage from "./pages/ExtensionPage";
-import PayrollPage from "./pages/PayrollPage";           // ← THÊM
-import PayrollDetailPage from "./pages/PayrollDetailPage"; // ← THÊM
+import PayrollPage from "./pages/PayrollPage";
+import PayrollDetailPage from "./pages/PayrollDetailPage";
 import AppointmentsPage from "./pages/AppointmentsPage";
 import TasksPage from "./pages/TasksPage";
+import LoyaltyPage from "./pages/LoyaltyPage";
 import { AppShell } from "./components/app-shell";
 import { NotificationBell } from "@/components/NotificationBell";
-import LoyaltyPage from "./pages/LoyaltyPage";
 
 export function App() {
   const { role, isLoggedIn, visibility, isAdmin, loading, currentStaff } = useAuth();
@@ -54,13 +54,14 @@ export function App() {
     if (isAdmin && visibility.catalog) tabs.push("catalog");
     if (visibility.operations) tabs.push("operations");
     if (isAdmin && visibility.staff) tabs.push("staff");
-    if (isAdmin && visibility.payroll) tabs.push("payroll");   // ← THÊM
+    if (isAdmin && visibility.payroll) tabs.push("payroll");
     if (isAdmin && visibility.settings) tabs.push("settings");
     if (isAdmin) tabs.push("invoices");
     if (isAdmin) tabs.push("reports");
     if (isAdmin) tabs.push("extension");
     if (isAdmin) tabs.push("appointments");
     if (isAdmin) tabs.push("tasks");
+    if (isAdmin) tabs.push("loyalty");
     if (visibility.customers) tabs.push("appointments");
     if (visibility.staff) tabs.push("tasks");
 
@@ -88,7 +89,7 @@ export function App() {
     if (isAdmin && visibility.catalog) tabs.push("catalog");
     if (visibility.operations) tabs.push("operations");
     if (isAdmin && visibility.staff) tabs.push("staff");
-    if (isAdmin && visibility.payroll) tabs.push("payroll");   // ← THÊM
+    if (isAdmin && visibility.payroll) tabs.push("payroll");
     if (isAdmin && visibility.settings) tabs.push("settings");
     if (isAdmin) tabs.push("invoices");
     if (isAdmin) tabs.push("reports");
@@ -124,7 +125,7 @@ export function App() {
       case "operations": return <OperationsPage userRole={role} />;
       case "staff": return <StaffPage userRole={role} />;
       case "pos": return <POSPage />;
-      case "payroll": return <PayrollPage onViewDetail={handleViewPayrollDetail} />;  // ← THÊM
+      case "payroll": return <PayrollPage onViewDetail={handleViewPayrollDetail} />;
       case "settings": return <SettingsPage onNavigate={setActiveTab} />;
       case "invoices": return <InvoicesPage />;
       case "reports": return <ReportsPage />;
