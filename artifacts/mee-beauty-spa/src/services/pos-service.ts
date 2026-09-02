@@ -263,28 +263,8 @@ export class POSService {
         return { success: false, error: invoiceErr?.message || "Lỗi khi tạo hóa đơn" };
       }
 
-      // ============ LOYALTY EARN ============
-      try {
-        const { earnFromInvoice } = await import('@/services/loyalty.service');
-        await earnFromInvoice(invoice.id);
-      } catch (err) {
-        console.error('Loyalty earn error:', err);
-        // Không throw, không ảnh hưởng checkout
-      }
-
       const commissionLogs: any[] = [];
       const packageInvoiceItemMap = new Map<string, string>();
-
-      console.log("📦 CART ITEMS:", cartItems.map(i => ({
-        name: i.name,
-        item_type: i.item_type,
-        quantity: i.quantity,
-        package_id: i.package_id,
-        use_package: i.use_package,
-        cart_item_id: i.cart_item_id,
-        ktv_splits: i.ktv_splits,
-        is_gift: i.is_gift
-      })));
 
       // ============ XỬ LÝ TỪNG ITEM ============
       for (const item of cartItems) {
@@ -796,6 +776,15 @@ export class POSService {
             console.warn("⚠️ Lỗi tạo service_session:", sessionErr);
           }
         }
+      }
+
+      // ============ LOYALTY EARN (sau khi đã có items) ============
+      try {
+        const { earnFromInvoice } = await import('@/services/loyalty.service');
+        await earnFromInvoice(invoice.id);
+      } catch (err) {
+        console.error('Loyalty earn error:', err);
+        // Không throw, không ảnh hưởng checkout
       }
 
       return { success: true, invoice_id: invoice.id };
