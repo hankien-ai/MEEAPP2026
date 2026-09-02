@@ -1,4 +1,3 @@
-// src/components/loyalty/AdjustmentModal.tsx
 import React, { useState } from 'react';
 import { adjust } from '@/services/loyalty.service';
 import { Button, Input, Select } from '@/components/primitives';
@@ -6,16 +5,20 @@ import { X } from 'lucide-react';
 
 interface Props {
   customerId: string;
+  mode: string; // 'SESSIONS' | 'POINTS'
   onClose: () => void;
   onSuccess: () => void;
   staffId?: string;
 }
 
-export default function AdjustmentModal({ customerId, onClose, onSuccess, staffId }: Props) {
+export default function AdjustmentModal({ customerId, mode, onClose, onSuccess, staffId }: Props) {
   const [type, setType] = useState<'INCREASE' | 'DECREASE'>('INCREASE');
   const [amount, setAmount] = useState<number>(0);
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  const unit = mode === 'SESSIONS' ? 'buổi' : 'điểm';
+  const title = mode === 'SESSIONS' ? 'Điều chỉnh buổi' : 'Điều chỉnh điểm';
 
   const handleSubmit = async () => {
     if (amount <= 0) {
@@ -31,7 +34,7 @@ export default function AdjustmentModal({ customerId, onClose, onSuccess, staffI
     try {
       const finalAmount = type === 'INCREASE' ? amount : -amount;
       await adjust(customerId, finalAmount, reason.trim(), staffId || '');
-      alert('✅ Điều chỉnh thành công!');
+      alert(`✅ Điều chỉnh ${unit} thành công!`);
       onSuccess();
     } catch (err: any) {
       alert(err.message || '❌ Lỗi điều chỉnh');
@@ -44,7 +47,7 @@ export default function AdjustmentModal({ customerId, onClose, onSuccess, staffI
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
         <div className="flex justify-between items-center border-b pb-3">
-          <h3 className="text-lg font-bold text-slate-900">Điều chỉnh Loyalty</h3>
+          <h3 className="text-lg font-bold text-slate-900">{title}</h3>
           <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded">
             <X className="w-5 h-5" />
           </button>
@@ -64,7 +67,7 @@ export default function AdjustmentModal({ customerId, onClose, onSuccess, staffI
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700">Số lượng</label>
+            <label className="block text-sm font-medium text-slate-700">Số lượng ({unit})</label>
             <Input
               type="number"
               min={1}

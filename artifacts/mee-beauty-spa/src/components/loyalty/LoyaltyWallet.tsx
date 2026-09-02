@@ -1,4 +1,3 @@
-// src/components/loyalty/LoyaltyWallet.tsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { getWallet, getTransactions, redeem, adjust, checkExpiryOnLoad } from '@/services/loyalty.service';
@@ -22,7 +21,6 @@ export default function LoyaltyWallet({ customerId }: LoyaltyWalletProps) {
   const loadData = async () => {
     setLoading(true);
     try {
-      // 👇 KIỂM TRA EXPIRY TRƯỚC KHI LOAD WALLET
       await checkExpiryOnLoad();
 
       const [w, txs] = await Promise.all([
@@ -68,6 +66,7 @@ export default function LoyaltyWallet({ customerId }: LoyaltyWalletProps) {
   const isEligible = wallet.isEligible;
   const sessionsRequired = wallet.sessions_required || 0;
   const progress = wallet.sessions_progress || 0;
+  const unit = mode === 'SESSIONS' ? 'buổi' : 'điểm';
 
   return (
     <div className="space-y-4">
@@ -80,9 +79,7 @@ export default function LoyaltyWallet({ customerId }: LoyaltyWalletProps) {
             </p>
             <div className="text-3xl font-bold text-slate-900 mt-1">
               {balance}
-              <span className="text-sm font-normal text-slate-500 ml-1">
-                {mode === 'SESSIONS' ? 'buổi' : 'điểm'}
-              </span>
+              <span className="text-sm font-normal text-slate-500 ml-1">{unit}</span>
             </div>
             {mode === 'SESSIONS' && sessionsRequired > 0 && (
               <div className="mt-1 text-sm text-slate-600">
@@ -147,7 +144,7 @@ export default function LoyaltyWallet({ customerId }: LoyaltyWalletProps) {
                   <div className="text-xs text-slate-400">{new Date(tx.created_at).toLocaleString('vi-VN')}</div>
                 </div>
                 <div className={`font-bold ${tx.amount > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                  {tx.amount > 0 ? '+' : ''}{tx.amount}
+                  {tx.amount > 0 ? '+' : ''}{tx.amount} {unit}
                 </div>
               </div>
             ))}
@@ -168,6 +165,7 @@ export default function LoyaltyWallet({ customerId }: LoyaltyWalletProps) {
       {showAdjustment && (
         <AdjustmentModal
           customerId={customerId}
+          mode={mode}
           onClose={() => setShowAdjustment(false)}
           onSuccess={handleAdjustmentSuccess}
           staffId={currentStaff?.id}

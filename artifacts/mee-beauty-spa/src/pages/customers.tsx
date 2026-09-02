@@ -65,6 +65,7 @@ import {
   Edit,
 } from "lucide-react";
 import { getWallet } from '@/services/loyalty.service';
+import LoyaltySummary from '@/components/loyalty/LoyaltySummary';
 
 // ============================================================
 // HÀM BỎ DẤU (removeAccents)
@@ -288,6 +289,7 @@ export function CustomerProfilePage({
         balance: wallet.balance || 0,
         mode: wallet.mode || 'OFF',
         isEligible: wallet.isEligible || false,
+        sessions_required: wallet.sessions_required || 0, // 👈 THÊM DÒNG NÀY
       });
       if (cust) {
         setEditFormData({
@@ -705,43 +707,13 @@ export function CustomerProfilePage({
 
           {/* 👇 LOYALTY SUMMARY */}
           {loyaltySummary && loyaltySummary.mode !== 'OFF' && (
-            <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-2xl border border-purple-200 p-4 shadow-sm">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center">
-                    <Star className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-purple-600 font-medium">
-                      {loyaltySummary.mode === 'SESSIONS' ? 'Tích buổi' : 'Tích điểm'}
-                    </p>
-                    <p className="text-xl font-bold text-purple-800">
-                      {loyaltySummary.balance}
-                      <span className="text-sm font-normal text-purple-500 ml-1">
-                        {loyaltySummary.mode === 'SESSIONS' ? 'buổi' : 'điểm'}
-                      </span>
-                    </p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  {loyaltySummary.isEligible ? (
-                    <Badge variant="success" className="text-sm px-3 py-1">
-                      ✅ Đủ điều kiện
-                    </Badge>
-                  ) : (
-                    <Badge variant="neutral" className="text-sm px-3 py-1">
-                      Chưa đủ
-                    </Badge>
-                  )}
-                  <button
-                    onClick={() => setActiveTab('loyalty')}
-                    className="block text-xs text-indigo-600 hover:underline mt-1 font-medium"
-                  >
-                    Xem chi tiết →
-                  </button>
-                </div>
-              </div>
-            </div>
+            <LoyaltySummary
+              balance={loyaltySummary.balance}
+              mode={loyaltySummary.mode}
+              isEligible={loyaltySummary.isEligible}
+              sessionsRequired={loyaltySummary.sessions_required || 0}
+              onViewDetail={() => setActiveTab('loyalty')}
+            />
           )}
 
           {/* Hóa đơn gần đây */}
