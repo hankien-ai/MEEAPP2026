@@ -3,15 +3,17 @@ import React, { useState, useEffect } from 'react';
 import { supabase, DEFAULT_ORG_ID, DEFAULT_BRANCH_ID } from '@/services/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { X, CreditCard, Gift, Package, User, Users, FileText, CheckCircle, Clock, AlertCircle } from 'lucide-react';
-import { Badge } from '@/components/primitives';
+import { Badge, Button } from '@/components/primitives';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { maskPhone } from '@/lib/utils';
+import { processRefund } from '@/services/loyalty.service';
 
 interface InvoiceDetailModalProps {
   isOpen: boolean;
   invoiceId: string | null;
   onClose: () => void;
+  onInvoiceVoided?: () => void; // 👈 Gọi lại để refresh danh sách
 }
 
 const formatVND = (val: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val);
@@ -21,7 +23,12 @@ const formatDate = (dateStr: string) => {
   return format(new Date(dateStr), 'dd/MM/yyyy HH:mm', { locale: vi });
 };
 
-export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({ isOpen, invoiceId, onClose }) => {
+export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({ 
+  isOpen, 
+  invoiceId, 
+  onClose,
+  onInvoiceVoided 
+}) => {
   const { role } = useAuth();
   const isAdmin = role === 'admin';
   const [loading, setLoading] = useState(false);
@@ -31,6 +38,7 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({ isOpen, 
   const [commissions, setCommissions] = useState<any[]>([]);
   const [packages, setPackages] = useState<any[]>([]);
   const [entitlements, setEntitlements] = useState<any[]>([]);
+  const [isVoiding, setIsVoiding] = useState(false);
 
   useEffect(() => {
     if (isOpen && invoiceId) {
@@ -126,6 +134,55 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({ isOpen, 
     }
   };
 
+  // 👇 XỬ LÝ HỦY HÓA ĐƠN + REFUND LOYALTY
+  const handleVoidInvoice = async () => {
+    if (!invoice || invoice.status === 'VOID') return;
+
+    if (!window.confirm('Bạn có chắc muốn hủy hóa đơn này? Hành động không thể hoàn tác.\nLoyalty đã tích từ hóa đơn sẽ được hoàn tác tự động.')) {
+      return;
+    }
+
+    setIsVoiding(true);
+    setError(null);
+    try {
+      // 1. Cập nhật status invoice thành VOID
+      const { error: updateErr } = await supabase
+        .from('invoices')
+        .update({ 
+          status: 'VOID', 
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', invoice.id);
+
+      if (updateErr) throw updateErr;
+
+      // 2. Gọi Loyalty Refund (hoàn tác điểm/buổi)
+      await processRefund(invoice.id);
+
+      // 3. Cập nhật invoice state
+      setInvoice({ ...invoice, status: 'VOID' });
+
+      // 4. Thông báo thành công
+      alert('✅ Đã hủy hóa đơn và hoàn tác Loyalty thành công!');
+
+      // 5. Gọi callback để refresh danh sách (nếu có)
+      if (onInvoiceVoided) {
+        onInvoiceVoided();
+      }
+
+      // 6. Đóng modal sau 1 giây
+      setTimeout(() => {
+        onClose();
+      }, 500);
+
+    } catch (err: any) {
+      console.error('Lỗi hủy hóa đơn:', err);
+      setError(err.message || 'Lỗi khi hủy hóa đơn, vui lòng thử lại.');
+    } finally {
+      setIsVoiding(false);
+    }
+  };
+
   if (!isOpen) return null;
 
   if (loading) {
@@ -189,7 +246,7 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({ isOpen, 
         {/* Header */}
         <div className="sticky top-0 bg-white z-10 p-4 border-b border-slate-200 flex justify-between items-start">
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <FileText className="w-5 h-5 text-blue-600" />
               <h2 className="text-lg font-bold text-slate-900">
                 HÓA ĐƠN #{invoice.id.slice(0, 8).toUpperCase()}
@@ -201,16 +258,30 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({ isOpen, 
               )}
             </div>
             <p className="text-xs text-slate-500 mt-1">{formatDate(invoice.created_at)}</p>
-            <div className="flex items-center gap-2 mt-1">
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
               <Badge variant="neutral" className={statusColor}>{invoice.status}</Badge>
               <span className="text-xs text-slate-400">
                 Phương thức: {invoice.payment_method || '—'}
               </span>
             </div>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {/* 👇 NÚT HỦY HÓA ĐƠN - CHỈ ADMIN */}
+            {isAdmin && invoice.status !== 'VOID' && (
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={handleVoidInvoice}
+                isLoading={isVoiding}
+                className="text-xs font-semibold"
+              >
+                🗑 Hủy hóa đơn
+              </Button>
+            )}
+            <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         <div className="p-4 space-y-4">

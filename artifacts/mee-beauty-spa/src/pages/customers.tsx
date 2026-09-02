@@ -2,6 +2,7 @@
 import React, { useState, useEffect, ChangeEvent, FormEvent, useRef } from "react";
 import { useAuth } from '@/context/AuthContext';
 import { maskPhone } from '@/lib/utils';
+import LoyaltyWallet from '@/components/loyalty/LoyaltyWallet';
 import { supabase } from "../services/supabase";
 import {
   Button,
@@ -44,6 +45,7 @@ import {
   isPhoneExists,
 } from "../services/customer.service";
 import { User, Package, Camera, ArrowLeft, Plus, Search, Gift } from "lucide-react";
+import { getWallet } from '@/services/loyalty.service';
 
 // ============================================================
 // HÀM BỎ DẤU (removeAccents)
@@ -586,6 +588,7 @@ export function CustomerProfilePage({
           { key: "info", label: "📋 Thông tin" },
           { key: "photos", label: "📷 Ảnh" },
           { key: "packages", label: "📦 Liệu trình" },
+          { key: "loyalty", label: "🎁 Loyalty" },  // 👈 THÊM DÒNG NÀY
           { key: "history", label: "📜 Lịch sử" },
         ].map((tab) => (
           <button
@@ -952,7 +955,14 @@ export function CustomerProfilePage({
         </Panel>
       )}
 
-      {/* TAB 4: LỊCH SỬ DỊCH VỤ */}
+      {/* TAB 4: TÍCH ĐIỂM / BUỔI */}
+      {activeTab === "loyalty" && (
+        <div className="p-4">
+          <LoyaltyWallet customerId={customer.id} />
+        </div>
+      )}
+
+      {/* TAB 5: LỊCH SỬ DỊCH VỤ */}
       {activeTab === "history" && (
         <Panel>
           <PanelHeader title="Lịch sử sử dụng dịch vụ" />
@@ -1383,6 +1393,8 @@ export function CustomersPage() {
     Record<string, { hasPackage: boolean; hasGift: boolean }>
   >({});
 
+  const [loyaltyStatus, setLoyaltyStatus] = useState<Record<string, boolean>>({});
+
   const loadData = async () => {
     setLoading(true);
     try {
@@ -1398,6 +1410,20 @@ export function CustomersPage() {
         };
       }
       setCustomerBadges(badges);
+
+      // === LOAD LOYALTY STATUS ===
+      const statusMap: Record<string, boolean> = {};
+      for (const c of data || []) {
+        try {
+          const wallet = await getWallet(c.id);
+          statusMap[c.id] = wallet.isEligible || false;
+        } catch (err) {
+          console.error('Lỗi lấy loyalty wallet cho khách', c.id, err);
+          statusMap[c.id] = false;
+        }
+      }
+      setLoyaltyStatus(statusMap);
+
     } catch (err) {
       console.error("Lỗi lấy danh sách khách hàng:", err);
     } finally {
@@ -1561,6 +1587,10 @@ export function CustomersPage() {
                             {item.full_name || item.name}
                           </p>
                           <div className="flex items-center gap-2 shrink-0">
+                            {/* 👇 ICON LOYALTY - chỉ hiển thị khi đủ điều kiện */}
+                            {loyaltyStatus[item.id] && (
+                              <span className="text-purple-500 text-lg" title="Đủ điều kiện Loyalty">🎁</span>
+                            )}
                             {badges.hasPackage && (
                               <button
                                 onClick={(e) => {

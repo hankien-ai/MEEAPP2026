@@ -263,6 +263,15 @@ export class POSService {
         return { success: false, error: invoiceErr?.message || "Lỗi khi tạo hóa đơn" };
       }
 
+      // ============ LOYALTY EARN ============
+      try {
+        const { earnFromInvoice } = await import('@/services/loyalty.service');
+        await earnFromInvoice(invoice.id);
+      } catch (err) {
+        console.error('Loyalty earn error:', err);
+        // Không throw, không ảnh hưởng checkout
+      }
+
       const commissionLogs: any[] = [];
       const packageInvoiceItemMap = new Map<string, string>();
 
