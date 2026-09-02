@@ -1,19 +1,9 @@
 // src/services/loyalty.service.ts
-import { supabase, DEFAULT_ORG_ID, DEFAULT_BRANCH_ID } from './supabase';
+import { supabase } from './supabase';
 import { settingsService } from './settings.service';
 import type { LoyaltyConfig, LoyaltyAccount, LoyaltyTransaction, LoyaltyWallet, LoyaltyRedeemConfig } from '@/types/loyalty';
 
 const LOYALTY_CONFIG_KEY = 'loyalty_config';
-
-// ============================================================
-// HELPER: Map mode từ config sang database enum
-// ============================================================
-
-function mapLoyaltyModeToDb(mode: string): string {
-  if (mode === 'SESSIONS') return 'SESSION';
-  if (mode === 'POINTS') return 'POINT';
-  return mode;
-}
 
 // ============================================================
 // CONFIG
@@ -66,15 +56,12 @@ export async function getOrCreateAccount(customerId: string): Promise<LoyaltyAcc
   }
 
   const config = await getConfig();
-  const dbMode = mapLoyaltyModeToDb(config.mode);
   const { data: newAccount, error: insertError } = await supabase
     .from('loyalty_accounts')
     .insert({
       customer_id: customerId,
-      mode: dbMode,
+      mode: config.mode,
       balance: 0,
-      organization_id: DEFAULT_ORG_ID,
-      branch_id: DEFAULT_BRANCH_ID,
     })
     .select()
     .single();
@@ -122,6 +109,7 @@ export async function getWallet(customerId: string): Promise<LoyaltyWallet> {
     sessionsProgress = account.balance;
     isEligible = required > 0 && account.balance >= required;
   } else if (config.mode === 'POINTS') {
+    // Kiểm tra có ít nhất một item có thể đổi không
     const { data: redeemable } = await supabase
       .from('loyalty_redeem_config')
       .select('points_required')
@@ -169,21 +157,17 @@ export async function getTransactions(
 }
 
 // ============================================================
-// EARN – CÓ LOG DEBUG CHI TIẾT
+// EARN
 // ============================================================
 
 export async function earnFromInvoice(invoiceId: string): Promise<void> {
-  console.log('🔍 [Loyalty] earnFromInvoice called, invoiceId:', invoiceId);
-
   const config = await getConfig();
-  console.log('📋 [Loyalty] Config:', config);
 
   if (!config.enabled || config.mode === 'OFF') {
-    console.log('⏹️ [Loyalty] Loyalty disabled or mode OFF');
     return;
   }
 
-  // 1. Lấy invoice
+  // 1. Lấy invoice và items
   const { data: invoice, error: invoiceError } = await supabase
     .from('invoices')
     .select('id, customer_id, status, is_gift')
@@ -191,32 +175,27 @@ export async function earnFromInvoice(invoiceId: string): Promise<void> {
     .single();
 
   if (invoiceError || !invoice) {
-    console.error('❌ [Loyalty] Invoice not found:', invoiceId, invoiceError);
+    console.error('Invoice not found:', invoiceId);
     return;
   }
-  console.log('📄 [Loyalty] Invoice:', invoice);
 
   // Chỉ invoice PAID hoặc PARTIALLY_PAID mới được tính
   if (!['PAID', 'PARTIALLY_PAID'].includes(invoice.status)) {
-    console.log('⏹️ [Loyalty] Invoice status not PAID/PARTIALLY_PAID:', invoice.status);
     return;
   }
 
   if (invoice.is_gift) {
-    console.log('⏹️ [Loyalty] Invoice is gift, skip');
     return;
   }
 
   if (!invoice.customer_id) {
-    console.log('⏹️ [Loyalty] No customer_id, skip');
     return;
   }
 
   // 2. Lấy account
   const account = await getOrCreateAccount(invoice.customer_id);
-  console.log('👤 [Loyalty] Account:', account);
 
-  // 3. Kiểm tra đã Earn chưa
+  // 3. Kiểm tra đã Earn chưa (chống duplicate)
   const { data: existing } = await supabase
     .from('loyalty_transactions')
     .select('id')
@@ -226,7 +205,7 @@ export async function earnFromInvoice(invoiceId: string): Promise<void> {
     .maybeSingle();
 
   if (existing) {
-    console.log('⏹️ [Loyalty] Invoice already earned:', invoiceId);
+    console.log('Invoice already earned loyalty:', invoiceId);
     return;
   }
 
@@ -237,24 +216,22 @@ export async function earnFromInvoice(invoiceId: string): Promise<void> {
     .eq('invoice_id', invoiceId);
 
   if (itemsError) {
-    console.error('❌ [Loyalty] Error fetching invoice items:', itemsError);
+    console.error('Error fetching invoice items:', itemsError);
     return;
   }
-  console.log('📦 [Loyalty] Invoice items:', items);
 
-  // 5. Lọc bỏ package và gift
+  // 5. Lọc bỏ package items và gift items
   const eligibleItems = items.filter((item) => !item.package_id && !item.is_gift);
-  console.log('✅ [Loyalty] Eligible items:', eligibleItems);
 
   if (eligibleItems.length === 0) {
-    console.log('⏹️ [Loyalty] No eligible items');
     return;
   }
 
   let earnAmount = 0;
 
   if (config.mode === 'SESSIONS') {
-    // SESSIONS: đếm số service DIRECT
+    // SESSIONS: mỗi service DIRECT = 1 buổi
+    // Chỉ tính những item là SERVICE
     const catalogIds = eligibleItems.map((item) => item.catalog_item_id).filter(Boolean);
     let serviceIds: string[] = [];
 
@@ -267,48 +244,32 @@ export async function earnFromInvoice(invoiceId: string): Promise<void> {
         serviceIds = services.map((s) => s.catalog_item_id);
       }
     }
-    console.log('🔍 [Loyalty] Service catalog IDs:', serviceIds);
 
     const sessionCount = eligibleItems.filter((item) =>
       serviceIds.includes(item.catalog_item_id),
     ).length;
 
-    console.log('📊 [Loyalty] Session count:', sessionCount);
-
-    if (sessionCount === 0) {
-      console.log('⏹️ [Loyalty] No session to earn');
-      return;
-    }
+    if (sessionCount === 0) return;
     earnAmount = sessionCount;
   } else if (config.mode === 'POINTS') {
+    // POINTS: tính tổng tiền hợp lệ
     const totalAmount = eligibleItems.reduce((sum, item) => sum + (item.total_amount || 0), 0);
-    if (totalAmount === 0) {
-      console.log('⏹️ [Loyalty] Total amount = 0');
-      return;
-    }
+    if (totalAmount === 0) return;
 
     const pointsPerAmount = config.points_per_amount || 0;
     const amountPerPoint = config.amount_per_point || 100000;
 
-    if (amountPerPoint <= 0 || pointsPerAmount <= 0) {
-      console.log('⏹️ [Loyalty] Invalid points config');
-      return;
-    }
+    if (amountPerPoint <= 0 || pointsPerAmount <= 0) return;
 
     earnAmount = Math.floor((totalAmount / amountPerPoint) * pointsPerAmount);
-    if (earnAmount === 0) {
-      console.log('⏹️ [Loyalty] Earn amount = 0');
-      return;
-    }
-    console.log('💳 [Loyalty] Points earned:', earnAmount);
+    if (earnAmount === 0) return;
   }
 
   // 6. Cập nhật balance và tạo transaction
   const newBalance = (account.balance || 0) + earnAmount;
-  console.log('💰 [Loyalty] New balance:', newBalance);
 
   // Update account
-  const { error: updateError } = await supabase
+  await supabase
     .from('loyalty_accounts')
     .update({
       balance: newBalance,
@@ -316,34 +277,16 @@ export async function earnFromInvoice(invoiceId: string): Promise<void> {
     })
     .eq('id', account.id);
 
-  if (updateError) {
-    console.error('❌ [Loyalty] Error updating account:', updateError);
-    return;
-  }
-
   // Insert transaction
-  const { error: txError } = await supabase
-    .from('loyalty_transactions')
-    .insert({
-      loyalty_account_id: account.id,
-      invoice_id: invoiceId,
-      transaction_type: 'EARN',
-      amount: earnAmount,
-      balance_after: newBalance,
-      source_type: 'INVOICE',
-      note: `Earn from invoice ${invoiceId}`,
-      created_at: new Date().toISOString(),
-    });
-
-  if (txError) {
-    console.error('❌ [Loyalty] Error inserting transaction:', txError);
-    return;
-  }
-
-  console.log('✅ [Loyalty] Earned successfully!', {
-    invoiceId,
-    earnAmount,
-    newBalance,
+  await supabase.from('loyalty_transactions').insert({
+    loyalty_account_id: account.id,
+    invoice_id: invoiceId,
+    transaction_type: 'EARN',
+    amount: earnAmount,
+    balance_after: newBalance,
+    source_type: 'INVOICE',
+    note: `Earn from invoice ${invoiceId}`,
+    created_at: new Date().toISOString(),
   });
 }
 
@@ -649,17 +592,17 @@ export async function processExpiry(): Promise<number> {
 }
 
 // ============================================================
-// CHECK EXPIRY ON LOAD
+// CHECK EXPIRY ON LOAD (gọi khi mở trang)
 // ============================================================
 
 export async function checkExpiryOnLoad(): Promise<void> {
   try {
     const config = await getConfig();
+    // Chỉ chạy nếu Loyalty được bật và có cấu hình expiry
     if (config.enabled && config.expiry_months) {
       await processExpiry();
       console.log('✅ Expiry check completed');
     }
   } catch (err) {
     console.error('⚠️ Expiry check error:', err);
-  }
-}
+    // Không throw để không ảnh hưởng UI
