@@ -118,6 +118,13 @@ export function CustomerProfilePage({
   // Collapse state for info section
   const [isInfoExpanded, setIsInfoExpanded] = useState(false);
 
+  // Loyalty summary state
+  const [loyaltySummary, setLoyaltySummary] = useState<{
+    balance: number;
+    mode: string;
+    isEligible: boolean;
+  } | null>(null);
+
   // Tab 1: Info
   const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
   const [editFormData, setEditFormData] = useState({
@@ -270,12 +277,18 @@ export function CustomerProfilePage({
     if (!customerId) return;
     setLoading(true);
     try {
-      const [cust, statsData] = await Promise.all([
+      const [cust, statsData, wallet] = await Promise.all([
         fetchCustomerById(customerId),
         fetchCustomerStats(customerId),
+        getWallet(customerId),
       ]);
       setCustomer(cust);
       setStats(statsData);
+      setLoyaltySummary({
+        balance: wallet.balance || 0,
+        mode: wallet.mode || 'OFF',
+        isEligible: wallet.isEligible || false,
+      });
       if (cust) {
         setEditFormData({
           full_name: cust.full_name || cust.name || "",
@@ -689,6 +702,47 @@ export function CustomerProfilePage({
               </div>
             )}
           </div>
+
+          {/* 👇 LOYALTY SUMMARY */}
+          {loyaltySummary && loyaltySummary.mode !== 'OFF' && (
+            <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-2xl border border-purple-200 p-4 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center">
+                    <Star className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-purple-600 font-medium">
+                      {loyaltySummary.mode === 'SESSIONS' ? 'Tích buổi' : 'Tích điểm'}
+                    </p>
+                    <p className="text-xl font-bold text-purple-800">
+                      {loyaltySummary.balance}
+                      <span className="text-sm font-normal text-purple-500 ml-1">
+                        {loyaltySummary.mode === 'SESSIONS' ? 'buổi' : 'điểm'}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  {loyaltySummary.isEligible ? (
+                    <Badge variant="success" className="text-sm px-3 py-1">
+                      ✅ Đủ điều kiện
+                    </Badge>
+                  ) : (
+                    <Badge variant="neutral" className="text-sm px-3 py-1">
+                      Chưa đủ
+                    </Badge>
+                  )}
+                  <button
+                    onClick={() => setActiveTab('loyalty')}
+                    className="block text-xs text-indigo-600 hover:underline mt-1 font-medium"
+                  >
+                    Xem chi tiết →
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Hóa đơn gần đây */}
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
