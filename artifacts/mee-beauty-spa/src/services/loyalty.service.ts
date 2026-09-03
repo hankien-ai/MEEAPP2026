@@ -182,7 +182,7 @@ export async function getTransactions(
 }
 
 // ============================================================
-// EARN – CÓ LOG DEBUG CHI TIẾT
+// EARN – ĐÃ SỬA
 // ============================================================
 
 export async function earnFromInvoice(invoiceId: string): Promise<void> {
@@ -196,6 +196,7 @@ export async function earnFromInvoice(invoiceId: string): Promise<void> {
     return;
   }
 
+  // 1. Lấy invoice
   const { data: invoice, error: invoiceError } = await supabase
     .from('invoices')
     .select('id, customer_id, status, is_gift')
@@ -208,6 +209,7 @@ export async function earnFromInvoice(invoiceId: string): Promise<void> {
   }
   console.log('📄 [Loyalty] Invoice:', invoice);
 
+  // Chỉ invoice PAID hoặc PARTIALLY_PAID mới được tính
   if (!['PAID', 'PARTIALLY_PAID'].includes(invoice.status)) {
     console.log('⏹️ [Loyalty] Invoice status not PAID/PARTIALLY_PAID:', invoice.status);
     return;
@@ -223,9 +225,11 @@ export async function earnFromInvoice(invoiceId: string): Promise<void> {
     return;
   }
 
+  // 2. Lấy account
   const account = await getOrCreateAccount(invoice.customer_id);
   console.log('👤 [Loyalty] Account:', account);
 
+  // 3. Kiểm tra đã Earn chưa (chống duplicate)
   const { data: existing } = await supabase
     .from('loyalty_transactions')
     .select('id')
@@ -239,9 +243,10 @@ export async function earnFromInvoice(invoiceId: string): Promise<void> {
     return;
   }
 
+  // 4. Lấy invoice_items (có quantity)
   const { data: items, error: itemsError } = await supabase
     .from('invoice_items')
-    .select('id, catalog_item_id, package_id, total_amount, is_gift')
+    .select('id, catalog_item_id, package_id, quantity, total_amount, is_gift')
     .eq('invoice_id', invoiceId);
 
   if (itemsError) {
@@ -250,6 +255,7 @@ export async function earnFromInvoice(invoiceId: string): Promise<void> {
   }
   console.log('📦 [Loyalty] Invoice items:', items);
 
+  // 5. Lọc bỏ package items và gift items
   const eligibleItems = items.filter((item) => !item.package_id && !item.is_gift);
   console.log('✅ [Loyalty] Eligible items:', eligibleItems);
 
@@ -261,6 +267,8 @@ export async function earnFromInvoice(invoiceId: string): Promise<void> {
   let earnAmount = 0;
 
   if (config.mode === 'SESSIONS') {
+    // SESSIONS: mỗi service DIRECT = số lượng (quantity)
+    // Chỉ tính những item là SERVICE
     const catalogIds = eligibleItems.map((item) => item.catalog_item_id).filter(Boolean);
     let serviceIds: string[] = [];
 
@@ -275,6 +283,7 @@ export async function earnFromInvoice(invoiceId: string): Promise<void> {
     }
     console.log('🔍 [Loyalty] Service catalog IDs:', serviceIds);
 
+    // Tổng quantity của các DIRECT SERVICE
     const sessionCount = eligibleItems
       .filter((item) => serviceIds.includes(item.catalog_item_id))
       .reduce((sum, item) => sum + (item.quantity || 0), 0);
@@ -287,6 +296,7 @@ export async function earnFromInvoice(invoiceId: string): Promise<void> {
     }
     earnAmount = sessionCount;
   } else if (config.mode === 'POINTS') {
+    // POINTS: tính tổng tiền hợp lệ
     const totalAmount = eligibleItems.reduce((sum, item) => sum + (item.total_amount || 0), 0);
     if (totalAmount === 0) {
       console.log('⏹️ [Loyalty] Total amount = 0');
@@ -309,9 +319,11 @@ export async function earnFromInvoice(invoiceId: string): Promise<void> {
     console.log('💳 [Loyalty] Points earned:', earnAmount);
   }
 
+  // 6. Cập nhật balance và tạo transaction
   const newBalance = (account.balance || 0) + earnAmount;
   console.log('💰 [Loyalty] New balance:', newBalance);
 
+  // Update account
   const { error: updateError } = await supabase
     .from('loyalty_accounts')
     .update({
@@ -325,6 +337,7 @@ export async function earnFromInvoice(invoiceId: string): Promise<void> {
     return;
   }
 
+  // Insert transaction
   const { error: txError } = await supabase
     .from('loyalty_transactions')
     .insert({
@@ -336,6 +349,8 @@ export async function earnFromInvoice(invoiceId: string): Promise<void> {
       source_type: 'INVOICE',
       note: `Earn from invoice ${invoiceId}`,
       created_at: new Date().toISOString(),
+      organization_id: account.organization_id,  // 👈 THÊM
+      branch_id: account.branch_id,  
     });
 
   if (txError) {
@@ -427,7 +442,6 @@ export async function adjust(
     created_at: new Date().toISOString(),
   });
 }
-
 // ============================================================
 // REFUND / REVERSAL
 // ============================================================
