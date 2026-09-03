@@ -275,11 +275,11 @@ export async function earnFromInvoice(invoiceId: string): Promise<void> {
     }
     console.log('🔍 [Loyalty] Service catalog IDs:', serviceIds);
 
-    const sessionCount = eligibleItems.filter((item) =>
-      serviceIds.includes(item.catalog_item_id),
-    ).length;
+    const sessionCount = eligibleItems
+      .filter((item) => serviceIds.includes(item.catalog_item_id))
+      .reduce((sum, item) => sum + (item.quantity || 0), 0);
 
-    console.log('📊 [Loyalty] Session count:', sessionCount);
+    console.log('📊 [Loyalty] Session count (sum quantity):', sessionCount);
 
     if (sessionCount === 0) {
       console.log('⏹️ [Loyalty] No session to earn');
