@@ -766,7 +766,7 @@ export default function CatalogManagementPage() {
 }
 
 // ==========================================================
-// MODAL FORMS (giữ nguyên logic từ code cũ)
+// MODAL FORMS
 // ==========================================================
 function ServiceFormModal({ isOpen, onClose, editingService, categories, onSave }) {
   const [formData, setFormData] = useState({
@@ -780,6 +780,7 @@ function ServiceFormModal({ isOpen, onClose, editingService, categories, onSave 
     sales_commission_value: editingService?.sales_commission_value ?? editingService?.sales_commission_rate ?? 0,
     performance_commission_type: editingService?.performance_commission_type || "PERCENT",
     performance_commission_value: editingService?.performance_commission_value ?? editingService?.performance_commission_rate ?? 0,
+    loyalty_points: editingService?.loyalty_points ?? 0,
   });
   const [validationError, setValidationError] = useState(null);
 
@@ -827,6 +828,18 @@ function ServiceFormModal({ isOpen, onClose, editingService, categories, onSave 
               <div className="bg-slate-50 p-3 rounded-lg"><label className="block text-xs font-medium text-slate-600">KTV</label><div className="flex gap-2 mt-1"><button type="button" onClick={() => setFormData({ ...formData, performance_commission_type: "PERCENT" })} className={`px-2 py-1 text-xs rounded ${formData.performance_commission_type === "PERCENT" ? "bg-pink-600 text-white" : "bg-white border border-slate-300"}`}>%</button><button type="button" onClick={() => setFormData({ ...formData, performance_commission_type: "FIXED" })} className={`px-2 py-1 text-xs rounded ${formData.performance_commission_type === "FIXED" ? "bg-pink-600 text-white" : "bg-white border border-slate-300"}`}>₫</button></div><input type="number" value={formData.performance_commission_value} onChange={(e) => setFormData({ ...formData, performance_commission_value: Number(e.target.value) })} className="w-full mt-1 p-1.5 border border-slate-300 rounded text-xs" /></div>
             </div>
           </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700">Điểm Loyalty</label>
+            <input
+              type="number"
+              min="0"
+              value={formData.loyalty_points}
+              onChange={(e) => setFormData({ ...formData, loyalty_points: Number(e.target.value) })}
+              className="w-full p-2 border border-slate-300 rounded-lg text-sm"
+              placeholder="Số điểm cần để đổi (0 = không dùng)"
+            />
+            <p className="text-xs text-slate-400 mt-1">Áp dụng khi hệ thống ở chế độ POINTS</p>
+          </div>
           <div><label className="block text-sm font-medium text-slate-700">Mô tả</label><textarea rows={2} value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="w-full p-2 border border-slate-300 rounded-lg text-sm" /></div>
           <div className="flex gap-3 pt-4 border-t">
             <button onClick={onClose} className="flex-1 py-2.5 border border-slate-300 rounded-lg text-sm font-semibold text-slate-700">Hủy</button>
@@ -852,6 +865,7 @@ function ProductFormModal({ isOpen, onClose, editingProduct, categories, onSave 
     product_type: editingProduct?.product_type || "RETAIL",
     sales_commission_type: editingProduct?.sales_commission_type || "PERCENT",
     sales_commission_value: editingProduct?.sales_commission_value ?? 0,
+    loyalty_points: editingProduct?.loyalty_points ?? 0,
   });
   const [validationError, setValidationError] = useState(null);
 
@@ -901,6 +915,18 @@ function ProductFormModal({ isOpen, onClose, editingProduct, categories, onSave 
               <div className="flex-1"><div className="flex gap-2"><button type="button" onClick={() => setFormData({ ...formData, sales_commission_type: "PERCENT" })} className={`px-2 py-1 text-xs rounded ${formData.sales_commission_type === "PERCENT" ? "bg-pink-600 text-white" : "bg-white border border-slate-300"}`}>%</button><button type="button" onClick={() => setFormData({ ...formData, sales_commission_type: "FIXED" })} className={`px-2 py-1 text-xs rounded ${formData.sales_commission_type === "FIXED" ? "bg-pink-600 text-white" : "bg-white border border-slate-300"}`}>₫</button></div></div>
               <div className="flex-2"><input type="number" value={formData.sales_commission_value} onChange={(e) => setFormData({ ...formData, sales_commission_value: Number(e.target.value) })} className="w-full p-2 border border-slate-300 rounded-lg text-sm" placeholder="Giá trị" /></div>
             </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700">Điểm Loyalty</label>
+            <input
+              type="number"
+              min="0"
+              value={formData.loyalty_points}
+              onChange={(e) => setFormData({ ...formData, loyalty_points: Number(e.target.value) })}
+              className="w-full p-2 border border-slate-300 rounded-lg text-sm"
+              placeholder="Số điểm cần để đổi (0 = không dùng)"
+            />
+            <p className="text-xs text-slate-400 mt-1">Áp dụng khi hệ thống ở chế độ POINTS</p>
           </div>
           <div className="flex gap-3 pt-4 border-t">
             <button onClick={onClose} className="flex-1 py-2.5 border border-slate-300 rounded-lg text-sm font-semibold text-slate-700">Hủy</button>

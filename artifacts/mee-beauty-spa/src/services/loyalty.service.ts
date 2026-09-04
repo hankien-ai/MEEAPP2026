@@ -59,7 +59,6 @@ export async function getConfig(): Promise<LoyaltyConfig> {
 
 export async function saveConfig(config: LoyaltyConfig): Promise<void> {
   await settingsService.setConfig(LOYALTY_CONFIG_KEY, config);
-  // Invalidate cache sau khi lưu
   const { invalidateCache } = await import('./cache.service');
   invalidateCache(LOYALTY_CONFIG_CACHE_KEY);
 }
@@ -80,7 +79,23 @@ export async function getOrCreateAccount(customerId: string): Promise<LoyaltyAcc
   }
 
   if (existing) {
-    return existing;
+    // Đảm bảo hai balance mới có giá trị (nếu chưa có)
+    if (existing.sessions_balance === undefined || existing.points_balance === undefined) {
+      await supabase
+        .from('loyalty_accounts')
+        .update({
+          sessions_balance: existing.mode === 'SESSION' ? existing.balance : 0,
+          points_balance: existing.mode === 'POINT' ? existing.balance : 0,
+        })
+        .eq('id', existing.id);
+      const { data: updated } = await supabase
+        .from('loyalty_accounts')
+        .select('*')
+        .eq('id', existing.id)
+        .single();
+      return updated as LoyaltyAccount;
+    }
+    return existing as LoyaltyAccount;
   }
 
   const config = await getConfig();
@@ -90,7 +105,8 @@ export async function getOrCreateAccount(customerId: string): Promise<LoyaltyAcc
     .insert({
       customer_id: customerId,
       mode: dbMode,
-      balance: 0,
+      sessions_balance: 0,
+      points_balance: 0,
       organization_id: DEFAULT_ORG_ID,
       branch_id: DEFAULT_BRANCH_ID,
     })
@@ -98,7 +114,7 @@ export async function getOrCreateAccount(customerId: string): Promise<LoyaltyAcc
     .single();
 
   if (insertError) throw insertError;
-  return newAccount;
+  return newAccount as LoyaltyAccount;
 }
 
 export async function getAccount(customerId: string): Promise<LoyaltyAccount | null> {
@@ -109,7 +125,7 @@ export async function getAccount(customerId: string): Promise<LoyaltyAccount | n
     .maybeSingle();
 
   if (error) throw error;
-  return data;
+  return data as LoyaltyAccount | null;
 }
 
 // ============================================================
@@ -124,6 +140,8 @@ export async function getWallet(customerId: string): Promise<LoyaltyWallet> {
     return {
       hasAccount: false,
       mode: config.mode,
+      sessions_balance: 0,
+      points_balance: 0,
       balance: 0,
       isEligible: false,
       expires_at: null,
@@ -132,33 +150,41 @@ export async function getWallet(customerId: string): Promise<LoyaltyWallet> {
     };
   }
 
-  // Map database mode sang UI mode
   const uiMode = mapDbModeToUiMode(account.mode, config.mode);
-
   let isEligible = false;
   let sessionsProgress = 0;
 
   if (uiMode === 'SESSIONS') {
     const required = config.sessions_required || 0;
-    sessionsProgress = account.balance;
-    isEligible = required > 0 && account.balance >= required;
+    sessionsProgress = account.sessions_balance;
+    isEligible = required > 0 && account.sessions_balance >= required;
   } else if (uiMode === 'POINTS') {
-    const { data: redeemable } = await supabase
-      .from('loyalty_redeem_config')
-      .select('points_required')
-      .eq('is_active', true)
-      .limit(1);
+    // Lấy loyalty_points nhỏ nhất > 0
+    const { data: minPointItem, error } = await supabase
+      .from('catalog_items')
+      .select('loyalty_points')
+      .eq('status', 'ACTIVE')
+      .gt('loyalty_points', 0)
+      .order('loyalty_points', { ascending: true })
+      .limit(1)
+      .maybeSingle();
 
-    if (redeemable && redeemable.length > 0) {
-      const minPoints = Math.min(...redeemable.map((r) => r.points_required));
-      isEligible = account.balance >= minPoints;
+    if (!error && minPointItem) {
+      const minPoints = minPointItem.loyalty_points;
+      isEligible = account.points_balance >= minPoints;
+    } else {
+      isEligible = false;
     }
   }
+
+  const balance = uiMode === 'SESSIONS' ? account.sessions_balance : account.points_balance;
 
   return {
     hasAccount: true,
     mode: uiMode,
-    balance: account.balance || 0,
+    sessions_balance: account.sessions_balance,
+    points_balance: account.points_balance,
+    balance,
     isEligible,
     expires_at: account.expires_at,
     sessions_required: config.sessions_required || 0,
@@ -204,7 +230,6 @@ export async function earnFromInvoice(invoiceId: string): Promise<void> {
     return;
   }
 
-  // 1. Lấy invoice
   const { data: invoice, error: invoiceError } = await supabase
     .from('invoices')
     .select('id, customer_id, status, is_gift')
@@ -215,9 +240,7 @@ export async function earnFromInvoice(invoiceId: string): Promise<void> {
     console.error('❌ [Loyalty] Invoice not found:', invoiceId, invoiceError);
     return;
   }
-  console.log('📄 [Loyalty] Invoice:', invoice);
 
-  // Chỉ invoice PAID hoặc PARTIALLY_PAID mới được tính
   if (!['PAID', 'PARTIALLY_PAID'].includes(invoice.status)) {
     console.log('⏹️ [Loyalty] Invoice status not PAID/PARTIALLY_PAID:', invoice.status);
     return;
@@ -233,11 +256,9 @@ export async function earnFromInvoice(invoiceId: string): Promise<void> {
     return;
   }
 
-  // 2. Lấy account
   const account = await getOrCreateAccount(invoice.customer_id);
   console.log('👤 [Loyalty] Account:', account);
 
-  // 3. Kiểm tra đã Earn chưa (chống duplicate)
   const { data: existing } = await supabase
     .from('loyalty_transactions')
     .select('id')
@@ -251,7 +272,6 @@ export async function earnFromInvoice(invoiceId: string): Promise<void> {
     return;
   }
 
-  // 4. Lấy invoice_items (có quantity)
   const { data: items, error: itemsError } = await supabase
     .from('invoice_items')
     .select('id, catalog_item_id, package_id, quantity, total_amount, is_gift')
@@ -261,12 +281,8 @@ export async function earnFromInvoice(invoiceId: string): Promise<void> {
     console.error('❌ [Loyalty] Error fetching invoice items:', itemsError);
     return;
   }
-  console.log('📦 [Loyalty] Invoice items:', items);
 
-  // 5. Lọc bỏ package items và gift items
   const eligibleItems = items.filter((item) => !item.package_id && !item.is_gift);
-  console.log('✅ [Loyalty] Eligible items:', eligibleItems);
-
   if (eligibleItems.length === 0) {
     console.log('⏹️ [Loyalty] No eligible items');
     return;
@@ -275,11 +291,8 @@ export async function earnFromInvoice(invoiceId: string): Promise<void> {
   let earnAmount = 0;
 
   if (config.mode === 'SESSIONS') {
-    // SESSIONS: mỗi service DIRECT = số lượng (quantity)
-    // Chỉ tính những item là SERVICE
     const catalogIds = eligibleItems.map((item) => item.catalog_item_id).filter(Boolean);
     let serviceIds: string[] = [];
-
     if (catalogIds.length > 0) {
       const { data: services } = await supabase
         .from('services')
@@ -289,14 +302,9 @@ export async function earnFromInvoice(invoiceId: string): Promise<void> {
         serviceIds = services.map((s) => s.catalog_item_id);
       }
     }
-    console.log('🔍 [Loyalty] Service catalog IDs:', serviceIds);
-
-    // Tổng quantity của các DIRECT SERVICE
     const sessionCount = eligibleItems
       .filter((item) => serviceIds.includes(item.catalog_item_id))
       .reduce((sum, item) => sum + (item.quantity || 0), 0);
-
-    console.log('📊 [Loyalty] Session count (sum quantity):', sessionCount);
 
     if (sessionCount === 0) {
       console.log('⏹️ [Loyalty] No session to earn');
@@ -304,38 +312,39 @@ export async function earnFromInvoice(invoiceId: string): Promise<void> {
     }
     earnAmount = sessionCount;
   } else if (config.mode === 'POINTS') {
-    // POINTS: tính tổng tiền hợp lệ
     const totalAmount = eligibleItems.reduce((sum, item) => sum + (item.total_amount || 0), 0);
     if (totalAmount === 0) {
       console.log('⏹️ [Loyalty] Total amount = 0');
       return;
     }
-
     const pointsPerAmount = config.points_per_amount || 0;
     const amountPerPoint = config.amount_per_point || 100000;
-
     if (amountPerPoint <= 0 || pointsPerAmount <= 0) {
       console.log('⏹️ [Loyalty] Invalid points config');
       return;
     }
-
     earnAmount = Math.floor((totalAmount / amountPerPoint) * pointsPerAmount);
     if (earnAmount === 0) {
       console.log('⏹️ [Loyalty] Earn amount = 0');
       return;
     }
-    console.log('💳 [Loyalty] Points earned:', earnAmount);
   }
 
-  // 6. Cập nhật balance và tạo transaction
-  const newBalance = (account.balance || 0) + earnAmount;
-  console.log('💰 [Loyalty] New balance:', newBalance);
+  // Cập nhật đúng cột
+  let updateField: { sessions_balance?: number; points_balance?: number } = {};
+  let newBalance = 0;
+  if (config.mode === 'SESSIONS') {
+    newBalance = (account.sessions_balance || 0) + earnAmount;
+    updateField.sessions_balance = newBalance;
+  } else if (config.mode === 'POINTS') {
+    newBalance = (account.points_balance || 0) + earnAmount;
+    updateField.points_balance = newBalance;
+  }
 
-  // Update account
   const { error: updateError } = await supabase
     .from('loyalty_accounts')
     .update({
-      balance: newBalance,
+      ...updateField,
       updated_at: new Date().toISOString(),
     })
     .eq('id', account.id);
@@ -345,7 +354,6 @@ export async function earnFromInvoice(invoiceId: string): Promise<void> {
     return;
   }
 
-  // Insert transaction
   const { error: txError } = await supabase
     .from('loyalty_transactions')
     .insert({
@@ -357,7 +365,7 @@ export async function earnFromInvoice(invoiceId: string): Promise<void> {
       source_type: 'INVOICE',
       note: `Earn from invoice ${invoiceId}`,
       created_at: new Date().toISOString(),
-      created_by: null,                           // 👈 SET NULL để tránh lỗi FK
+      created_by: null,
       organization_id: account.organization_id,
       branch_id: account.branch_id,
     });
@@ -375,7 +383,7 @@ export async function earnFromInvoice(invoiceId: string): Promise<void> {
 }
 
 // ============================================================
-// REDEEM – Gọi RPC
+// REDEEM – Gọi RPC (đã sửa trong SQL)
 // ============================================================
 
 export interface RedeemResult {
@@ -426,7 +434,10 @@ export async function adjust(
   }
 
   const account = await getOrCreateAccount(customerId);
-  const newBalance = (account.balance || 0) + amount;
+  const config = await getConfig();
+  const targetField = config.mode === 'SESSIONS' ? 'sessions_balance' : 'points_balance';
+  const currentBalance = config.mode === 'SESSIONS' ? account.sessions_balance : account.points_balance;
+  const newBalance = currentBalance + amount;
 
   if (newBalance < 0) {
     throw new Error('Số dư không thể âm');
@@ -435,7 +446,7 @@ export async function adjust(
   await supabase
     .from('loyalty_accounts')
     .update({
-      balance: newBalance,
+      [targetField]: newBalance,
       updated_at: new Date().toISOString(),
     })
     .eq('id', account.id);
@@ -447,10 +458,10 @@ export async function adjust(
     balance_after: newBalance,
     source_type: 'ADMIN',
     note: note.trim(),
-    created_by: null,                           // 👈 Đổi từ staffId thành null
+    created_by: null,
     created_at: new Date().toISOString(),
-    organization_id: account.organization_id,   // 👈 Thêm
-    branch_id: account.branch_id,               // 👈 Thêm
+    organization_id: account.organization_id,
+    branch_id: account.branch_id,
   });
 }
 
@@ -471,9 +482,7 @@ export async function processRefund(invoiceId: string): Promise<void> {
     return;
   }
 
-  if (!transactions || transactions.length === 0) {
-    return;
-  }
+  if (!transactions || transactions.length === 0) return;
 
   const earnTx = transactions[0];
 
@@ -494,10 +503,9 @@ export async function processRefund(invoiceId: string): Promise<void> {
     return;
   }
 
-  // Lấy thêm organization_id và branch_id từ account
   const { data: account, error: accError } = await supabase
     .from('loyalty_accounts')
-    .select('id, balance, organization_id, branch_id')  // 👈 Thêm 2 trường
+    .select('id, sessions_balance, points_balance, organization_id, branch_id')
     .eq('id', earnTx.loyalty_account_id)
     .single();
 
@@ -506,12 +514,15 @@ export async function processRefund(invoiceId: string): Promise<void> {
     return;
   }
 
-  const newBalance = (account.balance || 0) - (earnTx.amount || 0);
+  const config = await getConfig();
+  const targetField = config.mode === 'SESSIONS' ? 'sessions_balance' : 'points_balance';
+  const currentBalance = config.mode === 'SESSIONS' ? account.sessions_balance : account.points_balance;
+  const newBalance = currentBalance - (earnTx.amount || 0);
 
   await supabase
     .from('loyalty_accounts')
     .update({
-      balance: newBalance,
+      [targetField]: newBalance,
       updated_at: new Date().toISOString(),
     })
     .eq('id', account.id);
@@ -526,9 +537,9 @@ export async function processRefund(invoiceId: string): Promise<void> {
     reversal_of: earnTx.id,
     note: `Reversal of invoice ${invoiceId}`,
     created_at: new Date().toISOString(),
-    created_by: null,                            // 👈 Thêm (rõ ràng)
-    organization_id: account.organization_id,    // 👈 Thêm
-    branch_id: account.branch_id,                // 👈 Thêm
+    created_by: null,
+    organization_id: account.organization_id,
+    branch_id: account.branch_id,
   });
 }
 
@@ -537,42 +548,50 @@ export async function processRefund(invoiceId: string): Promise<void> {
 // ============================================================
 
 export async function getRedeemableItems(mode: string): Promise<any[]> {
-  const { data: items, error } = await supabase
-    .from('catalog_items')
-    .select(`
-      id,
-      name,
-      code,
-      item_type,
-      price,
-      status,
-      loyalty_redeem_config!left (
+  if (mode === 'SESSIONS') {
+    // SESSIONS: trả về tất cả service/product đang hoạt động
+    const { data: items, error } = await supabase
+      .from('catalog_items')
+      .select(`
         id,
-        points_required,
-        is_active
-      )
-    `)
-    .in('item_type', ['SERVICE', 'PRODUCT'])
-    .order('name', { ascending: true });
+        name,
+        code,
+        item_type,
+        price,
+        status
+      `)
+      .eq('status', 'ACTIVE')
+      .in('item_type', ['SERVICE', 'PRODUCT'])
+      .order('name', { ascending: true });
 
-  if (error) throw error;
+    if (error) throw error;
+    return items || [];
+  } else if (mode === 'POINTS') {
+    // POINTS: chỉ trả về item có loyalty_points > 0
+    const { data: items, error } = await supabase
+      .from('catalog_items')
+      .select(`
+        id,
+        name,
+        code,
+        item_type,
+        price,
+        status,
+        loyalty_points
+      `)
+      .eq('status', 'ACTIVE')
+      .gt('loyalty_points', 0)
+      .order('name', { ascending: true });
 
-  if (mode === 'POINTS') {
-    return (items || []).filter((item) => item.loyalty_redeem_config && item.loyalty_redeem_config.length > 0);
+    if (error) throw error;
+    return items || [];
   }
 
-  return items || [];
+  return [];
 }
 
 export async function getRedeemConfig(catalogItemId: string): Promise<LoyaltyRedeemConfig | null> {
-  const { data, error } = await supabase
-    .from('loyalty_redeem_config')
-    .select('*')
-    .eq('catalog_item_id', catalogItemId)
-    .maybeSingle();
-
-  if (error) throw error;
-  return data;
+  return null; // không còn dùng
 }
 
 export async function updateRedeemConfig(
@@ -580,58 +599,23 @@ export async function updateRedeemConfig(
   pointsRequired: number | null,
   isActive: boolean,
 ): Promise<void> {
-  if (pointsRequired !== null && pointsRequired < 0) {
-    throw new Error('Số điểm phải lớn hơn hoặc bằng 0');
-  }
-
-  const existing = await getRedeemConfig(catalogItemId);
-
-  if (existing) {
-    if (pointsRequired === null) {
-      await supabase
-        .from('loyalty_redeem_config')
-        .delete()
-        .eq('catalog_item_id', catalogItemId);
-    } else {
-      await supabase
-        .from('loyalty_redeem_config')
-        .update({
-          points_required: pointsRequired,
-          is_active: isActive,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('catalog_item_id', catalogItemId);
-    }
-  } else if (pointsRequired !== null) {
-    await supabase.from('loyalty_redeem_config').insert({
-      catalog_item_id: catalogItemId,
-      points_required: pointsRequired,
-      is_active: isActive,
-    });
-  }
+  // Không làm gì
 }
 
 // ============================================================
-// EXPIRY CHECK
+// EXPIRY
 // ============================================================
 
 export async function processExpiry(): Promise<number> {
   const config = await getConfig();
+  if (!config.enabled || config.mode === 'OFF' || !config.expiry_months) return 0;
 
-  if (!config.enabled || config.mode === 'OFF') {
-    return 0;
-  }
-
-  if (!config.expiry_months) {
-    return 0;
-  }
-
-  // Thêm organization_id, branch_id vào select
   const { data: accounts, error } = await supabase
     .from('loyalty_accounts')
-    .select('id, customer_id, balance, organization_id, branch_id')
+    .select('id, customer_id, sessions_balance, points_balance, organization_id, branch_id')
     .lt('expires_at', new Date().toISOString())
-    .gt('balance', 0);
+    .gt('sessions_balance', 0)
+    .or('points_balance.gt.0');
 
   if (error) {
     console.error('Error finding expired accounts:', error);
@@ -639,12 +623,14 @@ export async function processExpiry(): Promise<number> {
   }
 
   let count = 0;
-
   for (const account of accounts || []) {
+    const newSessions = 0;
+    const newPoints = 0;
     await supabase
       .from('loyalty_accounts')
       .update({
-        balance: 0,
+        sessions_balance: newSessions,
+        points_balance: newPoints,
         updated_at: new Date().toISOString(),
       })
       .eq('id', account.id);
@@ -652,25 +638,19 @@ export async function processExpiry(): Promise<number> {
     await supabase.from('loyalty_transactions').insert({
       loyalty_account_id: account.id,
       transaction_type: 'EXPIRY',
-      amount: -(account.balance || 0),
+      amount: -(account.sessions_balance + account.points_balance),
       balance_after: 0,
       source_type: 'EXPIRY',
       note: `Expired points/sessions`,
       created_at: new Date().toISOString(),
-      created_by: null,                          // 👈 Thêm
-      organization_id: account.organization_id,  // 👈 Thêm
-      branch_id: account.branch_id,              // 👈 Thêm
+      created_by: null,
+      organization_id: account.organization_id,
+      branch_id: account.branch_id,
     });
-
     count++;
   }
-
   return count;
 }
-
-// ============================================================
-// CHECK EXPIRY ON LOAD
-// ============================================================
 
 export async function checkExpiryOnLoad(): Promise<void> {
   try {

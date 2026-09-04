@@ -20,7 +20,6 @@ export default function RedeemModal({ customerId, wallet, onClose, onSuccess, st
   const [submitting, setSubmitting] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);
 
-  // Lấy staffId từ prop hoặc context
   const staffId = propStaffId || currentStaff?.id;
 
   useEffect(() => {
@@ -45,7 +44,6 @@ export default function RedeemModal({ customerId, wallet, onClose, onSuccess, st
       return;
     }
 
-    // Kiểm tra staffId trước khi gọi redeem
     const finalStaffId = staffId;
     if (!finalStaffId) {
       console.error('❌ staffId is null/undefined');
@@ -74,16 +72,28 @@ export default function RedeemModal({ customerId, wallet, onClose, onSuccess, st
   };
 
   const mode = wallet.mode;
-  const balance = wallet.balance;
+  const sessionsBalance = wallet.sessions_balance || 0;
+  const pointsBalance = wallet.points_balance || 0;
 
-  // SESSIONS: cần sessions_required để đổi 1 phần thưởng
-  // POINTS: cần price của item
+  // Xác định eligible dựa trên mode
   const isEligible = (item: any) => {
     if (mode === 'SESSIONS') {
-      return balance >= (wallet.sessions_required || 1);
+      const required = wallet.sessions_required || 1;
+      return sessionsBalance >= required;
+    } else if (mode === 'POINTS') {
+      return pointsBalance >= (item.loyalty_points || 0);
     }
-    // POINTS: so sánh balance >= price
-    return balance >= (item.price || 0);
+    return false;
+  };
+
+  // Lấy số lượng cần dùng để hiển thị
+  const getRequiredAmount = (item: any) => {
+    if (mode === 'SESSIONS') {
+      return wallet.sessions_required || 1;
+    } else if (mode === 'POINTS') {
+      return item.loyalty_points || 0;
+    }
+    return 0;
   };
 
   const displayItems = items.filter((item) => item.status === 'ACTIVE');
@@ -100,31 +110,42 @@ export default function RedeemModal({ customerId, wallet, onClose, onSuccess, st
           </button>
         </div>
 
-        <div className="mt-4 mb-3 p-3 bg-slate-50 rounded-xl">
-          <p className="text-sm text-slate-600">
-            {mode === 'SESSIONS' ? '🎁 Số buổi hiện có:' : '⭐ Điểm hiện có:'}
-            <span className="font-bold text-purple-700 ml-2">{balance}</span>
-          </p>
+        <div className="mt-4 mb-3 p-3 bg-slate-50 rounded-xl space-y-1">
           {mode === 'SESSIONS' && (
-            <p className="text-xs text-slate-500 mt-1">
-              Cần <strong>{wallet.sessions_required || 1} buổi</strong> để đổi <strong>1 phần thưởng</strong>
-            </p>
+            <>
+              <p className="text-sm text-slate-600">
+                🎁 Số buổi hiện có: <span className="font-bold text-purple-700">{sessionsBalance}</span>
+              </p>
+              <p className="text-xs text-slate-500">
+                Cần <strong>{wallet.sessions_required || 1} buổi</strong> để đổi <strong>1 phần thưởng</strong>
+              </p>
+            </>
           )}
           {mode === 'POINTS' && (
-            <p className="text-xs text-slate-500 mt-1">
-              Giá trị mỗi điểm = 1đ. Bạn có thể đổi sản phẩm/dịch vụ có giá ≤ {balance} điểm.
-            </p>
+            <>
+              <p className="text-sm text-slate-600">
+                ⭐ Điểm hiện có: <span className="font-bold text-purple-700">{pointsBalance}</span>
+              </p>
+              <p className="text-xs text-slate-500">
+                Mỗi điểm = 1đ. Giá trị điểm được xác định trên từng dịch vụ/sản phẩm trong Catalog.
+              </p>
+            </>
           )}
         </div>
 
         {loading ? (
           <div className="text-center py-8 text-slate-500">Đang tải...</div>
         ) : displayItems.length === 0 ? (
-          <div className="text-center py-8 text-slate-400">Không có phần thưởng nào phù hợp.</div>
+          <div className="text-center py-8 text-slate-400">
+            {mode === 'POINTS'
+              ? 'Chưa có dịch vụ/sản phẩm nào được cấu hình điểm đổi.'
+              : 'Không có phần thưởng nào phù hợp với chế độ SESSIONS.'}
+          </div>
         ) : (
           <div className="space-y-2 max-h-64 overflow-y-auto">
             {displayItems.map((item) => {
               const eligible = isEligible(item);
+              const required = getRequiredAmount(item);
               const isSelected = selectedItem?.id === item.id;
 
               return (
@@ -145,11 +166,10 @@ export default function RedeemModal({ customerId, wallet, onClose, onSuccess, st
                       {eligible && <div className="text-xs text-emerald-500 font-medium">✅ Đủ</div>}
                     </div>
                   </div>
-                  {mode === 'POINTS' && eligible && (
-                    <div className="text-xs text-purple-600 mt-1">
-                      Giá: {item.price} điểm
-                    </div>
-                  )}
+                  <div className="text-xs text-purple-600 mt-1">
+                    {mode === 'SESSIONS' && `Cần: ${required} buổi`}
+                    {mode === 'POINTS' && `Cần: ${required} điểm`}
+                  </div>
                 </div>
               );
             })}

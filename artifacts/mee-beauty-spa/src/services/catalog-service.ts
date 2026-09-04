@@ -1,3 +1,4 @@
+// src/services/catalog-service.ts
 import { supabase, DEFAULT_ORG_ID, DEFAULT_BRANCH_ID } from "./supabase";
 import {
   ServiceItem,
@@ -149,6 +150,7 @@ export async function fetchServices(): Promise<ServiceItem[]> {
       performance_commission_type: perfType,
       performance_commission_value: perfVal,
       performance_commission_rate: perfType === "PERCENT" ? perfVal : 0,
+      loyalty_points: item.loyalty_points ?? 0, // 👈 THÊM DÒNG NÀY
     };
   });
 }
@@ -164,6 +166,7 @@ export async function createService(payload: {
   sales_commission_value?: number;
   performance_commission_type?: CommissionType;
   performance_commission_value?: number;
+  loyalty_points?: number; // 👈 THÊM
 }): Promise<ServiceItem> {
   const salesType = payload.sales_commission_type || "PERCENT";
   const salesVal = Math.max(0, payload.sales_commission_value || 0);
@@ -185,6 +188,7 @@ export async function createService(payload: {
       description: payload.description || null,
       price: payload.price,
       status: "ACTIVE",
+      loyalty_points: payload.loyalty_points ?? 0, // 👈 THÊM
     })
     .select()
     .single();
@@ -234,6 +238,7 @@ export async function updateService(
     sales_commission_value?: number;
     performance_commission_type?: CommissionType;
     performance_commission_value?: number;
+    loyalty_points?: number; // 👈 THÊM
   },
 ): Promise<void> {
   const salesType = payload.sales_commission_type || "PERCENT";
@@ -252,6 +257,7 @@ export async function updateService(
       category: payload.category || null,
       description: payload.description || null,
       price: payload.price,
+      loyalty_points: payload.loyalty_points ?? 0, // 👈 THÊM
     })
     .eq("id", catalogItemId)
     .eq("organization_id", DEFAULT_ORG_ID);
@@ -351,6 +357,7 @@ export async function fetchProducts(): Promise<ProductItem[]> {
       unit: pDetail?.unit ?? "cái",
       sales_commission_type: salesType,
       sales_commission_value: salesVal,
+      loyalty_points: item.loyalty_points ?? 0, // 👈 THÊM
     };
   });
 }
@@ -368,6 +375,7 @@ export async function createProduct(payload: {
   unit: string;
   sales_commission_type?: CommissionType;
   sales_commission_value?: number;
+  loyalty_points?: number; // 👈 THÊM
 }): Promise<ProductItem> {
   const salesType = payload.sales_commission_type || "PERCENT";
   const salesVal = Math.max(0, payload.sales_commission_value || 0);
@@ -385,6 +393,7 @@ export async function createProduct(payload: {
       description: payload.description || null,
       price: payload.selling_price,
       status: "ACTIVE",
+      loyalty_points: payload.loyalty_points ?? 0, // 👈 THÊM
     })
     .select()
     .single();
@@ -438,6 +447,7 @@ export async function updateProduct(
     unit: string;
     sales_commission_type?: CommissionType;
     sales_commission_value?: number;
+    loyalty_points?: number; // 👈 THÊM
   },
 ): Promise<void> {
   const salesType = payload.sales_commission_type || "PERCENT";
@@ -451,6 +461,7 @@ export async function updateProduct(
       category: payload.category || null,
       description: payload.description || null,
       price: payload.selling_price,
+      loyalty_points: payload.loyalty_points ?? 0, // 👈 THÊM
     })
     .eq("id", catalogItemId)
     .eq("organization_id", DEFAULT_ORG_ID);

@@ -22,6 +22,7 @@ export interface CatalogItem {
   description?: string | null;
   price: number;
   status: CatalogStatus;
+  loyalty_points?: number;
 }
 
 // Bảng services mở rộng
