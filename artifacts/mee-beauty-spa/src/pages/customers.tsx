@@ -26,6 +26,7 @@ import {
   ServiceSession,
   Invoice,
   PhotoType,
+  CustomerServiceEntitlement,
 } from "../types/domain";
 import {
   fetchCustomers,
@@ -43,6 +44,8 @@ import {
   fetchCustomerStats,
   isValidPhone,
   isPhoneExists,
+  fetchCustomerServiceEntitlements,
+  useServiceEntitlement,
 } from "../services/customer.service";
 import {
   User,
@@ -152,10 +155,12 @@ export function CustomerProfilePage({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Tab 3: Packages
+  // Tab 3: Packages + Entitlements
   const [packages, setPackages] = useState<CustomerPackage[]>([]);
+  const [entitlements, setEntitlements] = useState<CustomerServiceEntitlement[]>([]);
   const [loadingPackages, setLoadingPackages] = useState<boolean>(false);
   const [usingSessionId, setUsingSessionId] = useState<string | null>(null);
+  const [usingEntitlementId, setUsingEntitlementId] = useState<string | null>(null);
 
   const [editPackageModal, setEditPackageModal] = useState<{
     isOpen: boolean;
@@ -289,7 +294,7 @@ export function CustomerProfilePage({
         balance: wallet.balance || 0,
         mode: wallet.mode || 'OFF',
         isEligible: wallet.isEligible || false,
-        sessions_required: wallet.sessions_required || 0, // 👈 THÊM DÒNG NÀY
+        sessions_required: wallet.sessions_required || 0,
       });
       if (cust) {
         setEditFormData({
@@ -322,15 +327,21 @@ export function CustomerProfilePage({
     }
   };
 
-  const loadPackages = async () => {
+  // Gộp load packages và entitlements
+  const loadBenefits = async () => {
     if (!customerId) return;
     setLoadingPackages(true);
     try {
-      const data = await fetchCustomerPackageWithItems(customerId);
-      setPackages(data);
+      const [pkgs, ents] = await Promise.all([
+        fetchCustomerPackageWithItems(customerId),
+        fetchCustomerServiceEntitlements(customerId),
+      ]);
+      setPackages(pkgs);
+      setEntitlements(ents);
     } catch (err) {
-      console.error("Lỗi tải gói liệu trình:", err);
+      console.error("Lỗi tải gói và quà tặng:", err);
       setPackages([]);
+      setEntitlements([]);
     } finally {
       setLoadingPackages(false);
     }
@@ -364,13 +375,20 @@ export function CustomerProfilePage({
     }
   };
 
+  // Gộp tất cả load khi có customerId
   useEffect(() => {
     if (customerId) {
-      loadCustomerDetails();
-      loadPhotos();
-      loadPackages();
-      loadHistory();
-      loadInvoices();
+      // Chạy song song các tác vụ không phụ thuộc
+      const loadAll = async () => {
+        await Promise.all([
+          loadCustomerDetails(),
+          loadPhotos(),
+          loadBenefits(),
+          loadHistory(),
+          loadInvoices(),
+        ]);
+      };
+      loadAll();
     }
   }, [customerId]);
 
@@ -472,7 +490,7 @@ export function CustomerProfilePage({
         alert(result.message);
       }
       await Promise.all([
-        loadPackages(),
+        loadBenefits(),
         loadHistory(),
         loadCustomerDetails(),
       ]);
@@ -480,6 +498,24 @@ export function CustomerProfilePage({
       alert(err.message || "Thao tác thất bại");
     } finally {
       setUsingSessionId(null);
+    }
+  };
+
+  // Handler sử dụng quà tặng (entitlement)
+  const handleUseEntitlement = async (entitlementId: string) => {
+    if (!window.confirm('Xác nhận sử dụng 1 buổi quà tặng?')) return;
+    setUsingEntitlementId(entitlementId);
+    try {
+      const result = await useServiceEntitlement(entitlementId);
+      if (result.success) {
+        await loadBenefits();
+      } else {
+        alert(result.message);
+      }
+    } catch (err: any) {
+      alert(err.message || 'Lỗi sử dụng quà tặng');
+    } finally {
+      setUsingEntitlementId(null);
     }
   };
 
@@ -506,7 +542,7 @@ export function CustomerProfilePage({
         .eq("id", editPackageModal.pkg.id);
       if (error) throw error;
       setEditPackageModal({ isOpen: false, pkg: null });
-      await loadPackages();
+      await loadBenefits();
     } catch (err: any) {
       alert(err.message || "Lỗi cập nhật package");
     }
@@ -873,17 +909,18 @@ export function CustomerProfilePage({
       {/* TAB 3: LIỆU TRÌNH */}
       {activeTab === "packages" && (
         <Panel>
-          <PanelHeader title="Danh sách gói liệu trình" />
+          <PanelHeader title="Danh sách gói liệu trình và quà tặng" />
           <PanelContent>
             {loadingPackages ? (
               <Spinner className="py-8" />
-            ) : packages.length === 0 ? (
+            ) : packages.length === 0 && entitlements.length === 0 ? (
               <EmptyState
-                title="Chưa có gói liệu trình"
-                description="Khách hàng chưa mua gói dịch vụ nào."
+                title="Chưa có liệu trình"
+                description="Khách hàng chưa có gói hoặc quà tặng nào."
               />
             ) : (
               <div className="space-y-4">
+                {/* Packages */}
                 {packages.map((pkg) => {
                   const usedSessions = pkg.total_sessions - pkg.remaining_sessions;
                   const isDepleted = pkg.remaining_sessions <= 0;
@@ -984,6 +1021,41 @@ export function CustomerProfilePage({
                     </div>
                   );
                 })}
+
+                {/* Quà tặng dịch vụ (entitlements) */}
+                {entitlements.length > 0 && (
+                  <div className="mt-4 border-t pt-4">
+                    <h4 className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                      <Gift className="w-4 h-4 text-purple-600" />
+                      Quà tặng dịch vụ ({entitlements.length})
+                    </h4>
+                    <div className="space-y-2 mt-2">
+                      {entitlements.map((ent) => {
+                        const serviceName = ent.services?.catalog_item?.name || 'Dịch vụ';
+                        const remaining = ent.remaining_quantity || 0;
+                        return (
+                          <div key={ent.id} className="bg-purple-50 border border-purple-200 rounded-lg p-3 flex items-center justify-between">
+                            <div>
+                              <div className="text-sm font-medium text-purple-800">{serviceName}</div>
+                              <div className="text-xs text-purple-600">Còn {remaining} buổi</div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {remaining > 0 && (
+                                <button
+                                  onClick={() => handleUseEntitlement(ent.id)}
+                                  disabled={usingEntitlementId === ent.id}
+                                  className="px-3 py-1.5 bg-purple-700 text-white text-xs font-bold rounded hover:bg-purple-800 disabled:opacity-50"
+                                >
+                                  {usingEntitlementId === ent.id ? 'Đang xử lý...' : 'Sử dụng'}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </PanelContent>
@@ -1436,28 +1508,34 @@ export function CustomersPage() {
       const data = await fetchCustomers();
       setCustomers(data || []);
 
-      const badges: Record<string, { hasPackage: boolean; hasGift: boolean }> = {};
-      for (const c of data || []) {
-        const pkgs = await fetchCustomerPackages(c.id);
-        badges[c.id] = {
-          hasPackage: pkgs.some((p) => p.status === "ACTIVE" && p.remaining_sessions > 0),
-          hasGift: pkgs.some((p) => p.is_gift === true),
-        };
-      }
-      setCustomerBadges(badges);
+      // Lấy tất cả customer packages một lần thay vì N+1
+      const customerIds = data.map(c => c.id);
+      if (customerIds.length > 0) {
+        const { data: packages, error } = await supabase
+          .from('customer_packages')
+          .select('customer_id, status, remaining_sessions, is_gift')
+          .in('customer_id', customerIds);
 
-      // === LOAD LOYALTY STATUS ===
-      const statusMap: Record<string, boolean> = {};
-      for (const c of data || []) {
-        try {
-          const wallet = await getWallet(c.id);
-          statusMap[c.id] = wallet.isEligible || false;
-        } catch (err) {
-          console.error('Lỗi lấy loyalty wallet cho khách', c.id, err);
-          statusMap[c.id] = false;
+        if (!error && packages) {
+          const badges: Record<string, { hasPackage: boolean; hasGift: boolean }> = {};
+          packages.forEach(pkg => {
+            if (!badges[pkg.customer_id]) {
+              badges[pkg.customer_id] = { hasPackage: false, hasGift: false };
+            }
+            if (pkg.status === 'ACTIVE' && pkg.remaining_sessions > 0) {
+              badges[pkg.customer_id].hasPackage = true;
+            }
+            if (pkg.is_gift === true) {
+              badges[pkg.customer_id].hasGift = true;
+            }
+          });
+          setCustomerBadges(badges);
         }
       }
-      setLoyaltyStatus(statusMap);
+
+      // Tối ưu: không load loyalty status cho từng customer ở list (để tránh N+1)
+      // Nếu cần, có thể bỏ qua hoặc load sau. Tạm thời set rỗng.
+      setLoyaltyStatus({});
     } catch (err) {
       console.error("Lỗi lấy danh sách khách hàng:", err);
     } finally {
@@ -1621,10 +1699,7 @@ export function CustomersPage() {
                             {item.full_name || item.name}
                           </p>
                           <div className="flex items-center gap-2 shrink-0">
-                            {/* 👇 LOYALTY ICON - sáng khi đủ điều kiện */}
-                            {loyaltyStatus[item.id] && (
-                              <span className="text-purple-500 text-lg" title="Đủ điều kiện Loyalty">🎁</span>
-                            )}
+                            {/* Có thể bỏ loyalty icon nếu không load status */}
                             {badges.hasPackage && (
                               <button
                                 onClick={(e) => {

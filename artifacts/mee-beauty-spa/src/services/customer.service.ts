@@ -592,6 +592,76 @@ export async function fetchCustomerServiceEntitlements(customerId: string): Prom
   return data || [];
 }
 
+// ============ SERVICE ENTITLEMENT USAGE ============
+
+export async function useServiceEntitlement(
+  entitlementId: string,
+  staffId?: string,
+  notes?: string
+): Promise<{ success: boolean; message: string; remaining_quantity: number }> {
+  try {
+    const { data: ent, error: fetchErr } = await supabase
+      .from('customer_service_entitlements')
+      .select('*, customer_id, service_id, catalog_item_id, remaining_quantity, used_quantity, organization_id, branch_id')
+      .eq('id', entitlementId)
+      .single();
+
+    if (fetchErr || !ent) {
+      return { success: false, message: 'Không tìm thấy quà tặng', remaining_quantity: 0 };
+    }
+
+    if (ent.remaining_quantity <= 0) {
+      return { success: false, message: 'Quà tặng đã hết buổi', remaining_quantity: 0 };
+    }
+
+    const { data: updatedEnt, error: updateErr } = await supabase
+      .from('customer_service_entitlements')
+      .update({
+        used_quantity: ent.used_quantity + 1,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', entitlementId)
+      .select('*, remaining_quantity')
+      .single();
+
+    if (updateErr) {
+      return { success: false, message: updateErr.message, remaining_quantity: 0 };
+    }
+
+    const { error: sessionErr } = await supabase
+      .from('service_sessions')
+      .insert({
+        customer_id: ent.customer_id,
+        catalog_item_id: ent.catalog_item_id,
+        staff_id: staffId || null,
+        source_type: 'GIFT',
+        package_id: null,
+        price_charged: 0,
+        notes: notes || `Sử dụng quà tặng, entitlement ${entitlementId}`,
+        performed_at: new Date().toISOString(),
+        organization_id: ent.organization_id,
+        branch_id: ent.branch_id,
+      });
+
+    if (sessionErr) {
+      // Rollback
+      await supabase
+        .from('customer_service_entitlements')
+        .update({ used_quantity: ent.used_quantity })
+        .eq('id', entitlementId);
+      return { success: false, message: sessionErr.message, remaining_quantity: 0 };
+    }
+
+    return {
+      success: true,
+      message: 'Đã sử dụng 1 buổi quà tặng',
+      remaining_quantity: updatedEnt.remaining_quantity
+    };
+  } catch (err: any) {
+    return { success: false, message: err.message, remaining_quantity: 0 };
+  }
+}
+
 // ============ EXPORTS ============
 
 export const getCustomers = fetchCustomers;
@@ -624,7 +694,8 @@ export const customerService = {
   isValidPhone,
   isPhoneExists,
   payCustomerDebt,
-  fetchCustomerServiceEntitlements,  // 👈 THÊM DÒNG NÀY
+  fetchCustomerServiceEntitlements,
+  useServiceEntitlement,   // Thêm hàm mới
 };
 
 export default customerService;

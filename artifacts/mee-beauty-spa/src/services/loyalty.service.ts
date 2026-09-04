@@ -2,8 +2,11 @@
 import { supabase, DEFAULT_ORG_ID, DEFAULT_BRANCH_ID } from './supabase';
 import { settingsService } from './settings.service';
 import type { LoyaltyConfig, LoyaltyAccount, LoyaltyTransaction, LoyaltyWallet, LoyaltyRedeemConfig } from '@/types/loyalty';
+import { getCache, setCache } from './cache.service';
 
 const LOYALTY_CONFIG_KEY = 'loyalty_config';
+const LOYALTY_CONFIG_CACHE_KEY = 'loyalty_config_cache';
+const CACHE_TTL = 30; // 30 giây
 
 // ============================================================
 // HELPER: Map mode từ config → database enum
@@ -30,6 +33,9 @@ function mapDbModeToUiMode(dbMode: string, fallbackMode: string): string {
 // ============================================================
 
 export async function getConfig(): Promise<LoyaltyConfig> {
+  const cached = getCache<LoyaltyConfig>(LOYALTY_CONFIG_CACHE_KEY, CACHE_TTL);
+  if (cached) return cached;
+
   const defaultConfig: LoyaltyConfig = {
     enabled: false,
     mode: 'OFF',
@@ -42,10 +48,9 @@ export async function getConfig(): Promise<LoyaltyConfig> {
 
   try {
     const saved = await settingsService.getConfig(LOYALTY_CONFIG_KEY);
-    if (saved) {
-      return { ...defaultConfig, ...saved };
-    }
-    return defaultConfig;
+    const config = saved ? { ...defaultConfig, ...saved } : defaultConfig;
+    setCache(LOYALTY_CONFIG_CACHE_KEY, config);
+    return config;
   } catch (err) {
     console.error('Lỗi tải config Loyalty:', err);
     return defaultConfig;
@@ -54,6 +59,9 @@ export async function getConfig(): Promise<LoyaltyConfig> {
 
 export async function saveConfig(config: LoyaltyConfig): Promise<void> {
   await settingsService.setConfig(LOYALTY_CONFIG_KEY, config);
+  // Invalidate cache sau khi lưu
+  const { invalidateCache } = await import('./cache.service');
+  invalidateCache(LOYALTY_CONFIG_CACHE_KEY);
 }
 
 // ============================================================
