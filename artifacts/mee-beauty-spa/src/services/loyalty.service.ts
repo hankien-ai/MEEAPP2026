@@ -182,7 +182,7 @@ export async function getTransactions(
 }
 
 // ============================================================
-// EARN – ĐÃ SỬA
+// EARN
 // ============================================================
 
 export async function earnFromInvoice(invoiceId: string): Promise<void> {
@@ -349,8 +349,9 @@ export async function earnFromInvoice(invoiceId: string): Promise<void> {
       source_type: 'INVOICE',
       note: `Earn from invoice ${invoiceId}`,
       created_at: new Date().toISOString(),
-      organization_id: account.organization_id,  // 👈 THÊM
-      branch_id: account.branch_id,  
+      created_by: null,                           // 👈 SET NULL để tránh lỗi FK
+      organization_id: account.organization_id,
+      branch_id: account.branch_id,
     });
 
   if (txError) {
@@ -438,10 +439,13 @@ export async function adjust(
     balance_after: newBalance,
     source_type: 'ADMIN',
     note: note.trim(),
-    created_by: staffId,
+    created_by: null,                           // 👈 Đổi từ staffId thành null
     created_at: new Date().toISOString(),
+    organization_id: account.organization_id,   // 👈 Thêm
+    branch_id: account.branch_id,               // 👈 Thêm
   });
 }
+
 // ============================================================
 // REFUND / REVERSAL
 // ============================================================
@@ -482,9 +486,10 @@ export async function processRefund(invoiceId: string): Promise<void> {
     return;
   }
 
+  // Lấy thêm organization_id và branch_id từ account
   const { data: account, error: accError } = await supabase
     .from('loyalty_accounts')
-    .select('id, balance')
+    .select('id, balance, organization_id, branch_id')  // 👈 Thêm 2 trường
     .eq('id', earnTx.loyalty_account_id)
     .single();
 
@@ -513,6 +518,9 @@ export async function processRefund(invoiceId: string): Promise<void> {
     reversal_of: earnTx.id,
     note: `Reversal of invoice ${invoiceId}`,
     created_at: new Date().toISOString(),
+    created_by: null,                            // 👈 Thêm (rõ ràng)
+    organization_id: account.organization_id,    // 👈 Thêm
+    branch_id: account.branch_id,                // 👈 Thêm
   });
 }
 
@@ -610,9 +618,10 @@ export async function processExpiry(): Promise<number> {
     return 0;
   }
 
+  // Thêm organization_id, branch_id vào select
   const { data: accounts, error } = await supabase
     .from('loyalty_accounts')
-    .select('id, customer_id, balance')
+    .select('id, customer_id, balance, organization_id, branch_id')
     .lt('expires_at', new Date().toISOString())
     .gt('balance', 0);
 
@@ -640,6 +649,9 @@ export async function processExpiry(): Promise<number> {
       source_type: 'EXPIRY',
       note: `Expired points/sessions`,
       created_at: new Date().toISOString(),
+      created_by: null,                          // 👈 Thêm
+      organization_id: account.organization_id,  // 👈 Thêm
+      branch_id: account.branch_id,              // 👈 Thêm
     });
 
     count++;
