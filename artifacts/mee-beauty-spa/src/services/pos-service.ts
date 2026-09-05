@@ -15,8 +15,6 @@ import { catalogService } from "./catalog-service";
 import { customerService } from "./customer.service";
 
 export class POSService {
-  // ❌ ĐÃ XÓA hàm getLoggedInStaff()
-
   static async searchCustomers(query: string): Promise<Customer[]> {
     if (!query.trim()) return [];
     try {
@@ -138,9 +136,7 @@ export class POSService {
 
   static async createDraftInvoice(payload: CreateInvoicePayload): Promise<CheckoutResult> {
     try {
-      // ✅ KHÔNG gọi getLoggedInStaff, dùng seller_staff_id từ payload
       const sellerStaffId = payload.seller_staff_id || null;
-
       const paymentMethod = payload.is_gift ? null : payload.payment_method;
 
       const { data: invoice, error: invoiceErr } = await supabase
@@ -189,7 +185,6 @@ export class POSService {
 
   static async processCheckout(cartItems: CartItem[], payload: CheckoutPayload): Promise<CheckoutResult> {
     try {
-      // ✅ KHÔNG gọi getLoggedInStaff, dùng seller_staff_id từ payload
       const defaultSellerId = payload.seller_staff_id || null;
 
       // ============ VALIDATION ============
@@ -244,8 +239,6 @@ export class POSService {
         is_gift: payload.is_gift || false,
       };
 
-      console.log("🧾 INSERT INVOICE PAYLOAD:", JSON.stringify(invoiceData, null, 2));
-
       const { data: invoice, error: invoiceErr } = await supabase
         .from("invoices")
         .insert(invoiceData)
@@ -253,13 +246,7 @@ export class POSService {
         .single();
 
       if (invoiceErr || !invoice) {
-        console.error("❌❌❌ INVOICE INSERT ERROR FULL:", {
-          code: invoiceErr.code,
-          message: invoiceErr.message,
-          details: invoiceErr.details,
-          hint: invoiceErr.hint,
-          payload: invoiceData,
-        });
+        console.error("❌ INVOICE INSERT ERROR:", invoiceErr);
         return { success: false, error: invoiceErr?.message || "Lỗi khi tạo hóa đơn" };
       }
 
@@ -309,14 +296,14 @@ export class POSService {
             invoice_id: invoice.id,
             is_gift: true,
           };
-          const { error } = await supabase
+          const { error: entErr } = await supabase
             .from('customer_service_entitlements')
             .insert(entitlementPayload);
-          if (error) {
+          if (entErr) {
             await supabase.from('invoice_items').delete().eq('invoice_id', invoice.id);
             await supabase.from('invoices').delete().eq('id', invoice.id);
-            console.error("❌ Gift entitlement error:", error);
-            return { success: false, error: `Không thể tạo quyền lợi Gift: ${error.message}` };
+            console.error("❌ Gift entitlement error:", entErr);
+            return { success: false, error: `Không thể tạo quyền lợi Gift: ${entErr.message}` };
           }
         }
 
@@ -324,9 +311,10 @@ export class POSService {
           packageInvoiceItemMap.set(item.package_id, invItem.id);
         }
 
-        // ============ GIFT ENTITLEMENT USAGE ============
+        // ============ GIFT ENTITLEMENT USAGE (từ Loyalty Redeem) ============
         if (item.use_gift_entitlement && item.gift_entitlement_id && item.actual_service_id) {
           try {
+            // 1. Lấy entitlement hiện tại
             const { data: current, error: getErr } = await supabase
               .from('customer_service_entitlements')
               .select('used_quantity, remaining_quantity')
@@ -341,20 +329,30 @@ export class POSService {
               return { success: false, error: 'Quà tặng đã hết' };
             }
 
+            // 2. Cập nhật used_quantity
             const newUsed = current.used_quantity + 1;
-            const { data: updatedEnt, error: updateErr } = await supabase
+            const { error: updateErr } = await supabase
               .from('customer_service_entitlements')
               .update({
                 used_quantity: newUsed,
                 updated_at: new Date().toISOString()
               })
-              .eq('id', item.gift_entitlement_id)
-              .select()
-              .single();
+              .eq('id', item.gift_entitlement_id);
 
             if (updateErr) {
               console.error("❌ Lỗi cập nhật gift entitlement:", updateErr);
               return { success: false, error: `Không thể sử dụng quà tặng: ${updateErr.message}` };
+            }
+
+            // 3. Tạo service_session (ghi nhận lịch sử)
+            // Lấy staff_id từ performing_staff_id hoặc ktv_splits
+            let staffId = item.performing_staff_id || null;
+            if (!staffId && item.ktv_splits && item.ktv_splits.length > 0) {
+              staffId = item.ktv_splits[0].staff_id;
+            }
+            // Fallback: lấy seller_staff_id
+            if (!staffId) {
+              staffId = item.seller_staff_id || defaultSellerId;
             }
 
             const { error: sessErr } = await supabase
@@ -364,7 +362,7 @@ export class POSService {
                 branch_id: DEFAULT_BRANCH_ID,
                 customer_id: payload.customer_id,
                 catalog_item_id: item.catalog_item_id,
-                staff_id: item.performing_staff_id || null,
+                staff_id: staffId,
                 source_type: 'GIFT',
                 package_id: null,
                 price_charged: 0,
@@ -373,16 +371,16 @@ export class POSService {
               });
 
             if (sessErr) {
+              // Rollback: giảm used_quantity
               await supabase
                 .from('customer_service_entitlements')
-                .update({
-                  used_quantity: current.used_quantity,
-                  updated_at: new Date().toISOString()
-                })
+                .update({ used_quantity: current.used_quantity })
                 .eq('id', item.gift_entitlement_id);
               return { success: false, error: `Không thể tạo lịch sử dịch vụ: ${sessErr.message}` };
             }
 
+            // 4. Tính hoa hồng KTV (performance) cho gift entitlement
+            // Lấy performance commission từ service
             const { data: serviceDetail, error: serviceErr } = await supabase
               .from('services')
               .select('performance_commission_type, performance_commission_value')
@@ -407,18 +405,25 @@ export class POSService {
               }
             }
 
+            // Nếu có hoa hồng và có KTV splits, tạo commission
             if (totalPerformanceComm > 0 && item.ktv_splits && item.ktv_splits.length > 0) {
               const splits = item.ktv_splits.map(split => ({
                 organization_id: DEFAULT_ORG_ID,
                 branch_id: DEFAULT_BRANCH_ID,
                 staff_id: split.staff_id,
-                invoice_item_id: null,
+                invoice_item_id: invItem.id, // hoặc null nếu không muốn liên kết
                 commission_type: 'PERFORMANCE',
                 amount: Math.round((totalPerformanceComm * split.share_percent) / 100),
               })).filter(c => c.amount > 0);
 
               if (splits.length > 0) {
-                await supabase.from('staff_commissions').insert(splits).catch(e => console.error(e));
+                const { error: commErr } = await supabase
+                  .from('staff_commissions')
+                  .insert(splits);
+                if (commErr) {
+                  console.error("❌ Lỗi tạo commission cho gift entitlement:", commErr);
+                  // Không throw, chỉ log
+                }
               }
             }
           } catch (err: any) {
@@ -427,7 +432,7 @@ export class POSService {
           }
         }
 
-        // ============ MULTI KTV ============
+        // ============ MULTI KTV (cho service lẻ) ============
         if (item.item_type === "SERVICE" && item.ktv_splits && item.ktv_splits.length > 0 && !item.use_package && item.total_amount > 0) {
           const splits = item.ktv_splits.map((s) => ({
             invoice_item_id: invItem.id,
@@ -438,11 +443,11 @@ export class POSService {
           try {
             await supabase.from("invoice_item_staff").insert(splits);
           } catch (err) {
-            console.warn("Không thể lưu KTV split, bỏ qua:", err);
+            console.warn("⚠️ Không thể lưu KTV split, bỏ qua:", err);
           }
         }
 
-        // ============ COMMISSION ============
+        // ============ COMMISSION SALE ============
         const isGift = item.is_gift || payload.is_gift;
         const isPackageUsage = item.use_package === true;
 
@@ -470,6 +475,7 @@ export class POSService {
           }
         }
 
+        // ============ COMMISSION PERFORMANCE cho service lẻ (không gift) ============
         if (item.item_type === "SERVICE" && !isGift && item.ktv_splits && item.ktv_splits.length > 0 && invItem?.id) {
           const servicePrice = item.unit_price || 0;
           if (servicePrice > 0) {
@@ -515,6 +521,7 @@ export class POSService {
               return { success: false, error: `Lỗi sử dụng package: ${result?.message}` };
             }
             try {
+              // Tạo package_usage log
               const { data: sessionData } = await supabase
                 .from("service_sessions")
                 .select("id")
@@ -778,13 +785,12 @@ export class POSService {
         }
       }
 
-      // ============ LOYALTY EARN (sau khi đã có items) ============
+      // ============ LOYALTY EARN ============
       try {
         const { earnFromInvoice } = await import('@/services/loyalty.service');
         await earnFromInvoice(invoice.id);
       } catch (err) {
         console.error('Loyalty earn error:', err);
-        // Không throw, không ảnh hưởng checkout
       }
 
       return { success: true, invoice_id: invoice.id };

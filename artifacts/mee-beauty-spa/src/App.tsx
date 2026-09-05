@@ -51,12 +51,16 @@ export function App() {
     if (visibility.dashboard) tabs.push("dashboard");
     if (visibility.customers) tabs.push("customers");
     if (visibility.pos) tabs.push("pos");
+    // Cho phép staff truy cập catalog
     if (isAdmin && visibility.catalog) tabs.push("catalog");
+    if (!isAdmin) tabs.push("catalog"); // staff luôn có catalog
     if (visibility.operations) tabs.push("operations");
     if (isAdmin && visibility.staff) tabs.push("staff");
     if (isAdmin && visibility.payroll) tabs.push("payroll");
     if (isAdmin && visibility.settings) tabs.push("settings");
+    // Cho phép staff truy cập invoices
     if (isAdmin) tabs.push("invoices");
+    if (!isAdmin) tabs.push("invoices"); // staff luôn có invoices
     if (isAdmin) tabs.push("reports");
     if (isAdmin) tabs.push("extension");
     if (isAdmin) tabs.push("appointments");
@@ -87,11 +91,13 @@ export function App() {
     if (visibility.customers) tabs.push("customers");
     if (visibility.pos) tabs.push("pos");
     if (isAdmin && visibility.catalog) tabs.push("catalog");
+    if (!isAdmin) tabs.push("catalog");
     if (visibility.operations) tabs.push("operations");
     if (isAdmin && visibility.staff) tabs.push("staff");
     if (isAdmin && visibility.payroll) tabs.push("payroll");
     if (isAdmin && visibility.settings) tabs.push("settings");
     if (isAdmin) tabs.push("invoices");
+    if (!isAdmin) tabs.push("invoices");
     if (isAdmin) tabs.push("reports");
     if (isAdmin) tabs.push("extension");
     if (isAdmin) tabs.push("appointments");

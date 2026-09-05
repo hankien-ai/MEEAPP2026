@@ -1,78 +1,79 @@
-// src/components/bottom-toolbar.tsx
-import React, { useState } from "react";
-import {
-  Home,
-  Users,
-  ShoppingCart,
-  UserCog,
-  Package,
-  MoreHorizontal,
-  Zap,
-  X,
-  BarChart3,
-  Settings, // <-- Thêm Settings
-} from "lucide-react";
+  // src/components/bottom-toolbar.tsx
+  import React, { useState } from "react";
+  import {
+    Home,
+    Users,
+    ShoppingCart,
+    UserCog,
+    Package,
+    MoreHorizontal,
+    Zap,
+    X,
+    BarChart3,
+    Settings,
+    FileText,
+  } from "lucide-react";
 
-interface BottomToolbarProps {
-  activeTab: string;
-  onSelectTab: (tab: string) => void;
-  userRole?: string | null;
-  visibleTabs?: string[];
-}
-
-export const BottomToolbar: React.FC<BottomToolbarProps> = ({
-  activeTab,
-  onSelectTab,
-  userRole = "staff",
-  visibleTabs = [],
-}) => {
-  const [isQuickOpen, setIsQuickOpen] = useState(false);
-
-  const normalizedRole = (userRole || "staff").toLowerCase();
-  const isAdmin = ["admin", "owner", "manager", "quan_ly"].includes(normalizedRole);
-
-  // ==========================================================
-  // STAFF – 5 nút cố định, không cần visibleTabs
-  // ==========================================================
-  if (!isAdmin) {
-    const staffModules = [
-      { id: "dashboard", label: "Trang chính", icon: Home },
-      { id: "customers", label: "Khách hàng", icon: Users },
-      { id: "pos", label: "POS", icon: ShoppingCart },
-      { id: "catalog", label: "Danh mục", icon: Package },
-      { id: "staff", label: "Nhân viên", icon: UserCog },
-    ];
-
-    return (
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-lg pb-[env(safe-area-inset-bottom,0px)]">
-        <div className="flex items-center justify-around h-16 px-2 max-w-screen-xl mx-auto">
-          {staffModules.map((mod) => {
-            const isCenter = mod.id === "pos";
-            const Icon = mod.icon;
-            const isActive = activeTab === mod.id;
-
-            return (
-              <button
-                key={mod.id}
-                onClick={() => onSelectTab(mod.id)}
-                className={`flex flex-col items-center justify-center transition-all ${
-                  isCenter
-                    ? "relative -top-5 w-16 h-16 rounded-full bg-gradient-to-br from-pink-500 to-rose-600 text-white shadow-2xl shadow-pink-500/40 border-4 border-white active:scale-95 hover:shadow-pink-500/60"
-                    : `py-1 ${isActive ? "text-pink-600 font-bold" : "text-slate-500 hover:text-slate-800"}`
-                }`}
-                style={isCenter ? { width: 64, height: 64 } : {}}
-              >
-                <Icon className={`${isCenter ? "w-7 h-7 fill-white/10" : "w-5 h-5 mb-0.5"}`} />
-                <span className={`${isCenter ? "text-[8px] font-black uppercase tracking-wider mt-0.5" : "text-[10px] tracking-tight"}`}>
-                  {isCenter ? "POS" : mod.label}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </nav>
-    );
+  interface BottomToolbarProps {
+    activeTab: string;
+    onSelectTab: (tab: string) => void;
+    userRole?: string | null;
+    visibleTabs?: string[];
   }
+
+  export const BottomToolbar: React.FC<BottomToolbarProps> = ({
+    activeTab,
+    onSelectTab,
+    userRole = "staff",
+    visibleTabs = [],
+  }) => {
+    const [isQuickOpen, setIsQuickOpen] = useState(false);
+
+    const normalizedRole = (userRole || "staff").toLowerCase();
+    const isAdmin = ["admin", "owner", "manager", "quan_ly"].includes(normalizedRole);
+
+    // ==========================================================
+    // STAFF – 5 nút: Trang chính, Khách hàng, POS, Hóa đơn, Danh mục
+    // ==========================================================
+    if (!isAdmin) {
+      const staffModules = [
+        { id: "dashboard", label: "Trang chính", icon: Home },
+        { id: "customers", label: "Khách hàng", icon: Users },
+        { id: "pos", label: "POS", icon: ShoppingCart },
+        { id: "invoices", label: "Hóa đơn", icon: FileText },
+        { id: "catalog", label: "Danh mục", icon: Package },
+      ];
+
+      return (
+        <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-lg pb-[env(safe-area-inset-bottom,0px)]">
+          <div className="flex items-center justify-around h-16 px-2 max-w-screen-xl mx-auto">
+            {staffModules.map((mod) => {
+              const isCenter = mod.id === "pos";
+              const Icon = mod.icon;
+              const isActive = activeTab === mod.id;
+
+              return (
+                <button
+                  key={mod.id}
+                  onClick={() => onSelectTab(mod.id)}
+                  className={`flex flex-col items-center justify-center transition-all ${
+                    isCenter
+                      ? "relative -top-5 w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-2xl shadow-blue-500/40 border-4 border-white active:scale-95 hover:shadow-blue-500/60"
+                      : `py-1 ${isActive ? "text-blue-600 font-bold" : "text-slate-500 hover:text-slate-800"}`
+                  }`}
+                  style={isCenter ? { width: 64, height: 64 } : {}}
+                >
+                  <Icon className={`${isCenter ? "w-7 h-7 fill-white/10" : "w-5 h-5 mb-0.5"}`} />
+                  <span className={`${isCenter ? "text-[8px] font-black uppercase tracking-wider mt-0.5" : "text-[10px] tracking-tight"}`}>
+                    {isCenter ? "POS" : mod.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+      );
+    }
 
   // ==========================================================
   // ADMIN – 5 vị trí: Home, Catalog, Quick, Staff, More

@@ -150,7 +150,7 @@ export async function fetchServices(): Promise<ServiceItem[]> {
       performance_commission_type: perfType,
       performance_commission_value: perfVal,
       performance_commission_rate: perfType === "PERCENT" ? perfVal : 0,
-      loyalty_points: item.loyalty_points ?? 0, // 👈 THÊM DÒNG NÀY
+      loyalty_points: item.loyalty_points ?? 0,
     };
   });
 }
@@ -166,7 +166,7 @@ export async function createService(payload: {
   sales_commission_value?: number;
   performance_commission_type?: CommissionType;
   performance_commission_value?: number;
-  loyalty_points?: number; // 👈 THÊM
+  loyalty_points?: number;
 }): Promise<ServiceItem> {
   const salesType = payload.sales_commission_type || "PERCENT";
   const salesVal = Math.max(0, payload.sales_commission_value || 0);
@@ -188,7 +188,7 @@ export async function createService(payload: {
       description: payload.description || null,
       price: payload.price,
       status: "ACTIVE",
-      loyalty_points: payload.loyalty_points ?? 0, // 👈 THÊM
+      loyalty_points: payload.loyalty_points ?? 0,
     })
     .select()
     .single();
@@ -238,7 +238,7 @@ export async function updateService(
     sales_commission_value?: number;
     performance_commission_type?: CommissionType;
     performance_commission_value?: number;
-    loyalty_points?: number; // 👈 THÊM
+    loyalty_points?: number;
   },
 ): Promise<void> {
   const salesType = payload.sales_commission_type || "PERCENT";
@@ -257,7 +257,7 @@ export async function updateService(
       category: payload.category || null,
       description: payload.description || null,
       price: payload.price,
-      loyalty_points: payload.loyalty_points ?? 0, // 👈 THÊM
+      loyalty_points: payload.loyalty_points ?? 0,
     })
     .eq("id", catalogItemId)
     .eq("organization_id", DEFAULT_ORG_ID);
@@ -357,7 +357,7 @@ export async function fetchProducts(): Promise<ProductItem[]> {
       unit: pDetail?.unit ?? "cái",
       sales_commission_type: salesType,
       sales_commission_value: salesVal,
-      loyalty_points: item.loyalty_points ?? 0, // 👈 THÊM
+      loyalty_points: item.loyalty_points ?? 0,
     };
   });
 }
@@ -375,7 +375,7 @@ export async function createProduct(payload: {
   unit: string;
   sales_commission_type?: CommissionType;
   sales_commission_value?: number;
-  loyalty_points?: number; // 👈 THÊM
+  loyalty_points?: number;
 }): Promise<ProductItem> {
   const salesType = payload.sales_commission_type || "PERCENT";
   const salesVal = Math.max(0, payload.sales_commission_value || 0);
@@ -393,7 +393,7 @@ export async function createProduct(payload: {
       description: payload.description || null,
       price: payload.selling_price,
       status: "ACTIVE",
-      loyalty_points: payload.loyalty_points ?? 0, // 👈 THÊM
+      loyalty_points: payload.loyalty_points ?? 0,
     })
     .select()
     .single();
@@ -447,7 +447,7 @@ export async function updateProduct(
     unit: string;
     sales_commission_type?: CommissionType;
     sales_commission_value?: number;
-    loyalty_points?: number; // 👈 THÊM
+    loyalty_points?: number;
   },
 ): Promise<void> {
   const salesType = payload.sales_commission_type || "PERCENT";
@@ -461,7 +461,7 @@ export async function updateProduct(
       category: payload.category || null,
       description: payload.description || null,
       price: payload.selling_price,
-      loyalty_points: payload.loyalty_points ?? 0, // 👈 THÊM
+      loyalty_points: payload.loyalty_points ?? 0,
     })
     .eq("id", catalogItemId)
     .eq("organization_id", DEFAULT_ORG_ID);
@@ -507,12 +507,14 @@ export async function deleteProduct(catalogItemId: string): Promise<void> {
   if (itemErr) throw itemErr;
 }
 
-// Gọi RPC thực hiện Nhập / Xuất / Điều chỉnh tồn kho
+// ==================== INVENTORY TRANSACTIONS ====================
+
 export async function processInventoryTransaction(input: {
   product_id: string;
   type: InventoryTransactionType;
   quantity: number;
   note?: string;
+  created_by?: string | null;
 }): Promise<void> {
   if (input.quantity <= 0) {
     throw new Error("Số lượng giao dịch phải lớn hơn 0");
@@ -523,6 +525,7 @@ export async function processInventoryTransaction(input: {
     p_transaction_type: input.type,
     p_quantity: input.quantity,
     p_note: input.note?.trim() || null,
+    p_created_by: input.created_by || null,
   });
 
   if (error) {
@@ -530,18 +533,38 @@ export async function processInventoryTransaction(input: {
   }
 }
 
-// Tải lịch sử biến động kho (mới nhất lên đầu)
+/**
+ * Lấy lịch sử giao dịch kho (dùng RPC để bypass RLS)
+ * @param productId - ID sản phẩm (products.id)
+ * @param catalogItemId - (tùy chọn) ID catalog item để fallback
+ */
 export async function fetchInventoryHistory(
   productId: string,
+  catalogItemId?: string,
 ): Promise<InventoryTransaction[]> {
-  const { data, error } = await supabase
-    .from("inventory_transactions")
-    .select("*")
-    .eq("product_id", productId)
-    .order("created_at", { ascending: false });
+  try {
+    // Gọi RPC get_inventory_history (SECURITY DEFINER)
+    const { data, error } = await supabase.rpc('get_inventory_history', {
+      p_product_id: productId,
+    });
 
-  if (error) throw new Error(`Lỗi tải lịch sử tồn kho: ${error.message}`);
-  return data || [];
+    if (error) {
+      console.error('❌ Lỗi RPC get_inventory_history:', error);
+      // Fallback: query trực tiếp (vẫn bị RLS nhưng để debug)
+      const { data: direct, error: directErr } = await supabase
+        .from('inventory_transactions')
+        .select('*')
+        .eq('product_id', productId)
+        .order('created_at', { ascending: false });
+      if (directErr) throw directErr;
+      return direct || [];
+    }
+
+    return data || [];
+  } catch (err) {
+    console.error('❌ fetchInventoryHistory exception:', err);
+    throw new Error('Không thể tải lịch sử tồn kho');
+  }
 }
 
 // ==================== SHARED CATALOG ITEM ACTIONS ====================
@@ -576,7 +599,6 @@ export async function fetchPackages(): Promise<Package[]> {
   if (!pkgs || pkgs.length === 0) return [];
 
   const pkgIds = pkgs.map((p) => p.id);
-  // Lấy package_items với join services và products
   const { data: items, error: itemErr } = await supabase
     .from("package_items")
     .select(`
@@ -723,10 +745,8 @@ export async function updatePackage(
 
   if (pkgErr) throw pkgErr;
 
-  // Xóa items cũ
   await supabase.from("package_items").delete().eq("package_id", packageId);
 
-  // Chèn items mới
   if (items.length > 0) {
     const packageItemsToInsert = items.map((it) => ({
       package_id: packageId,

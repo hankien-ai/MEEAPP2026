@@ -49,8 +49,9 @@ import {
   processInventoryTransaction,
   fetchInventoryHistory,
 } from "../services/catalog-service";
-import { supabase } from "../services/supabase";
+import { supabase, DEFAULT_ORG_ID, DEFAULT_BRANCH_ID } from "../services/supabase";
 import { Badge, Button } from "../components/primitives";
+import { useAuth } from "@/context/AuthContext";
 
 type ActiveTab = "services" | "products" | "packages" | "categories";
 
@@ -254,7 +255,10 @@ const QuickInventoryModal: React.FC<{
 // MAIN
 // ==========================================================
 export default function CatalogManagementPage() {
-  const [activeTab, setActiveTab] = useState<ActiveTab>("services");
+  const { role, currentStaff } = useAuth();
+  const isAdmin = role === "admin" || role === "owner" || role === "manager";
+
+  const [activeTab, setActiveTab] = useState<ActiveTab>(isAdmin ? "services" : "products");
   const [loading, setLoading] = useState(false);
   const [notification, setNotification] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
@@ -325,6 +329,12 @@ export default function CatalogManagementPage() {
     setFilters({ category: "", status: "", productType: "", categoryType: "" });
   }, [activeTab]);
 
+  useEffect(() => {
+    if (!isAdmin && activeTab !== 'products') {
+      setActiveTab('products');
+    }
+  }, [isAdmin, activeTab]);
+
   const formatVND = (amount: number) => new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(amount || 0);
 
   const matchSearch = (text: string, keyword: string): boolean => {
@@ -392,14 +402,98 @@ export default function CatalogManagementPage() {
     }
   };
 
-  const openQuickInventory = (product: ProductItem, type: InventoryTransactionType) => {
-    setQuickInv({ isOpen: true, product, type, submitting: false });
+  // ===== ĐẢM BẢO PRODUCT_ID =====
+  const ensureProductId = async (product: ProductItem): Promise<string | null> => {
+    if (product.product_id && product.product_id !== '') {
+      return product.product_id;
+    }
+
+    // Tìm products theo catalog_item_id (để không tạo trùng)
+    const { data: existing, error: findErr } = await supabase
+      .from('products')
+      .select('id')
+      .eq('catalog_item_id', product.id)
+      .maybeSingle();
+
+    if (findErr) {
+      console.error('❌ Lỗi tìm products record:', findErr);
+      showToast('error', 'Không thể kiểm tra tồn kho');
+      return null;
+    }
+
+    if (existing) {
+      // Đã có, cập nhật state và trả về id
+      const updatedProduct = { ...product, product_id: existing.id };
+      setProducts(prev =>
+        prev.map(p =>
+          p.id === product.id ? updatedProduct : p
+        )
+      );
+      return existing.id;
+    }
+
+    // Chưa có, tạo mới
+    showToast("info", "Đang tạo record tồn kho cho sản phẩm...");
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .insert({
+          catalog_item_id: product.id,
+          selling_price: product.selling_price || product.price || 0,
+          stock_quantity: product.stock_quantity || 0,
+          minimum_stock: product.minimum_stock || 5,
+          unit: product.unit || 'cái',
+          product_type: product.product_type || 'RETAIL',
+          organization_id: DEFAULT_ORG_ID,
+          branch_id: DEFAULT_BRANCH_ID,
+        })
+        .select('id')
+        .single();
+
+      if (error) {
+        console.error('❌ Lỗi tạo products record:', error);
+        showToast('error', `Không thể tạo record tồn kho: ${error.message}`);
+        return null;
+      }
+      const updatedProduct = { ...product, product_id: data.id };
+      setProducts(prev =>
+        prev.map(p =>
+          p.id === product.id ? updatedProduct : p
+        )
+      );
+      return data.id;
+    } catch (err) {
+      console.error('❌ Lỗi ensureProductId:', err);
+      showToast('error', 'Không thể tạo record tồn kho');
+      return null;
+    }
   };
+
+  // ===== OPEN QUICK INVENTORY =====
+  const openQuickInventory = async (product: ProductItem, type: InventoryTransactionType) => {
+    const productId = await ensureProductId(product);
+    if (!productId) {
+      showToast('error', 'Không thể xác định sản phẩm để nhập/xuất kho');
+      return;
+    }
+    const updatedProduct = { ...product, product_id: productId };
+    // Cập nhật state để dùng trong modal
+    setProducts(prev =>
+      prev.map(p =>
+        p.id === product.id ? updatedProduct : p
+      )
+    );
+    setQuickInv({ isOpen: true, product: updatedProduct, type, submitting: false });
+  };
+
   const closeQuickInventory = () => setQuickInv({ isOpen: false, product: null, type: "IN", submitting: false });
 
   const handleQuickInventorySubmit = async (quantity: number, note: string) => {
     const { product, type } = quickInv;
-    if (!product) return;
+    if (!product || !product.product_id) {
+      showToast('error', 'Thiếu thông tin sản phẩm');
+      return;
+    }
     setQuickInv(prev => ({ ...prev, submitting: true }));
     try {
       await processInventoryTransaction({
@@ -407,59 +501,100 @@ export default function CatalogManagementPage() {
         type,
         quantity,
         note: note || `${type === "IN" ? "Nhập" : "Xuất"} kho: ${product.name}`,
+        created_by: currentStaff?.id || null,
       });
+      // Cập nhật tồn kho trong state
+      const updatedStock = (product.stock_quantity || 0) + (type === "IN" ? quantity : -quantity);
       setProducts(prev =>
         prev.map(p =>
           p.id === product.id
-            ? { ...p, stock_quantity: (p.stock_quantity || 0) + (type === "IN" ? quantity : -quantity) }
+            ? { ...p, stock_quantity: updatedStock }
             : p
         )
       );
+      setQuickInv(prev => ({ ...prev, product: { ...prev.product!, stock_quantity: updatedStock } }));
       showToast("success", `${type === "IN" ? "Nhập" : "Xuất"} kho ${quantity} ${product.unit} thành công`);
-      closeQuickInventory();
-      loadData();
+      setTimeout(closeQuickInventory, 1000);
     } catch (err: any) {
+      console.error('❌ Lỗi xử lý giao dịch kho:', err);
       showToast("error", err.message || "Lỗi xử lý giao dịch kho");
-    } finally {
       setQuickInv(prev => ({ ...prev, submitting: false }));
     }
   };
 
+  // ===== OPEN PRODUCT DETAIL =====
   const openProductDetail = async (product: ProductItem) => {
-    if (!product || !product.product_id) {
-      showToast("error", "Không tìm thấy ID sản phẩm để xem lịch sử");
+    const productId = await ensureProductId(product);
+    if (!productId) {
+      showToast('error', 'Không thể xem lịch sử tồn kho vì thiếu ID sản phẩm');
       return;
     }
-    setProductDetail({ isOpen: true, product, history: [], loadingHistory: true });
+    console.log(`🔍 Fetching history for product_id: ${productId}`);
+    const updatedProduct = { ...product, product_id: productId };
+    setProducts(prev =>
+      prev.map(p =>
+        p.id === product.id ? updatedProduct : p
+      )
+    );
+    setProductDetail({ isOpen: true, product: updatedProduct, history: [], loadingHistory: true });
     try {
-      const history = await fetchInventoryHistory(product.product_id);
+      const history = await fetchInventoryHistory(productId);
       const historyWithStaff = history.map((item) => {
         const staff = staffList.find((s) => s.id === item.created_by);
         return { ...item, staff_name: staff?.full_name || "Hệ thống" };
       });
       setProductDetail(prev => ({ ...prev, history: historyWithStaff, loadingHistory: false }));
+      console.log(`✅ Đã tải ${history.length} giao dịch cho sản phẩm ${product.name}`);
     } catch (err) {
-      console.error("Lỗi tải lịch sử tồn kho:", err);
+      console.error("❌ Lỗi tải lịch sử tồn kho:", err);
       showToast("error", "Không thể tải lịch sử tồn kho");
       setProductDetail(prev => ({ ...prev, loadingHistory: false }));
     }
   };
+
+  // ==== CLOSE PRODUCT DETAIL ====
   const closeProductDetail = () => setProductDetail({ isOpen: false, product: null, history: [], loadingHistory: false });
+
+  // ===== TẠO MỚI =====
+  const handleCreateNew = () => {
+    if (!isAdmin) {
+      setEditingProduct(null);
+      setIsProductModalOpen(true);
+      return;
+    }
+    if (activeTab === "services") {
+      setEditingService(null);
+      setIsServiceModalOpen(true);
+    } else if (activeTab === "products") {
+      setEditingProduct(null);
+      setIsProductModalOpen(true);
+    } else if (activeTab === "packages") {
+      setEditingPackage(null);
+      setIsPackageModalOpen(true);
+    } else if (activeTab === "categories") {
+      setEditingCategory(null);
+      setIsCategoryModalOpen(true);
+    }
+  };
 
   // ==========================================================
   // RENDER
   // ==========================================================
+  const visibleTabs = isAdmin
+    ? [
+        { key: "services", label: "Dịch vụ" },
+        { key: "products", label: "Sản phẩm" },
+        { key: "packages", label: "Gói dịch vụ" },
+        { key: "categories", label: "Danh mục" },
+      ]
+    : [{ key: "products", label: "Sản phẩm" }];
+
   return (
     <div className="p-3 sm:p-6 max-w-7xl mx-auto space-y-4 sm:space-y-6 bg-slate-50 min-h-screen">
       <div className="flex justify-between items-center">
         <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Danh mục</h1>
         <button
-          onClick={() => {
-            if (activeTab === "services") { setEditingService(null); setIsServiceModalOpen(true); }
-            else if (activeTab === "products") { setEditingProduct(null); setIsProductModalOpen(true); }
-            else if (activeTab === "packages") { setEditingPackage(null); setIsPackageModalOpen(true); }
-            else if (activeTab === "categories") { setEditingCategory(null); setIsCategoryModalOpen(true); }
-          }}
+          onClick={handleCreateNew}
           className="flex items-center gap-2 px-4 py-2.5 bg-pink-600 text-white rounded-lg text-sm font-semibold hover:bg-pink-700 shadow-sm active:scale-95 transition-transform"
         >
           <Plus className="w-4 h-4" /> Tạo mới
@@ -476,17 +611,21 @@ export default function CatalogManagementPage() {
         </div>
       )}
 
+      {/* Tabs */}
       <div className="flex overflow-x-auto bg-white rounded-xl p-1 border border-slate-200 shadow-sm">
-        {[
-          { key: "services", label: "Dịch vụ" },
-          { key: "products", label: "Sản phẩm" },
-          { key: "packages", label: "Gói dịch vụ" },
-          { key: "categories", label: "Danh mục" },
-        ].map((tab) => (
+        {visibleTabs.map((tab) => (
           <button
             key={tab.key}
-            onClick={() => { setActiveTab(tab.key as ActiveTab); setSearchTerm(""); setFilters({ category: "", status: "", productType: "", categoryType: "" }); }}
-            className={`flex-1 py-2.5 px-3 text-sm font-semibold rounded-lg transition-all ${activeTab === tab.key ? "bg-pink-600 text-white shadow-sm" : "text-slate-500 hover:text-slate-800 hover:bg-slate-50"}`}
+            onClick={() => {
+              setActiveTab(tab.key as ActiveTab);
+              setSearchTerm("");
+              setFilters({ category: "", status: "", productType: "", categoryType: "" });
+            }}
+            className={`flex-1 py-2.5 px-3 text-sm font-semibold rounded-lg transition-all ${
+              activeTab === tab.key
+                ? "bg-pink-600 text-white shadow-sm"
+                : "text-slate-500 hover:text-slate-800 hover:bg-slate-50"
+            }`}
           >
             {tab.label}
           </button>
@@ -750,12 +889,73 @@ export default function CatalogManagementPage() {
                   </div>
                 </div>
               </div>
+              <div className="flex gap-2 mt-3">
+                <Button
+                  size="sm"
+                  variant="primary"
+                  onClick={() => {
+                    openQuickInventory(productDetail.product!, "IN");
+                    closeProductDetail();
+                  }}
+                  className="flex items-center gap-1 text-xs"
+                >
+                  <ArrowDownCircle className="w-3.5 h-3.5" /> Nhập kho
+                </Button>
+                {productDetail.product.product_type === "CONSUMABLE" && (
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    onClick={() => {
+                      openQuickInventory(productDetail.product!, "OUT");
+                      closeProductDetail();
+                    }}
+                    className="flex items-center gap-1 text-xs"
+                  >
+                    <ArrowUpCircle className="w-3.5 h-3.5" /> Xuất kho
+                  </Button>
+                )}
+              </div>
             </div>
             <div className="border-t pt-3 mt-3">
               <h4 className="font-semibold text-slate-800">Lịch sử xuất nhập tồn</h4>
-              {productDetail.loadingHistory ? <div className="text-center py-4 text-slate-500">Đang tải...</div>
-              : productDetail.history.length === 0 ? <div className="text-center py-4 text-slate-400">Không có dữ liệu lịch sử hoặc bạn không có quyền xem.</div>
-              : <div className="overflow-x-auto"><table className="w-full text-left text-xs border-collapse"><thead className="bg-slate-50"><tr><th className="p-2">Ngày</th><th className="p-2">Loại</th><th className="p-2 text-right">SL</th><th className="p-2 text-right">Tồn trước</th><th className="p-2 text-right">Tồn sau</th><th className="p-2">Ghi chú</th><th className="p-2">Người tạo</th></tr></thead><tbody className="divide-y divide-slate-100">{productDetail.history.map((tx) => (<tr key={tx.id}><td className="p-2 whitespace-nowrap">{new Date(tx.created_at).toLocaleString("vi-VN")}</td><td className="p-2"><Badge variant={tx.transaction_type === "IN" ? "success" : tx.transaction_type === "OUT" ? "danger" : "neutral"}>{tx.transaction_type === "IN" ? "+ Nhập" : tx.transaction_type === "OUT" ? "- Xuất" : "Điều chỉnh"}</Badge></td><td className="p-2 text-right font-medium">{tx.quantity}</td><td className="p-2 text-right text-slate-600">{tx.stock_before}</td><td className="p-2 text-right font-semibold">{tx.stock_after}</td><td className="p-2 text-slate-500 max-w-xs truncate">{tx.note || "—"}</td><td className="p-2 text-slate-500">{tx.staff_name || "Hệ thống"}</td></tr>))}</tbody></table></div>}
+              {productDetail.loadingHistory ? (
+                <div className="text-center py-4 text-slate-500">Đang tải...</div>
+              ) : productDetail.history.length === 0 ? (
+                <div className="text-center py-4 text-slate-400">Không có dữ liệu lịch sử.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead className="bg-slate-50">
+                      <tr>
+                        <th className="p-2">Ngày</th>
+                        <th className="p-2">Loại</th>
+                        <th className="p-2 text-right">SL</th>
+                        <th className="p-2 text-right">Tồn trước</th>
+                        <th className="p-2 text-right">Tồn sau</th>
+                        <th className="p-2">Ghi chú</th>
+                        <th className="p-2">Người tạo</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {productDetail.history.map((tx) => (
+                        <tr key={tx.id}>
+                          <td className="p-2 whitespace-nowrap">{new Date(tx.created_at).toLocaleString("vi-VN")}</td>
+                          <td className="p-2">
+                            <Badge variant={tx.transaction_type === "IN" ? "success" : tx.transaction_type === "OUT" ? "danger" : "neutral"}>
+                              {tx.transaction_type === "IN" ? "+ Nhập" : tx.transaction_type === "OUT" ? "- Xuất" : "Điều chỉnh"}
+                            </Badge>
+                          </td>
+                          <td className="p-2 text-right font-medium">{tx.quantity}</td>
+                          <td className="p-2 text-right text-slate-600">{tx.stock_before}</td>
+                          <td className="p-2 text-right font-semibold">{tx.stock_after}</td>
+                          <td className="p-2 text-slate-500 max-w-xs truncate">{tx.note || "—"}</td>
+                          <td className="p-2 text-slate-500">{tx.staff_name || "Hệ thống"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
             <div className="flex justify-end mt-4"><Button variant="outline" onClick={closeProductDetail}>Đóng</Button></div>
           </div>
@@ -766,7 +966,7 @@ export default function CatalogManagementPage() {
 }
 
 // ==========================================================
-// MODAL FORMS
+// MODAL FORMS (giữ nguyên)
 // ==========================================================
 function ServiceFormModal({ isOpen, onClose, editingService, categories, onSave }) {
   const [formData, setFormData] = useState({

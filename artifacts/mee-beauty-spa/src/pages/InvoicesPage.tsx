@@ -2,21 +2,19 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/services/supabase";
 import { useAuth } from "@/context/AuthContext";
-import { format } from "date-fns";
+import { format, startOfDay, endOfDay } from "date-fns";
 import { vi } from "date-fns/locale";
 import { Eye, Search } from "lucide-react";
 import { Badge, Spinner } from "@/components/primitives";
 import { InvoiceDetailModal } from "@/components/InvoiceDetailModal";
 
 export const InvoicesPage: React.FC = () => {
-  const { role } = useAuth();
+  const { role, currentStaff } = useAuth();
   const isAdmin = role === "admin";
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(
-    null,
-  );
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
   const [isInvoiceDetailOpen, setIsInvoiceDetailOpen] = useState(false);
 
   useEffect(() => {
@@ -34,19 +32,21 @@ export const InvoicesPage: React.FC = () => {
           customers:customer_id (full_name, phone),
           seller: seller_staff_id (full_name),
           items: invoice_items (*)
-        `,
+        `
         )
         .order("created_at", { ascending: false });
 
       if (!isAdmin) {
-        const { data: staffData } = await supabase
-          .from("staff")
-          .select("id")
-          .limit(1)
-          .single();
-        if (staffData) {
-          query = query.eq("seller_staff_id", staffData.id);
+        const staffId = currentStaff?.id;
+        if (staffId) {
+          query = query.eq("seller_staff_id", staffId);
         }
+        // Lọc theo ngày hôm nay
+        const todayStart = startOfDay(new Date());
+        const todayEnd = endOfDay(new Date());
+        query = query
+          .gte("created_at", todayStart.toISOString())
+          .lte("created_at", todayEnd.toISOString());
       }
 
       const { data, error } = await query;
@@ -75,7 +75,7 @@ export const InvoicesPage: React.FC = () => {
     (inv) =>
       inv.customers?.full_name?.toLowerCase().includes(search.toLowerCase()) ||
       inv.invoice_code?.toLowerCase().includes(search.toLowerCase()) ||
-      inv.id.toLowerCase().includes(search.toLowerCase()),
+      inv.id.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -97,13 +97,13 @@ export const InvoicesPage: React.FC = () => {
           placeholder="Tìm theo tên khách hàng hoặc mã hóa đơn..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-pink-500"
+          className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
         />
       </div>
 
       {filtered.length === 0 ? (
         <div className="text-center py-8 text-slate-500">
-          Không có hóa đơn nào
+          {!isAdmin ? "Hôm nay chưa có hóa đơn nào" : "Không có hóa đơn nào"}
         </div>
       ) : (
         <div className="space-y-3">
@@ -135,21 +135,21 @@ export const InvoicesPage: React.FC = () => {
                       inv.status === "PAID"
                         ? "success"
                         : inv.status === "PARTIALLY_PAID"
-                          ? "warning"
-                          : inv.status === "DRAFT"
-                            ? "neutral"
-                            : "danger"
+                        ? "warning"
+                        : inv.status === "DRAFT"
+                        ? "neutral"
+                        : "danger"
                     }
                   >
                     {inv.status === "PAID"
                       ? "Đã thanh toán"
                       : inv.status === "PARTIALLY_PAID"
-                        ? "Nợ một phần"
-                        : inv.status === "DRAFT"
-                          ? "Nháp"
-                          : inv.status === "VOID"
-                            ? "Hủy"
-                            : inv.status}
+                      ? "Nợ một phần"
+                      : inv.status === "DRAFT"
+                      ? "Nháp"
+                      : inv.status === "VOID"
+                      ? "Hủy"
+                      : inv.status}
                   </Badge>
                 </div>
               </div>
@@ -161,12 +161,11 @@ export const InvoicesPage: React.FC = () => {
         </div>
       )}
 
-      {/* Invoice Detail Modal dùng chung */}
       <InvoiceDetailModal
         isOpen={isInvoiceDetailOpen}
         invoiceId={selectedInvoiceId}
         onClose={() => setIsInvoiceDetailOpen(false)}
-        onInvoiceVoided={loadInvoices} 
+        onInvoiceVoided={loadInvoices}
       />
     </div>
   );
