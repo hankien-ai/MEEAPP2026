@@ -1,5 +1,5 @@
 // src/pages/staff.tsx
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   fetchStaff,
   createStaff,
@@ -12,9 +12,12 @@ import { attendanceService } from "../services/attendance.service";
 import { payrollService } from "../services/payroll.service";
 import { Button, Card, Badge, Spinner, Input } from "../components/primitives";
 import { StaffDetailPage } from "./StaffDetailPage";
+import { PayrollPage } from "./PayrollPage";
+import { SalarySettingsPage } from "./SalarySettingsPage";
 import { useAuth } from "@/context/AuthContext";
 import { authService } from "@/services/auth.service";
-import { Pencil, Trash2, Key, Plus, RefreshCw, Search } from "lucide-react";
+import { supabase } from "@/services/supabase";
+import { Pencil, Trash2, Key, Plus, RefreshCw, Search, CheckCircle, XCircle, User, Settings } from "lucide-react";
 
 // ============================================================
 // AVATAR
@@ -149,415 +152,104 @@ const StaffList: React.FC<{
 };
 
 // ============================================================
-// ATTENDANCE CHECK (giữ nguyên)
+// ATTENDANCE CHECK – DANH SÁCH TẤT CẢ NHÂN VIÊN
 // ============================================================
-const AttendanceCheck: React.FC<{
-  staffId: string;
-  staffName: string;
+const AttendanceAll: React.FC<{
+  staffList: StaffMemberDomain[];
   isAdmin: boolean;
   onRefresh: () => void;
-}> = ({ staffId, staffName, isAdmin, onRefresh }) => {
-  const [today, setToday] = useState<any>(null);
+}> = ({ staffList, isAdmin, onRefresh }) => {
+  const [attendanceMap, setAttendanceMap] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
+  const [submitting, setSubmitting] = useState<Record<string, boolean>>({});
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showOnlyWorking, setShowOnlyWorking] = useState(false);
 
-  const loadToday = useCallback(async () => {
-    if (!staffId) return;
+  const loadAttendance = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await attendanceService.getTodayAttendance(staffId);
-      setToday(data);
+      const today = new Date().toISOString().split("T")[0];
+      const { data, error } = await supabase
+        .from("attendance")
+        .select("*")
+        .eq("work_date", today)
+        .in("staff_id", staffList.map(s => s.id));
+
+      if (error) throw error;
+      const map: Record<string, any> = {};
+      data?.forEach((a: any) => {
+        map[a.staff_id] = a;
+      });
+      setAttendanceMap(map);
     } catch (err) {
-      console.error(err);
+      console.error("Lỗi tải chấm công:", err);
     } finally {
       setLoading(false);
     }
-  }, [staffId]);
+  }, [staffList]);
 
   useEffect(() => {
-    loadToday();
-  }, [loadToday]);
+    loadAttendance();
+  }, [loadAttendance]);
 
-  const handleCheckIn = async () => {
-    setSubmitting(true);
+  const handleCheckIn = async (staffId: string) => {
+    setSubmitting(prev => ({ ...prev, [staffId]: true }));
     setMessage(null);
     try {
       const result = await attendanceService.checkIn(staffId);
-      setToday(result);
-      setMessage({ type: "success", text: "Check-in thành công!" });
+      setAttendanceMap(prev => ({ ...prev, [staffId]: result }));
+      setMessage({ type: "success", text: `Check-in thành công` });
       onRefresh();
     } catch (err: any) {
       setMessage({ type: "error", text: err.message || "Lỗi check-in" });
     } finally {
-      setSubmitting(false);
+      setSubmitting(prev => ({ ...prev, [staffId]: false }));
     }
   };
 
-  const handleCheckOut = async () => {
-    setSubmitting(true);
+  const handleCheckOut = async (staffId: string) => {
+    setSubmitting(prev => ({ ...prev, [staffId]: true }));
     setMessage(null);
     try {
       const result = await attendanceService.checkOut(staffId);
-      setToday(result);
-      setMessage({ type: "success", text: "Check-out thành công!" });
+      setAttendanceMap(prev => ({ ...prev, [staffId]: result }));
+      setMessage({ type: "success", text: `Check-out thành công` });
       onRefresh();
     } catch (err: any) {
       setMessage({ type: "error", text: err.message || "Lỗi check-out" });
     } finally {
-      setSubmitting(false);
+      setSubmitting(prev => ({ ...prev, [staffId]: false }));
     }
   };
 
-  const handleClearAttendance = async () => {
-    if (!window.confirm(`Bạn có chắc muốn xoá chấm công hôm nay của ${staffName}?`)) return;
-    setSubmitting(true);
-    setMessage(null);
-    try {
-      if (today && typeof (attendanceService as any).deleteAttendance === "function") {
-        await (attendanceService as any).deleteAttendance(today.id);
-      } else if (today && typeof (attendanceService as any).deleteTodayAttendance === "function") {
-        await (attendanceService as any).deleteTodayAttendance(staffId);
-      }
-      setToday(null);
-      setMessage({ type: "success", text: "Đã xoá chấm công hôm nay." });
-      onRefresh();
-    } catch (err: any) {
-      setMessage({ type: "error", text: err.message || "Lỗi xoá chấm công" });
-    } finally {
-      setSubmitting(false);
-    }
+  const removeAccents = (str: string) => {
+    return str
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/đ/g, "d")
+      .replace(/Đ/g, "D");
   };
+
+  const filteredStaff = useMemo(() => {
+    let list = staffList;
+    if (searchQuery.trim()) {
+      const keyword = removeAccents(searchQuery.trim().toLowerCase());
+      list = list.filter(s => removeAccents(s.full_name.toLowerCase()).includes(keyword));
+    }
+    if (showOnlyWorking) {
+      list = list.filter(s => {
+        const att = attendanceMap[s.id];
+        return att && att.check_in !== null && att.check_out === null;
+      });
+    }
+    return list;
+  }, [staffList, searchQuery, showOnlyWorking, attendanceMap]);
 
   if (loading) return <Spinner className="py-8" />;
-
-  const isCheckedIn = today?.check_in !== null && today?.check_in !== undefined;
-  const isCheckedOut = today?.check_out !== null && today?.check_out !== undefined;
-
-  return (
-    <div className="space-y-4 max-w-lg mx-auto">
-      {message && (
-        <div
-          className={`p-3.5 rounded-2xl text-sm font-medium flex items-center gap-2 ${
-            message.type === "success"
-              ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
-              : "bg-rose-50 text-rose-800 border border-rose-200"
-          }`}
-        >
-          <span>{message.type === "success" ? "✅" : "⚠️"}</span> {message.text}
-        </div>
-      )}
-
-      <Card className="p-5 rounded-3xl border border-slate-100 bg-white shadow-sm space-y-4">
-        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-          <div>
-            <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Hôm nay</p>
-            <h3 className="text-base font-bold text-slate-800">{staffName}</h3>
-          </div>
-          <Badge
-            variant={isCheckedOut ? "success" : isCheckedIn ? "warning" : "neutral"}
-            className="px-3 py-1 text-xs rounded-full font-semibold"
-          >
-            {isCheckedOut ? "Hoàn tất" : isCheckedIn ? "Đang trong ca" : "Chưa chấm công"}
-          </Badge>
-        </div>
-
-        {(isCheckedIn || isCheckedOut) && (
-          <div className="grid grid-cols-2 gap-2 bg-slate-50 p-3 rounded-2xl text-xs">
-            <div className="text-center p-2 bg-white rounded-xl shadow-2xs">
-              <span className="text-slate-400 block mb-0.5">Vào ca</span>
-              <span className="font-bold text-slate-800 text-sm">
-                {isCheckedIn ? new Date(today.check_in).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "--:--"}
-              </span>
-            </div>
-            <div className="text-center p-2 bg-white rounded-xl shadow-2xs">
-              <span className="text-slate-400 block mb-0.5">Ra ca</span>
-              <span className="font-bold text-slate-800 text-sm">
-                {isCheckedOut ? new Date(today.check_out).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "--:--"}
-              </span>
-            </div>
-          </div>
-        )}
-
-        <div className="pt-2">
-          {!isCheckedIn && (
-            <Button
-              variant="primary"
-              onClick={handleCheckIn}
-              disabled={submitting}
-              className="w-full h-12 rounded-2xl text-base font-bold shadow-md shadow-blue-500/20 active:scale-[0.98] transition-transform"
-            >
-              🟢 Check-in Vào Ca
-            </Button>
-          )}
-
-          {isCheckedIn && !isCheckedOut && (
-            <Button
-              variant="secondary"
-              onClick={handleCheckOut}
-              disabled={submitting}
-              className="w-full h-12 rounded-2xl text-base font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-md shadow-amber-500/20 active:scale-[0.98] transition-transform"
-            >
-              🔴 Check-out Ra Ca
-            </Button>
-          )}
-
-          {isCheckedOut && (
-            <div className="p-4 text-center rounded-2xl bg-emerald-50 text-emerald-700 text-sm font-semibold border border-emerald-100">
-              🎉 Bạn đã hoàn tất ca làm việc hôm nay!
-            </div>
-          )}
-        </div>
-
-        {isAdmin && (isCheckedIn || isCheckedOut) && (
-          <div className="pt-3 border-t border-slate-100 text-center">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleClearAttendance}
-              disabled={submitting}
-              className="text-xs text-rose-600 hover:bg-rose-50 border-rose-200 rounded-xl"
-            >
-              🗑 Xoá chấm công hôm nay
-            </Button>
-          </div>
-        )}
-      </Card>
-
-      <div className="text-center">
-        <button
-          onClick={loadToday}
-          className="text-xs font-semibold text-blue-600 hover:underline py-2 px-3 rounded-full hover:bg-blue-50 active:bg-blue-100 transition-colors inline-flex items-center gap-1"
-        >
-          🔄 Làm mới dữ liệu
-        </button>
-      </div>
-    </div>
-  );
-};
-
-// ============================================================
-// PAYROLL LIST (giữ nguyên)
-// ============================================================
-const PayrollList: React.FC<{
-  staffId?: string;
-  isAdmin: boolean;
-}> = ({ staffId, isAdmin }) => {
-  const [month, setMonth] = useState(new Date().getMonth() + 1);
-  const [year, setYear] = useState(new Date().getFullYear());
-  const [payrollList, setPayrollList] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [calculating, setCalculating] = useState(false);
-  const [selectedStaff, setSelectedStaff] = useState(staffId || null);
-
-  useEffect(() => {
-    setSelectedStaff(staffId || null);
-  }, [staffId]);
-
-  useEffect(() => {
-    loadPayroll();
-  }, [month, year, selectedStaff]);
-
-  const loadPayroll = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      if (selectedStaff) {
-        const data = await payrollService.getPayroll(selectedStaff, month, year);
-        setPayrollList(data ? [data] : []);
-      } else {
-        const data = await payrollService.getPayrollList(month, year);
-        setPayrollList(data);
-      }
-    } catch (err: any) {
-      setError(err.message || "Lỗi tải bảng lương");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCalculateAll = async () => {
-    setCalculating(true);
-    setError(null);
-    try {
-      if (selectedStaff) {
-        await payrollService.calculateMonthlySalary(selectedStaff, month, year);
-        await loadPayroll();
-      } else {
-        const staffs = await fetchStaff("", true, true);
-        if (staffs && staffs.length > 0) {
-          for (const staff of staffs) {
-            await payrollService.calculateMonthlySalary(staff.id, month, year);
-          }
-          await loadPayroll();
-        }
-      }
-    } catch (err: any) {
-      setError(err.message || "Lỗi tính lương");
-    } finally {
-      setCalculating(false);
-    }
-  };
-
-  const handlePrevMonth = () => {
-    if (month === 1) {
-      setMonth(12);
-      setYear(year - 1);
-    } else setMonth(month - 1);
-  };
-  const handleNextMonth = () => {
-    if (month === 12) {
-      setMonth(1);
-      setYear(year + 1);
-    } else setMonth(month + 1);
-  };
-
-  const formatVND = (val: number) => new Intl.NumberFormat("vi-VN").format(val) + " đ";
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 p-2.5 rounded-2xl border border-slate-200/60">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handlePrevMonth}
-            className="w-8 h-8 rounded-xl bg-white border border-slate-200 shadow-2xs flex items-center justify-center text-slate-700 font-bold active:scale-95 transition-transform"
-          >
-            ‹
-          </button>
-          <span className="text-sm font-bold text-slate-800 px-1">
-            Tháng {month}/{year}
-          </span>
-          <button
-            onClick={handleNextMonth}
-            className="w-8 h-8 rounded-xl bg-white border border-slate-200 shadow-2xs flex items-center justify-center text-slate-700 font-bold active:scale-95 transition-transform"
-          >
-            ›
-          </button>
-        </div>
-
-        {isAdmin && (
-          <Button
-            size="sm"
-            onClick={handleCalculateAll}
-            isLoading={calculating}
-            className="rounded-xl text-xs font-semibold px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
-          >
-            🧮 Tính lương
-          </Button>
-        )}
-      </div>
-
-      {error && (
-        <div className="p-3 bg-rose-50 text-rose-700 text-sm rounded-2xl border border-rose-200">
-          ⚠️ {error}
-        </div>
-      )}
-
-      {loading ? (
-        <div className="py-8 text-center">
-          <Spinner />
-        </div>
-      ) : payrollList.length === 0 ? (
-        <div className="text-center py-10 text-slate-400 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 text-sm">
-          Chưa có dữ liệu bảng lương cho tháng này.
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {payrollList.map((p) => (
-            <Card
-              key={p.id}
-              className="p-4 rounded-2xl border border-slate-100 bg-white shadow-xs hover:shadow-md transition-shadow"
-            >
-              <div className="flex justify-between items-start gap-3">
-                <div className="space-y-1">
-                  <h4 className="font-bold text-slate-900 text-base">
-                    {p.staff?.full_name || p.staff_id}
-                  </h4>
-                  <p className="text-xs text-slate-500">
-                    Lương cơ bản: <span className="font-medium text-slate-700">{formatVND(p.base_salary)}</span>
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    Đi làm: <span className="font-semibold text-slate-800">{p.actual_working_days}/{p.total_working_days}</span> ngày · Nghỉ: <span className="font-semibold text-amber-600">{p.leave_days_taken}</span> ngày
-                  </p>
-                </div>
-
-                <div className="text-right shrink-0">
-                  <div className="text-xs text-slate-400 mb-0.5">Thực nhận</div>
-                  <div className="font-black text-emerald-600 text-base">{formatVND(p.net_salary)}</div>
-                  <Badge
-                    variant={p.status === "LOCKED" ? "success" : "neutral"}
-                    className="mt-1 text-[10px] rounded-full px-2 py-0.5"
-                  >
-                    {p.status === "LOCKED" ? "Đã khóa" : "Tạm tính"}
-                  </Badge>
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ============================================================
-// SALARY SETTINGS (giữ nguyên)
-// ============================================================
-const SalarySettings: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
-  const [settings, setSettings] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [allowedLeaveDays, setAllowedLeaveDays] = useState(2);
-  const [attendanceEnabled, setAttendanceEnabled] = useState(true);
-
-  useEffect(() => {
-    if (isAdmin) loadSettings();
-  }, [isAdmin]);
-
-  const loadSettings = async () => {
-    setLoading(true);
-    try {
-      const data = await payrollService.getSettings();
-      setSettings(data);
-      setAllowedLeaveDays(data.default_allowed_leave_days || 2);
-      setAttendanceEnabled(data.attendance_enabled !== false);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSave = async () => {
-    setSaving(true);
-    setMessage(null);
-    try {
-      await payrollService.updateSettings(settings.organization_id, settings.branch_id, {
-        default_allowed_leave_days: allowedLeaveDays,
-        attendance_enabled: attendanceEnabled,
-      });
-      setMessage({ type: "success", text: "Đã lưu cài đặt thành công!" });
-    } catch (err: any) {
-      setMessage({ type: "error", text: err.message || "Lỗi lưu cài đặt" });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (!isAdmin) {
-    return (
-      <div className="text-center py-12 text-slate-400 font-medium text-sm">
-        🔒 Bạn không có quyền truy cập cài đặt lương.
-      </div>
-    );
-  }
-
-  if (loading) return <Spinner className="py-8" />;
-
-  return (
-    <div className="space-y-4 max-w-lg mx-auto">
       {message && (
         <div
           className={`p-3.5 rounded-2xl text-sm font-medium flex items-center gap-2 ${
@@ -570,49 +262,105 @@ const SalarySettings: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
         </div>
       )}
 
-      <Card className="p-5 rounded-3xl border border-slate-100 bg-white shadow-xs space-y-5">
-        <h3 className="font-bold text-slate-800 text-base border-b border-slate-100 pb-3">
-          ⚙️ Cấu hình Lương & Chấm công
-        </h3>
-
-        <div>
-          <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wider">
-            Số ngày nghỉ phép có lương (mỗi tháng)
-          </label>
-          <Input
-            type="number"
-            value={allowedLeaveDays}
-            onChange={(e) => setAllowedLeaveDays(Number(e.target.value))}
-            min={0}
-            className="w-full rounded-2xl border-slate-200 focus:border-blue-500 h-11"
+      <div className="flex items-center gap-2 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Tìm nhân viên..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
-          <p className="text-xs text-slate-400 mt-1.5">Số ngày nghỉ phép mặc định mỗi tháng không bị trừ lương.</p>
         </div>
-
-        <div className="flex items-center justify-between p-3.5 bg-slate-50 rounded-2xl border border-slate-100">
-          <div>
-            <span className="text-sm font-semibold text-slate-800 block">Kích hoạt chấm công</span>
-            <span className="text-xs text-slate-400 block">Cho phép nhân viên tự check-in/out hằng ngày</span>
-          </div>
+        <label className="flex items-center gap-1.5 text-xs font-medium text-slate-600 whitespace-nowrap">
           <input
             type="checkbox"
-            checked={attendanceEnabled}
-            onChange={(e) => setAttendanceEnabled(e.target.checked)}
-            className="w-6 h-6 rounded-lg border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer accent-blue-600"
+            checked={showOnlyWorking}
+            onChange={(e) => setShowOnlyWorking(e.target.checked)}
+            className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
           />
-        </div>
+          Chỉ hiện đang làm
+        </label>
+      </div>
 
-        <Button
-          variant="primary"
-          onClick={handleSave}
-          isLoading={saving}
-          className="w-full h-11 rounded-2xl font-bold shadow-md shadow-blue-500/20 active:scale-[0.98] transition-transform"
-        >
-          Lưu cài đặt
-        </Button>
-      </Card>
+      {filteredStaff.length === 0 ? (
+        <div className="text-center py-8 text-slate-400">Không có nhân viên nào</div>
+      ) : (
+        <div className="space-y-2">
+          {filteredStaff.map((staff) => {
+            const att = attendanceMap[staff.id];
+            const isCheckedIn = att?.check_in !== null && att?.check_in !== undefined;
+            const isCheckedOut = att?.check_out !== null && att?.check_out !== undefined;
+            const isWorking = isCheckedIn && !isCheckedOut;
+
+            let statusColor = "bg-slate-50 border-slate-200";
+            if (isWorking) statusColor = "bg-emerald-50 border-emerald-200";
+            else if (!isCheckedIn) statusColor = "bg-rose-50/50 border-rose-200";
+
+            return (
+              <div
+                key={staff.id}
+                className={`p-3 rounded-xl border ${statusColor} flex items-center justify-between gap-2`}
+              >
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <Avatar name={staff.full_name} className="w-8 h-8 text-xs" />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-slate-800 text-sm truncate">{staff.full_name}</div>
+                    <div className="text-xs text-slate-500">{staff.role}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {isWorking && (
+                    <span className="text-xs font-medium text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">Đang làm</span>
+                  )}
+                  {!isCheckedIn && (
+                    <span className="text-xs font-medium text-rose-600 bg-rose-100 px-2 py-0.5 rounded-full">Vắng</span>
+                  )}
+                  {isCheckedOut && (
+                    <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">Đã về</span>
+                  )}
+                  {!isCheckedIn && (
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      onClick={() => handleCheckIn(staff.id)}
+                      isLoading={submitting[staff.id]}
+                      className="text-xs px-3 py-1.5 rounded-lg"
+                    >
+                      Check-in
+                    </Button>
+                  )}
+                  {isCheckedIn && !isCheckedOut && (
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      onClick={() => handleCheckOut(staff.id)}
+                      isLoading={submitting[staff.id]}
+                      className="text-xs px-3 py-1.5 rounded-lg"
+                    >
+                      Check-out
+                    </Button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
+};
+
+// ============================================================
+// PAYROLL – TÍCH HỢP PAYROLL PAGE
+// ============================================================
+const PayrollTab: React.FC<{
+  staffId?: string;
+  isAdmin: boolean;
+}> = ({ staffId, isAdmin }) => {
+  // Sử dụng component PayrollPage đã có
+  return <PayrollPage onViewDetail={(staffId, month, year) => {}} />;
 };
 
 // ============================================================
@@ -653,7 +401,6 @@ export const StaffPage: React.FC<{ userRole?: string }> = ({ userRole = "staff" 
     setLoading(true);
     setErrorMessage(null);
     try {
-      // Gọi fetchStaff với includeArchived = includeInactive (khi check "Hiện tạm ngưng" thì hiện cả archived)
       const data = await fetchStaff("", includeInactive, includeInactive);
       setStaffList(data);
       if (data.length > 0 && !selectedStaffId) {
@@ -670,11 +417,10 @@ export const StaffPage: React.FC<{ userRole?: string }> = ({ userRole = "staff" 
     loadData();
   }, [loadData]);
 
-  // ---- Client-side search (có removeAccents) ----
-  const filteredStaff = React.useMemo(() => {
+  // ---- Client-side search ----
+  const filteredStaff = useMemo(() => {
     if (!search.trim()) return staffList;
     const q = search.trim().toLowerCase();
-    // Hàm removeAccents đã được import từ service? Tôi sẽ copy lại ở đây
     const removeAccents = (str: string) => {
       return str
         .normalize("NFD")
@@ -857,23 +603,31 @@ export const StaffPage: React.FC<{ userRole?: string }> = ({ userRole = "staff" 
         <nav className="flex p-1 bg-slate-200/70 backdrop-blur-sm rounded-2xl overflow-x-auto scrollbar-none shadow-inner">
           {availableTabs.map((key) => {
             const labels: Record<string, string> = {
-              list: "📋 Danh sách",
-              attendance: "⏰ Chấm công",
-              payroll: "💰 Bảng lương",
-              settings: "⚙️ Cài đặt",
+              list: "Danh sách",
+              attendance: "Chấm công",
+              payroll: "Bảng lương",
+              settings: "Cài đặt",
             };
+            const icons: Record<string, React.ElementType> = {
+              list: User,
+              attendance: CheckCircle,
+              payroll: Key,
+              settings: Settings,
+            };
+            const Icon = icons[key] || User;
             const isActive = activeSubTab === key;
             return (
               <button
                 key={key}
                 onClick={() => setActiveSubTab(key as any)}
-                className={`flex-1 min-w-[90px] py-2 px-3 text-xs font-bold rounded-xl transition-all whitespace-nowrap text-center ${
+                className={`flex-1 min-w-[70px] py-2 px-3 text-xs font-bold rounded-xl transition-all flex flex-col items-center gap-0.5 ${
                   isActive
                     ? "bg-white text-blue-600 shadow-xs scale-[1.02]"
                     : "text-slate-600 hover:text-slate-900 active:opacity-70"
                 }`}
               >
-                {labels[key]}
+                <Icon className={`w-5 h-5 ${isActive ? "text-blue-600" : "text-slate-400"}`} />
+                <span>{labels[key]}</span>
               </button>
             );
           })}
@@ -884,41 +638,37 @@ export const StaffPage: React.FC<{ userRole?: string }> = ({ userRole = "staff" 
           {activeSubTab === "list" && (
             <div className="space-y-4">
               {/* Thanh tìm kiếm + nút thêm mới */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-2.5 rounded-2xl border border-slate-100">
+              <div className="flex items-center gap-2 bg-white p-2 rounded-xl border border-slate-200 shadow-sm">
                 <div className="relative flex-1">
-                  <span className="absolute inset-y-0 left-3 flex items-center text-slate-400">
-                    <Search className="w-4 h-4" />
-                  </span>
+                  <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
                   <input
                     type="text"
-                    placeholder="Tìm theo tên, SĐT, vị trí..."
+                    placeholder="Tìm nhân viên..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2.5 bg-white rounded-xl border border-slate-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-400"
+                    className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
-
-                <div className="flex items-center justify-between sm:justify-end gap-3 px-1 w-full sm:w-auto">
-                  {isAdmin && (
-                    <label className="flex items-center gap-2 text-xs font-medium text-slate-600 cursor-pointer select-none">
+                {isAdmin && (
+                  <>
+                    <label className="flex items-center gap-1.5 text-xs font-medium text-slate-600 whitespace-nowrap">
                       <input
                         type="checkbox"
                         checked={includeInactive}
                         onChange={(e) => setIncludeInactive(e.target.checked)}
-                        className="rounded-md border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4 accent-blue-600"
+                        className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                       />
-                      <span>Hiện tạm ngưng</span>
+                      Hiện tạm ngưng
                     </label>
-                  )}
-                  {isAdmin && activeSubTab === "list" && (
-                    <Button
+                    <button
                       onClick={() => handleOpenModal()}
-                      className="rounded-xl text-xs font-bold px-3.5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20 active:scale-95 transition-transform flex items-center gap-1"
+                      className="w-10 h-10 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-200 active:scale-95 transition-transform flex items-center justify-center"
+                      title="Thêm nhân viên"
                     >
-                      <Plus className="w-4 h-4" /> Thêm mới
-                    </Button>
-                  )}
-                </div>
+                      <Plus className="w-6 h-6" />
+                    </button>
+                  </>
+                )}
               </div>
 
               <StaffList
@@ -937,75 +687,18 @@ export const StaffPage: React.FC<{ userRole?: string }> = ({ userRole = "staff" 
           )}
 
           {activeSubTab === "attendance" && (
-            <div className="space-y-4">
-              {isAdmin ? (
-                <div className="max-w-lg mx-auto bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                  <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">
-                    Chọn nhân viên chấm công
-                  </label>
-                  <select
-                    value={selectedStaffId}
-                    onChange={(e) => setSelectedStaffId(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                  >
-                    {staffList.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.full_name} ({s.role})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ) : (
-                <div className="text-center py-1 text-xs font-medium text-slate-400">
-                  Thông tin chấm công cá nhân
-                </div>
-              )}
-
-              {selectedStaffId && (
-                <AttendanceCheck
-                  staffId={selectedStaffId}
-                  staffName={staffList.find((s) => s.id === selectedStaffId)?.full_name || "Nhân viên"}
-                  isAdmin={isAdmin}
-                  onRefresh={loadData}
-                />
-              )}
-            </div>
+            <AttendanceAll
+              staffList={staffList}
+              isAdmin={isAdmin}
+              onRefresh={loadData}
+            />
           )}
 
           {activeSubTab === "payroll" && (
-            <div className="space-y-4">
-              {isAdmin ? (
-                <div className="max-w-lg mx-auto bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                  <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">
-                    Lọc theo nhân viên
-                  </label>
-                  <select
-                    value={selectedStaffId || ""}
-                    onChange={(e) => setSelectedStaffId(e.target.value || "")}
-                    className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                  >
-                    <option value="">-- Tất cả nhân viên --</option>
-                    {staffList.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.full_name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ) : (
-                <div className="text-center py-1 text-xs font-medium text-slate-400">
-                  Bảng lương cá nhân của bạn
-                </div>
-              )}
-
-              <PayrollList
-                staffId={isAdmin ? selectedStaffId : staffList[0]?.id || undefined}
-                isAdmin={isAdmin}
-              />
-            </div>
+            <PayrollTab staffId={selectedStaffId} isAdmin={isAdmin} />
           )}
 
-          {activeSubTab === "settings" && <SalarySettings isAdmin={isAdmin} />}
+          {activeSubTab === "settings" && <SalarySettingsPage />}
         </div>
       </main>
 

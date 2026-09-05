@@ -1,6 +1,8 @@
+// src/pages/SalarySettingsPage.tsx
 import React, { useState, useEffect } from 'react';
 import { payrollService } from '../services/payroll.service';
-import { Button, Card, Input, Switch, Spinner } from '../components/primitives';
+import { Button, Card, Spinner, Input } from '../components/primitives';
+import { Switch } from '@/components/ui/switch';
 
 export const SalarySettingsPage: React.FC = () => {
   const [settings, setSettings] = useState<any>(null);
@@ -73,7 +75,7 @@ export const SalarySettingsPage: React.FC = () => {
 
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium">Bật chấm công</span>
-            <Switch checked={attendanceEnabled} onChange={setAttendanceEnabled} />
+            <Switch checked={attendanceEnabled} onCheckedChange={setAttendanceEnabled} />
           </div>
 
           <Button variant="primary" onClick={handleSave} isLoading={saving} className="w-full">
