@@ -51,6 +51,7 @@ const ALL_MODULES: ExtensionModule[] = [
   { id: 'appointments', title: 'Lịch hẹn', icon: Calendar, tabKey: 'appointments', description: 'Quản lý lịch hẹn' },
   { id: 'tasks', title: 'Công việc', icon: ClipboardCheck, tabKey: 'tasks', description: 'Quản lý công việc' },
   { id: 'loyalty', title: 'Loyalty', icon: Gift, tabKey: 'loyalty', description: 'Khách hàng thân thiết', adminOnly: true },
+  { id: 'audit', title: 'Lịch sử', icon: FileText, tabKey: 'audit', description: 'Ghi log thay đổi', adminOnly: true },
 ];
 
 const ExtensionPage: React.FC<ExtensionPageProps> = ({ onNavigate }) => {

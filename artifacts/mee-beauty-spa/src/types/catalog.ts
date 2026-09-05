@@ -23,6 +23,7 @@ export interface CatalogItem {
   price: number;
   status: CatalogStatus;
   loyalty_points?: number;
+  sort_order?: number;
 }
 
 // Bảng services mở rộng

@@ -109,7 +109,8 @@ export async function fetchServices(): Promise<ServiceItem[]> {
     .select("*")
     .eq("organization_id", DEFAULT_ORG_ID)
     .eq("item_type", "SERVICE")
-    .order("created_at", { ascending: false });
+    .order('sort_order', { ascending: true, nullsFirst: false })
+    .order('created_at', { ascending: false });
 
   if (itemErr) throw itemErr;
   if (!items || items.length === 0) return [];
@@ -167,6 +168,7 @@ export async function createService(payload: {
   performance_commission_type?: CommissionType;
   performance_commission_value?: number;
   loyalty_points?: number;
+  sort_order?: number;
 }): Promise<ServiceItem> {
   const salesType = payload.sales_commission_type || "PERCENT";
   const salesVal = Math.max(0, payload.sales_commission_value || 0);
@@ -189,6 +191,7 @@ export async function createService(payload: {
       price: payload.price,
       status: "ACTIVE",
       loyalty_points: payload.loyalty_points ?? 0,
+      sort_order: payload.sort_order ?? 0,
     })
     .select()
     .single();
@@ -239,6 +242,7 @@ export async function updateService(
     performance_commission_type?: CommissionType;
     performance_commission_value?: number;
     loyalty_points?: number;
+    sort_order?: number;
   },
 ): Promise<void> {
   const salesType = payload.sales_commission_type || "PERCENT";
@@ -258,6 +262,7 @@ export async function updateService(
       description: payload.description || null,
       price: payload.price,
       loyalty_points: payload.loyalty_points ?? 0,
+      sort_order: payload.sort_order ?? 0,
     })
     .eq("id", catalogItemId)
     .eq("organization_id", DEFAULT_ORG_ID);
@@ -325,7 +330,8 @@ export async function fetchProducts(): Promise<ProductItem[]> {
     .select("*")
     .eq("organization_id", DEFAULT_ORG_ID)
     .eq("item_type", "PRODUCT")
-    .order("created_at", { ascending: false });
+    .order('sort_order', { ascending: true, nullsFirst: false })
+    .order('created_at', { ascending: false });
 
   if (itemErr) throw itemErr;
   if (!items || items.length === 0) return [];
@@ -376,6 +382,7 @@ export async function createProduct(payload: {
   sales_commission_type?: CommissionType;
   sales_commission_value?: number;
   loyalty_points?: number;
+  sort_order?: number;
 }): Promise<ProductItem> {
   const salesType = payload.sales_commission_type || "PERCENT";
   const salesVal = Math.max(0, payload.sales_commission_value || 0);
@@ -394,6 +401,7 @@ export async function createProduct(payload: {
       price: payload.selling_price,
       status: "ACTIVE",
       loyalty_points: payload.loyalty_points ?? 0,
+      sort_order: payload.sort_order ?? 0,
     })
     .select()
     .single();
@@ -448,6 +456,7 @@ export async function updateProduct(
     sales_commission_type?: CommissionType;
     sales_commission_value?: number;
     loyalty_points?: number;
+    sort_order?: number;
   },
 ): Promise<void> {
   const salesType = payload.sales_commission_type || "PERCENT";
@@ -462,6 +471,7 @@ export async function updateProduct(
       description: payload.description || null,
       price: payload.selling_price,
       loyalty_points: payload.loyalty_points ?? 0,
+      sort_order: payload.sort_order ?? 0,
     })
     .eq("id", catalogItemId)
     .eq("organization_id", DEFAULT_ORG_ID);
@@ -533,24 +543,16 @@ export async function processInventoryTransaction(input: {
   }
 }
 
-/**
- * Lấy lịch sử giao dịch kho (dùng RPC để bypass RLS)
- * @param productId - ID sản phẩm (products.id)
- * @param catalogItemId - (tùy chọn) ID catalog item để fallback
- */
 export async function fetchInventoryHistory(
   productId: string,
-  catalogItemId?: string,
 ): Promise<InventoryTransaction[]> {
   try {
-    // Gọi RPC get_inventory_history (SECURITY DEFINER)
     const { data, error } = await supabase.rpc('get_inventory_history', {
       p_product_id: productId,
     });
 
     if (error) {
       console.error('❌ Lỗi RPC get_inventory_history:', error);
-      // Fallback: query trực tiếp (vẫn bị RLS nhưng để debug)
       const { data: direct, error: directErr } = await supabase
         .from('inventory_transactions')
         .select('*')

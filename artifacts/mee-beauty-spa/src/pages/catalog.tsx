@@ -1,4 +1,5 @@
 // src/pages/catalog.tsx
+// src/pages/catalog.tsx
 import React, { useState, useEffect, useMemo } from "react";
 import {
   Search,
@@ -261,6 +262,7 @@ export default function CatalogManagementPage() {
   const [activeTab, setActiveTab] = useState<ActiveTab>(isAdmin ? "services" : "products");
   const [loading, setLoading] = useState(false);
   const [notification, setNotification] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [isSortMode, setIsSortMode] = useState(false);
 
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [products, setProducts] = useState<ProductItem[]>([]);
@@ -557,7 +559,6 @@ export default function CatalogManagementPage() {
 
   // ===== TẠO MỚI =====
   const handleCreateNew = () => {
-    // Nếu không phải admin, không cho tạo mới
     if (!isAdmin) {
       showToast('error', 'Bạn không có quyền tạo mới sản phẩm');
       return;
@@ -577,6 +578,108 @@ export default function CatalogManagementPage() {
     }
   };
 
+  // ===== SẮP XẾP NHANH =====
+  const sortByName = async (type: 'service' | 'product') => {
+    const list = type === 'service' ? services : products;
+    const sorted = [...list].sort((a, b) => a.name.localeCompare(b.name));
+    for (let i = 0; i < sorted.length; i++) {
+      const item = sorted[i];
+      try {
+        if (type === 'service') {
+          await updateService(item.id, { ...item, sort_order: i + 1 });
+        } else {
+          await updateProduct(item.id, { ...item, sort_order: i + 1 });
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    if (type === 'service') setServices(sorted);
+    else setProducts(sorted);
+    showToast("success", "Đã sắp xếp theo tên A→Z");
+  };
+
+  const sortByPrice = async (type: 'service' | 'product') => {
+    const list = type === 'service' ? services : products;
+    const sorted = [...list].sort((a, b) => a.price - b.price);
+    for (let i = 0; i < sorted.length; i++) {
+      const item = sorted[i];
+      try {
+        if (type === 'service') {
+          await updateService(item.id, { ...item, sort_order: i + 1 });
+        } else {
+          await updateProduct(item.id, { ...item, sort_order: i + 1 });
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    if (type === 'service') setServices(sorted);
+    else setProducts(sorted);
+    showToast("success", "Đã sắp xếp theo giá tăng dần");
+  };
+
+  // ===== DI CHUYỂN THỨ TỰ =====
+  const handleMoveUp = async (item: any, type: 'service' | 'product') => {
+    const list = type === 'service' ? services : products;
+    const index = list.findIndex(i => i.id === item.id);
+    if (index <= 0) return;
+    const prevItem = list[index - 1];
+    if (!prevItem) return;
+
+    try {
+      const currentOrder = item.sort_order ?? 0;
+      const prevOrder = prevItem.sort_order ?? 0;
+
+      if (type === 'service') {
+        await updateService(item.id, { ...item, sort_order: prevOrder });
+        await updateService(prevItem.id, { ...prevItem, sort_order: currentOrder });
+      } else {
+        await updateProduct(item.id, { ...item, sort_order: prevOrder });
+        await updateProduct(prevItem.id, { ...prevItem, sort_order: currentOrder });
+      }
+
+      const newList = [...list];
+      [newList[index - 1], newList[index]] = [newList[index], newList[index - 1]];
+      if (type === 'service') setServices(newList);
+      else setProducts(newList);
+
+      showToast("success", "Đã di chuyển thứ tự lên");
+    } catch (err: any) {
+      showToast("error", err.message || "Lỗi cập nhật thứ tự");
+    }
+  };
+
+  const handleMoveDown = async (item: any, type: 'service' | 'product') => {
+    const list = type === 'service' ? services : products;
+    const index = list.findIndex(i => i.id === item.id);
+    if (index < 0 || index >= list.length - 1) return;
+    const nextItem = list[index + 1];
+    if (!nextItem) return;
+
+    try {
+      const currentOrder = item.sort_order ?? 0;
+      const nextOrder = nextItem.sort_order ?? 0;
+
+      if (type === 'service') {
+        await updateService(item.id, { ...item, sort_order: nextOrder });
+        await updateService(nextItem.id, { ...nextItem, sort_order: currentOrder });
+      } else {
+        await updateProduct(item.id, { ...item, sort_order: nextOrder });
+        await updateProduct(nextItem.id, { ...nextItem, sort_order: currentOrder });
+      }
+
+      const newList = [...list];
+      [newList[index], newList[index + 1]] = [newList[index + 1], newList[index]];
+      if (type === 'service') setServices(newList);
+      else setProducts(newList);
+
+      showToast("success", "Đã di chuyển thứ tự xuống");
+    } catch (err: any) {
+      showToast("error", err.message || "Lỗi cập nhật thứ tự");
+    }
+  };
+
   // ==========================================================
   // RENDER
   // ==========================================================
@@ -589,11 +692,12 @@ export default function CatalogManagementPage() {
       ]
     : [{ key: "products", label: "Sản phẩm" }];
 
+  const isServiceOrProduct = activeTab === 'services' || activeTab === 'products';
+
   return (
     <div className="p-3 sm:p-6 max-w-7xl mx-auto space-y-4 sm:space-y-6 bg-slate-50 min-h-screen">
       <div className="flex justify-between items-center">
         <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Danh mục</h1>
-        {/* Nút Tạo mới chỉ hiển thị cho Admin */}
         {isAdmin && (
           <button
             onClick={handleCreateNew}
@@ -654,6 +758,22 @@ export default function CatalogManagementPage() {
           <span className="hidden sm:inline">Lọc</span>
           {(filters.category || filters.status || filters.productType || filters.categoryType) && <span className="w-2 h-2 bg-pink-500 rounded-full" />}
         </button>
+        {isAdmin && isServiceOrProduct && (
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => sortByName(activeTab === 'services' ? 'service' : 'product')}
+              className="text-xs px-2 py-1 bg-blue-50 text-blue-600 rounded hover:bg-blue-100"
+            >
+              Tên A→Z
+            </button>
+            <button
+              onClick={() => sortByPrice(activeTab === 'services' ? 'service' : 'product')}
+              className="text-xs px-2 py-1 bg-blue-50 text-blue-600 rounded hover:bg-blue-100"
+            >
+              Giá ↑
+            </button>
+          </div>
+        )}
       </div>
 
       <FilterSheet
@@ -761,19 +881,41 @@ export default function CatalogManagementPage() {
                   )}
                   {!isCategory && <span className="text-sm font-bold text-emerald-700">{formatVND(price)}</span>}
                   {isProduct && <span className={`w-2.5 h-2.5 rounded-full ${stockColor} inline-block`} title={stockColor === "bg-emerald-500" ? "Còn nhiều" : stockColor === "bg-amber-500" ? "Sắp hết" : "Hết hàng"} />}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (window.confirm(`Bạn có chắc muốn xóa "${displayName}"?`)) {
-                        handleDelete(item.id, activeTab);
-                      }
-                    }}
-                    className="text-slate-400 hover:text-red-600 transition-colors ml-auto"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+
+                  {isAdmin && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (window.confirm(`Bạn có chắc muốn xóa "${displayName}"?`)) {
+                          handleDelete(item.id, activeTab);
+                        }
+                      }}
+                      className="text-slate-400 hover:text-red-600 transition-colors ml-auto"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
                 {inventoryButtons}
+
+                {isAdmin && (isService || isProduct) && (
+                  <div className="flex items-center gap-0.5 mt-1">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleMoveUp(item, isService ? 'service' : 'product'); }}
+                      className="text-xs px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded hover:bg-slate-200"
+                      title="Di chuyển lên"
+                    >
+                      ↑
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleMoveDown(item, isService ? 'service' : 'product'); }}
+                      className="text-xs px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded hover:bg-slate-200"
+                      title="Di chuyển xuống"
+                    >
+                      ↓
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -984,6 +1126,7 @@ function ServiceFormModal({ isOpen, onClose, editingService, categories, onSave 
     performance_commission_type: editingService?.performance_commission_type || "PERCENT",
     performance_commission_value: editingService?.performance_commission_value ?? editingService?.performance_commission_rate ?? 0,
     loyalty_points: editingService?.loyalty_points ?? 0,
+    sort_order: editingService?.sort_order ?? 0, // thêm
   });
   const [validationError, setValidationError] = useState(null);
 
@@ -1043,6 +1186,17 @@ function ServiceFormModal({ isOpen, onClose, editingService, categories, onSave 
             />
             <p className="text-xs text-slate-400 mt-1">Áp dụng khi hệ thống ở chế độ POINTS</p>
           </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700">Thứ tự hiển thị</label>
+            <input
+              type="number"
+              min="0"
+              value={formData.sort_order}
+              onChange={(e) => setFormData({ ...formData, sort_order: Number(e.target.value) })}
+              className="w-full p-2 border border-slate-300 rounded-lg text-sm"
+            />
+            <p className="text-xs text-slate-400 mt-1">Số càng nhỏ hiển thị càng đầu</p>
+          </div>
           <div><label className="block text-sm font-medium text-slate-700">Mô tả</label><textarea rows={2} value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="w-full p-2 border border-slate-300 rounded-lg text-sm" /></div>
           <div className="flex gap-3 pt-4 border-t">
             <button onClick={onClose} className="flex-1 py-2.5 border border-slate-300 rounded-lg text-sm font-semibold text-slate-700">Hủy</button>
@@ -1069,6 +1223,7 @@ function ProductFormModal({ isOpen, onClose, editingProduct, categories, onSave 
     sales_commission_type: editingProduct?.sales_commission_type || "PERCENT",
     sales_commission_value: editingProduct?.sales_commission_value ?? 0,
     loyalty_points: editingProduct?.loyalty_points ?? 0,
+    sort_order: editingProduct?.sort_order ?? 0,
   });
   const [validationError, setValidationError] = useState(null);
 
@@ -1130,6 +1285,17 @@ function ProductFormModal({ isOpen, onClose, editingProduct, categories, onSave 
               placeholder="Số điểm cần để đổi (0 = không dùng)"
             />
             <p className="text-xs text-slate-400 mt-1">Áp dụng khi hệ thống ở chế độ POINTS</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700">Thứ tự hiển thị</label>
+            <input
+              type="number"
+              min="0"
+              value={formData.sort_order}
+              onChange={(e) => setFormData({ ...formData, sort_order: Number(e.target.value) })}
+              className="w-full p-2 border border-slate-300 rounded-lg text-sm"
+            />
+            <p className="text-xs text-slate-400 mt-1">Số càng nhỏ hiển thị càng đầu</p>
           </div>
           <div className="flex gap-3 pt-4 border-t">
             <button onClick={onClose} className="flex-1 py-2.5 border border-slate-300 rounded-lg text-sm font-semibold text-slate-700">Hủy</button>

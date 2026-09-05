@@ -50,6 +50,17 @@ export const authService = {
 
       if (staff) {
         localStorage.setItem(STAFF_PROFILE_KEY, JSON.stringify(staff));
+
+        // Set config cho audit log (admin login)
+        try {
+          await supabase.rpc('set_config', {
+            key: 'app.current_profile_id',
+            value: staff.profile_id || staff.id,
+            is_global: false
+          });
+        } catch (setErr) {
+          console.warn('⚠️ Không thể set config audit log cho admin:', setErr);
+        }
       }
     }
 
@@ -89,6 +100,19 @@ export const authService = {
     const token = utf8ToBase64(JSON.stringify(tokenPayload));
     localStorage.setItem(STAFF_TOKEN_KEY, token);
 
+    // === THÊM: SET CONFIG CHO AUDIT LOG ===
+    try {
+      // Gọi RPC set_config để lưu profile_id vào session variable
+      await supabase.rpc('set_config', {
+        key: 'app.current_profile_id',
+        value: data.staff.profile_id || data.staff.id, // nếu không có profile_id thì dùng staff.id
+        is_global: false
+      });
+      console.log('✅ Đã set config cho audit log');
+    } catch (setErr) {
+      console.warn('⚠️ Không thể set config audit log:', setErr);
+    }
+
     console.log('✅ Đăng nhập Staff thành công:', data.staff.full_name);
     return data;
   },
@@ -105,6 +129,16 @@ export const authService = {
       this.clearStaffSession();
       localStorage.removeItem('mee_role');
       localStorage.removeItem('mee_visibility');
+      // 3. Clear session config
+      try {
+        await supabase.rpc('set_config', {
+          key: 'app.current_profile_id',
+          value: '',
+          is_global: false
+        });
+      } catch (setErr) {
+        // ignore
+      }
       console.log('✅ Đã đăng xuất hoàn toàn');
     }
   },

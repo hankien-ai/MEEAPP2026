@@ -18,6 +18,7 @@ import PayrollDetailPage from "./pages/PayrollDetailPage";
 import AppointmentsPage from "./pages/AppointmentsPage";
 import TasksPage from "./pages/TasksPage";
 import LoyaltyPage from "./pages/LoyaltyPage";
+import AuditLogPage from "./pages/AuditLogPage";
 import { AppShell } from "./components/app-shell";
 import { NotificationBell } from "@/components/NotificationBell";
 
@@ -25,7 +26,6 @@ export function App() {
   const { role, isLoggedIn, visibility, isAdmin, loading, currentStaff } = useAuth();
   const [activeTab, setActiveTab] = useState<string>("dashboard");
 
-  // State cho Payroll detail
   const [payrollDetail, setPayrollDetail] = useState<{
     staffId: string;
     month: number;
@@ -51,21 +51,20 @@ export function App() {
     if (visibility.dashboard) tabs.push("dashboard");
     if (visibility.customers) tabs.push("customers");
     if (visibility.pos) tabs.push("pos");
-    // Cho phép staff truy cập catalog
     if (isAdmin && visibility.catalog) tabs.push("catalog");
-    if (!isAdmin) tabs.push("catalog"); // staff luôn có catalog
+    if (!isAdmin) tabs.push("catalog");
     if (visibility.operations) tabs.push("operations");
     if (isAdmin && visibility.staff) tabs.push("staff");
     if (isAdmin && visibility.payroll) tabs.push("payroll");
     if (isAdmin && visibility.settings) tabs.push("settings");
-    // Cho phép staff truy cập invoices
     if (isAdmin) tabs.push("invoices");
-    if (!isAdmin) tabs.push("invoices"); // staff luôn có invoices
+    if (!isAdmin) tabs.push("invoices");
     if (isAdmin) tabs.push("reports");
     if (isAdmin) tabs.push("extension");
     if (isAdmin) tabs.push("appointments");
     if (isAdmin) tabs.push("tasks");
     if (isAdmin) tabs.push("loyalty");
+    if (isAdmin) tabs.push("audit");
     if (visibility.customers) tabs.push("appointments");
     if (visibility.staff) tabs.push("tasks");
 
@@ -103,6 +102,7 @@ export function App() {
     if (isAdmin) tabs.push("appointments");
     if (isAdmin) tabs.push("tasks");
     if (isAdmin) tabs.push("loyalty");
+    if (isAdmin) tabs.push("audit");
     if (visibility.customers) tabs.push("appointments");
     if (visibility.staff) tabs.push("tasks");
     return Array.from(new Set(tabs));
@@ -112,7 +112,6 @@ export function App() {
   const currentActiveTab = visibleTabs.includes(activeTab) ? activeTab : (visibleTabs.length > 0 ? visibleTabs[0] : "dashboard");
 
   const renderContent = () => {
-    // Nếu đang xem chi tiết payroll, ưu tiên hiển thị
     if (payrollDetail) {
       return (
         <PayrollDetailPage
@@ -139,6 +138,7 @@ export function App() {
       case "appointments": return <AppointmentsPage />;
       case "tasks": return <TasksPage />;
       case "loyalty": return <LoyaltyPage />;
+      case "audit": return <AuditLogPage />;
       default: return <NotFoundPage />;
     }
   };
