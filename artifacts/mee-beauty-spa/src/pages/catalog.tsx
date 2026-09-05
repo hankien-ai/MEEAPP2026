@@ -557,9 +557,9 @@ export default function CatalogManagementPage() {
 
   // ===== TẠO MỚI =====
   const handleCreateNew = () => {
+    // Nếu không phải admin, không cho tạo mới
     if (!isAdmin) {
-      setEditingProduct(null);
-      setIsProductModalOpen(true);
+      showToast('error', 'Bạn không có quyền tạo mới sản phẩm');
       return;
     }
     if (activeTab === "services") {
@@ -593,12 +593,15 @@ export default function CatalogManagementPage() {
     <div className="p-3 sm:p-6 max-w-7xl mx-auto space-y-4 sm:space-y-6 bg-slate-50 min-h-screen">
       <div className="flex justify-between items-center">
         <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Danh mục</h1>
-        <button
-          onClick={handleCreateNew}
-          className="flex items-center gap-2 px-4 py-2.5 bg-pink-600 text-white rounded-lg text-sm font-semibold hover:bg-pink-700 shadow-sm active:scale-95 transition-transform"
-        >
-          <Plus className="w-4 h-4" /> Tạo mới
-        </button>
+        {/* Nút Tạo mới chỉ hiển thị cho Admin */}
+        {isAdmin && (
+          <button
+            onClick={handleCreateNew}
+            className="flex items-center gap-2 px-4 py-2.5 bg-pink-600 text-white rounded-lg text-sm font-semibold hover:bg-pink-700 shadow-sm active:scale-95 transition-transform"
+          >
+            <Plus className="w-4 h-4" /> Tạo mới
+          </button>
+        )}
       </div>
 
       {notification && (

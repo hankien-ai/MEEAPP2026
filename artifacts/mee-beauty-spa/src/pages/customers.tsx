@@ -636,14 +636,17 @@ export function CustomerProfilePage({
               </div>
             </div>
           </div>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setIsEditModalOpen(true)}
-            className="shrink-0 text-xs font-medium rounded-xl px-3 py-1.5 border-blue-300 text-blue-600 hover:bg-blue-50"
-          >
-            <Edit className="w-3.5 h-3.5 mr-1" /> Sửa
-          </Button>
+          {/* Nút Sửa - chỉ hiển thị cho ADMIN */}
+          {isAdmin && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setIsEditModalOpen(true)}
+              className="shrink-0 text-xs font-medium rounded-xl px-3 py-1.5 border-blue-300 text-blue-600 hover:bg-blue-50"
+            >
+              <Edit className="w-3.5 h-3.5 mr-1" /> Sửa
+            </Button>
+          )}
         </div>
       </div>
 
@@ -737,6 +740,19 @@ export function CustomerProfilePage({
                     {customer.notes || "Không có ghi chú"}
                   </p>
                 </div>
+                {/* Tag danh mục (nếu có) */}
+                {customer.tags && customer.tags.length > 0 && (
+                  <div className="grid grid-cols-2 gap-1 py-1 border-t border-gray-100 pt-2">
+                    <span className="text-gray-500">Danh mục</span>
+                    <div className="flex flex-wrap gap-1 justify-end">
+                      {customer.tags.map((tag, idx) => (
+                        <Badge key={idx} variant="info" className="text-[10px]">
+                          {tag}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1129,76 +1145,78 @@ export function CustomerProfilePage({
 
       {/* ========== MODALS (giữ nguyên) ========== */}
 
-      {/* MODAL: EDIT CUSTOMER INFO */}
-      <Modal
-        isOpen={isEditModalOpen}
-        onClose={() => setIsEditModalOpen(false)}
-        title="Cập nhật thông tin khách hàng"
-      >
-        <form onSubmit={handleUpdateInfo} className="space-y-4">
-          <Input
-            label="Họ và Tên *"
-            required
-            value={editFormData.full_name}
-            onChange={(e: ChangeEvent<HTMLInputElement>) =>
-              setEditFormData({ ...editFormData, full_name: e.target.value })
-            }
-          />
-          <Input
-            label="Số Điện Thoại *"
-            required
-            value={editFormData.phone}
-            onChange={(e: ChangeEvent<HTMLInputElement>) =>
-              setEditFormData({ ...editFormData, phone: e.target.value })
-            }
-          />
-          <Input
-            label="Email"
-            type="email"
-            value={editFormData.email}
-            onChange={(e: ChangeEvent<HTMLInputElement>) =>
-              setEditFormData({ ...editFormData, email: e.target.value })
-            }
-          />
-          <div className="grid grid-cols-2 gap-4">
-            <Select
-              label="Giới tính"
-              value={editFormData.gender}
-              onChange={(e: ChangeEvent<HTMLSelectElement>) =>
-                setEditFormData({ ...editFormData, gender: e.target.value })
-              }
-            >
-              <option value="">Chưa chọn</option>
-              <option value="Nữ">Nữ</option>
-              <option value="Nam">Nam</option>
-              <option value="Khác">Khác</option>
-            </Select>
+      {/* MODAL: EDIT CUSTOMER INFO – CHỈ ADMIN MỚI ĐƯỢC MỞ */}
+      {isEditModalOpen && isAdmin && (
+        <Modal
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          title="Cập nhật thông tin khách hàng"
+        >
+          <form onSubmit={handleUpdateInfo} className="space-y-4">
             <Input
-              label="Ngày sinh"
-              type="date"
-              value={editFormData.birthday}
+              label="Họ và Tên *"
+              required
+              value={editFormData.full_name}
               onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                setEditFormData({ ...editFormData, birthday: e.target.value })
+                setEditFormData({ ...editFormData, full_name: e.target.value })
               }
             />
-          </div>
-          <Textarea
-            label="Ghi chú"
-            value={editFormData.notes}
-            onChange={(e: ChangeEvent<HTMLTextAreaElement>) =>
-              setEditFormData({ ...editFormData, notes: e.target.value })
-            }
-          />
-          <div className="flex justify-end gap-2 pt-4">
-            <Button variant="outline" onClick={() => setIsEditModalOpen(false)}>
-              Hủy
-            </Button>
-            <Button type="submit" isLoading={updating}>
-              Lưu thay đổi
-            </Button>
-          </div>
-        </form>
-      </Modal>
+            <Input
+              label="Số Điện Thoại *"
+              required
+              value={editFormData.phone}
+              onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                setEditFormData({ ...editFormData, phone: e.target.value })
+              }
+            />
+            <Input
+              label="Email"
+              type="email"
+              value={editFormData.email}
+              onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                setEditFormData({ ...editFormData, email: e.target.value })
+              }
+            />
+            <div className="grid grid-cols-2 gap-4">
+              <Select
+                label="Giới tính"
+                value={editFormData.gender}
+                onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+                  setEditFormData({ ...editFormData, gender: e.target.value })
+                }
+              >
+                <option value="">Chưa chọn</option>
+                <option value="Nữ">Nữ</option>
+                <option value="Nam">Nam</option>
+                <option value="Khác">Khác</option>
+              </Select>
+              <Input
+                label="Ngày sinh"
+                type="date"
+                value={editFormData.birthday}
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  setEditFormData({ ...editFormData, birthday: e.target.value })
+                }
+              />
+            </div>
+            <Textarea
+              label="Ghi chú"
+              value={editFormData.notes}
+              onChange={(e: ChangeEvent<HTMLTextAreaElement>) =>
+                setEditFormData({ ...editFormData, notes: e.target.value })
+              }
+            />
+            <div className="flex justify-end gap-2 pt-4">
+              <Button variant="outline" onClick={() => setIsEditModalOpen(false)}>
+                Hủy
+              </Button>
+              <Button type="submit" isLoading={updating}>
+                Lưu thay đổi
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
 
       {/* MODAL: UPLOAD PHOTO */}
       <Modal
