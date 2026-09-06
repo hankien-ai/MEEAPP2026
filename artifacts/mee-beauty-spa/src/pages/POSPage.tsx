@@ -148,6 +148,7 @@ export const POSPage: React.FC = () => {
   const [packages, setPackages] = useState<CatalogPackageItem[]>([]);
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [loggedStaff, setLoggedStaff] = useState<Staff | null>(null);
+  const [recentServices, setRecentServices] = useState<CatalogServiceItem[]>([]);
 
   // Customer & cart
   const [customer, setCustomer] = useState<Customer | null>(null);
@@ -218,14 +219,13 @@ export const POSPage: React.FC = () => {
         role: staff.role,
       });
       setSelectedSellerId(staff.id);
-      console.log("🔍 POS updated staff:", staff.full_name);
     } else {
       setLoggedStaff(null);
       setSelectedSellerId(undefined);
     }
   }, [currentStaff]);
 
-  // 👇 LOAD DATA - KHÔNG GỌI getLoggedInStaff
+  // 👇 LOAD DATA
   const loadData = async () => {
     setLoading(true);
     const [sData, pData, pkgData, staffData] = await Promise.all([
@@ -258,6 +258,37 @@ export const POSPage: React.FC = () => {
   useEffect(() => {
     loadData();
   }, []);
+
+  // 👇 Load recent services khi customer thay đổi
+  useEffect(() => {
+    if (customer) {
+      loadRecentServices(customer.id);
+    } else {
+      setRecentServices([]);
+    }
+  }, [customer]);
+
+  const loadRecentServices = async (customerId: string) => {
+    try {
+      const history = await customerService.fetchCustomerServiceHistory(customerId);
+      const seen = new Set<string>();
+      const unique: CatalogServiceItem[] = [];
+      for (const session of history) {
+        const catalogItemId = session.catalog_item_id;
+        if (catalogItemId && !seen.has(catalogItemId)) {
+          seen.add(catalogItemId);
+          const service = services.find(s => s.catalog_item_id === catalogItemId);
+          if (service) {
+            unique.push(service);
+          }
+        }
+        if (unique.length >= 5) break;
+      }
+      setRecentServices(unique);
+    } catch (err) {
+      console.error('Lỗi load recent services:', err);
+    }
+  };
 
   const showAlert = (type: "success" | "error" | "info", message: string) => {
     setNotification({ type, message });
@@ -476,7 +507,7 @@ export const POSPage: React.FC = () => {
     });
   };
 
-  // ========== PACKAGE USAGE (SỬA LỖI KTV SPLITS) ==========
+  // ========== PACKAGE USAGE ==========
   const handleUsePackageItem = (customerPackageId: string, customerPackageItemId: string, serviceName: string, serviceId: string, remaining: number) => {
     const service = services.find(s => s.id === serviceId);
     if (!service) {
@@ -494,7 +525,6 @@ export const POSPage: React.FC = () => {
       return;
     }
 
-    // 🔥 ĐẢM BẢO LUÔN CÓ KTV SPLITS
     let selectedStaffId = getDefaultSellerId();
     let defaultSplits: KTVSplit[] = [];
 
@@ -502,7 +532,6 @@ export const POSPage: React.FC = () => {
       const staffName = staffList.find(s => s.id === selectedStaffId)?.full_name || loggedStaff?.full_name || "KTV";
       defaultSplits = [{ staff_id: selectedStaffId, staff_name: staffName, share_percent: 100 }];
     } else {
-      // Fallback: lấy staff đầu tiên trong danh sách active
       const firstStaff = staffList.find(s => s.id);
       if (firstStaff) {
         selectedStaffId = firstStaff.id;
@@ -551,7 +580,6 @@ export const POSPage: React.FC = () => {
       return;
     }
 
-    // Kiểm tra đã có trong giỏ chưa
     const exists = cartItems.some(item => item.gift_entitlement_id === entitlementId);
     if (exists) {
       showAlert("warning", "Dịch vụ này đã được thêm vào giỏ");
@@ -761,19 +789,15 @@ export const POSPage: React.FC = () => {
       return;
     }
 
-    // Nếu giỏ hàng chỉ chứa các item không phải thanh toán (dùng package hoặc gift entitlement)
     const allFreeItems = cartItems.every(item => 
       item.use_package === true || item.use_gift_entitlement === true
     );
 
-    // Nếu tất cả đều là free và tổng tiền = 0 → tự động hoàn thành
     if (allFreeItems && finalTotal === 0) {
-      // Gọi thanh toán ngay với method CASH, paidAmount = 0, không notes
       handleConfirmPayment('CASH', 0, 'Tự động hoàn thành (dùng gói/quà tặng)');
       return;
     }
 
-    // Các trường hợp khác cần chọn thanh toán
     if (hasPackageInCart && !customer) {
       showAlert("error", "Gói dịch vụ (Package) bắt buộc phải chọn Khách hàng trước khi thanh toán!");
       return;
@@ -789,12 +813,10 @@ export const POSPage: React.FC = () => {
       }
     }
 
-    // Mở modal thanh toán bình thường
     setIsDebtPayment(false);
     setIsPaymentModalOpen(true);
   };
 
-  // 🔥 Hàm xử lý thanh toán nợ
   const handleDebtPaymentConfirm = async (method: PaymentMethod, paidAmount: number, notes?: string) => {
     if (!customer) {
       showAlert("error", "Không có khách hàng!");
@@ -915,17 +937,14 @@ export const POSPage: React.FC = () => {
         </div>
       )}
 
-      <header className="bg-white rounded-xl border border-slate-200 p-3 mb-3 shadow-sm flex flex-wrap items-center justify-between gap-2">
+      <header className="bg-white rounded-xl border border-slate-200 p-3 mb-3 shadow-sm flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-black text-sm shadow-md shadow-emerald-600/30">
             M
           </div>
           <div>
-            <h1 className="font-extrabold text-slate-900 text-sm sm:text-base">
-              POS Thu Ngân
-            </h1>
-            <p className="text-[10px] text-slate-500">
-              Sale: {loggedStaff?.full_name || "Chưa xác định"}
+            <p className="text-sm font-medium text-slate-700">
+              {loggedStaff?.full_name || "Chưa xác định"}
             </p>
           </div>
         </div>
@@ -950,13 +969,6 @@ export const POSPage: React.FC = () => {
               </span>
             )}
           </div>
-
-          <button
-            onClick={loadData}
-            className="px-2.5 py-1.5 border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg text-[10px] font-medium transition-all"
-          >
-            🔄 Tải lại
-          </button>
 
           {customer && (
             <button
@@ -988,7 +1000,6 @@ export const POSPage: React.FC = () => {
                 onUsePackageItem={handleUsePackageItem}
                 onSelectGift={() => {}}
                 onPayDebt={() => {
-                  // 🔥 XỬ LÝ THANH TOÁN NỢ
                   if (!customer) {
                     showAlert("error", "Vui lòng chọn khách hàng!");
                     return;
@@ -1018,6 +1029,7 @@ export const POSPage: React.FC = () => {
               onAddProduct={(item) => toggleCartItem(item, 'PRODUCT')}
               onAddPackage={(item) => toggleCartItem(item, 'PACKAGE')}
               cartItemIds={cartItemIds}
+              recentServices={recentServices}
             />
           </div>
 
