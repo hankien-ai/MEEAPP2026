@@ -4,7 +4,7 @@ import { supabase } from '@/services/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
-import { Search, X } from 'lucide-react';
+import { Search, Filter, X } from 'lucide-react';
 import { Badge, Spinner, Button } from '@/components/primitives';
 
 export const AuditLogPage: React.FC = () => {
@@ -27,8 +27,8 @@ export const AuditLogPage: React.FC = () => {
     setLoading(true);
     try {
       let query = supabase
-        .from('audit_logs')
-        .select('*, profiles:actor_profile_id(full_name)')
+        .from('audit_logs_view') // 🔥 Dùng view thay vì bảng
+        .select('*')
         .order('created_at', { ascending: false })
         .limit(200);
 
@@ -191,7 +191,9 @@ export const AuditLogPage: React.FC = () => {
                     </span>
                   </td>
                   <td className="p-3 font-mono">{log.entity_id?.slice(0, 8)}</td>
-                  <td className="p-3">{log.profiles?.full_name || 'Hệ thống'}</td>
+                  <td className="p-3 font-medium text-slate-800">
+                    {log.staff_name || 'Hệ thống'} {/* 🔥 Lấy từ view */}
+                  </td>
                   <td className="p-3 max-w-xs truncate">
                     {log.action === 'INSERT' && log.new_values ? (
                       <span className="text-emerald-600">Tạo mới</span>

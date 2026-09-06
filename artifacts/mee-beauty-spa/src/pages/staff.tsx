@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   fetchStaff,
-  createStaff,
+  createStaffWithProfile, // đã import hàm mới
   updateStaff,
   updateStaffStatus,
   archiveStaff,
@@ -477,36 +477,40 @@ export const StaffPage: React.FC<{ userRole?: string }> = ({ userRole = "staff" 
     setErrorMessage(null);
     setSuccessMessage(null);
 
-    if (!editingStaff) {
-      if (formData.pin.length !== 6 || !/^\d{6}$/.test(formData.pin)) {
-        setErrorMessage("Mã PIN phải gồm 6 chữ số");
-        return;
-      }
-      if (formData.pin !== formData.confirm_pin) {
-        setErrorMessage("Mã PIN và xác nhận không khớp");
-        return;
-      }
-    }
-
     try {
-      const payload = {
-        full_name: formData.full_name,
-        role: formData.role,
-        phone: formData.phone,
-        base_salary: Number(formData.base_salary) || 0,
-        status: formData.status,
-        started_on: formData.started_on,
-      };
-
-      let staffId: string;
       if (editingStaff) {
+        // Cập nhật nhân viên (không cần pin)
+        const payload = {
+          full_name: formData.full_name,
+          role: formData.role,
+          phone: formData.phone,
+          base_salary: Number(formData.base_salary) || 0,
+          status: formData.status,
+          started_on: formData.started_on,
+        };
         await updateStaff(editingStaff.id, payload);
-        staffId = editingStaff.id;
         setSuccessMessage("Cập nhật nhân viên thành công!");
       } else {
-        const newStaff = await createStaff(payload);
-        staffId = newStaff.id;
-        await authService.setStaffPin(staffId, formData.pin);
+        // Tạo mới nhân viên – sử dụng RPC để tạo auth user + profile + staff + pin
+        if (formData.pin.length !== 6 || !/^\d{6}$/.test(formData.pin)) {
+          setErrorMessage("Mã PIN phải gồm 6 chữ số");
+          return;
+        }
+        if (formData.pin !== formData.confirm_pin) {
+          setErrorMessage("Mã PIN và xác nhận không khớp");
+          return;
+        }
+
+        const payload = {
+          full_name: formData.full_name,
+          phone: formData.phone,
+          role: formData.role,
+          pin: formData.pin,
+          base_salary: Number(formData.base_salary) || 0,
+          status: formData.status,
+          started_on: formData.started_on,
+        };
+        await createStaffWithProfile(payload);
         setSuccessMessage("Thêm mới nhân viên thành công!");
       }
 

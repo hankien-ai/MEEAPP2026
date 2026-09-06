@@ -4,7 +4,6 @@ import { supabase } from './supabase';
 const STAFF_TOKEN_KEY = 'mee_staff_token';
 const STAFF_PROFILE_KEY = 'mee_staff_profile';
 
-// Hàm mã hóa UTF-8 sang base64 (xử lý tiếng Việt an toàn)
 function utf8ToBase64(str: string): string {
   return btoa(
     encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, function (_, p1) {
@@ -13,7 +12,6 @@ function utf8ToBase64(str: string): string {
   );
 }
 
-// Hàm giải mã base64 về UTF-8
 function base64ToUtf8(str: string): string {
   return decodeURIComponent(
     atob(str)
@@ -26,21 +24,15 @@ function base64ToUtf8(str: string): string {
 }
 
 export const authService = {
-  /**
-   * ADMIN LOGIN - Supabase Auth
-   */
   async loginAdmin(email: string, password: string) {
-    // 1. Dọn dẹp token Staff PIN cũ trước khi đăng nhập Admin
     this.clearStaffSession();
 
-    // 2. Thực hiện đăng nhập Supabase Auth
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
     if (error) throw error;
 
-    // 3. Lấy thông tin Staff tương ứng và lưu vào LocalStorage để đồng bộ isAdmin()
     if (data?.user) {
       const { data: staff } = await supabase
         .from('staff')
@@ -50,31 +42,33 @@ export const authService = {
 
       if (staff) {
         localStorage.setItem(STAFF_PROFILE_KEY, JSON.stringify(staff));
-
-        // Set config cho audit log (admin login)
+        // Set config cho audit log
+        if (staff.profile_id) {
+          try {
+            await supabase.rpc('set_config', {
+              key: 'app.current_profile_id',
+              value: staff.profile_id,
+              is_global: false
+            });
+          } catch (e) { /* ignore */ }
+        }
+        // Set staff id
         try {
           await supabase.rpc('set_config', {
-            key: 'app.current_profile_id',
-            value: staff.profile_id || staff.id,
+            key: 'app.current_staff_id',
+            value: staff.id,
             is_global: false
           });
-        } catch (setErr) {
-          console.warn('⚠️ Không thể set config audit log cho admin:', setErr);
-        }
+        } catch (e) { /* ignore */ }
       }
     }
 
     return data;
   },
 
-  /**
-   * STAFF LOGIN - PIN qua RPC
-   */
   async loginStaff(pin: string) {
-    // 1. Đăng xuất khỏi Supabase Auth Admin trước để tránh xung đột session ngầm
     await supabase.auth.signOut().catch(() => {});
 
-    // 2. Gọi RPC staff_pin_login
     const { data, error } = await supabase.rpc('staff_pin_login', {
       p_pin: pin,
     });
@@ -88,10 +82,8 @@ export const authService = {
       throw new Error(data?.error || 'Mã PIN không đúng');
     }
 
-    // 3. Lưu thông tin Staff vào LocalStorage
     localStorage.setItem(STAFF_PROFILE_KEY, JSON.stringify(data.staff));
 
-    // 4. Tạo token Staff (Expiration 12 giờ)
     const tokenPayload = {
       staff_id: data.staff.id,
       role: data.staff.role,
@@ -100,60 +92,45 @@ export const authService = {
     const token = utf8ToBase64(JSON.stringify(tokenPayload));
     localStorage.setItem(STAFF_TOKEN_KEY, token);
 
-    // === THÊM: SET CONFIG CHO AUDIT LOG ===
+    // 🔥 Set config cho audit log
+    if (data.staff?.profile_id) {
+      try {
+        await supabase.rpc('set_config', {
+          key: 'app.current_profile_id',
+          value: data.staff.profile_id,
+          is_global: false
+        });
+      } catch (e) { /* ignore */ }
+    }
+    // 🔥 Set staff id (quan trọng cho staff không có profile)
     try {
-      // Gọi RPC set_config để lưu profile_id vào session variable
       await supabase.rpc('set_config', {
-        key: 'app.current_profile_id',
-        value: data.staff.profile_id || data.staff.id, // nếu không có profile_id thì dùng staff.id
+        key: 'app.current_staff_id',
+        value: data.staff.id,
         is_global: false
       });
-      console.log('✅ Đã set config cho audit log');
-    } catch (setErr) {
-      console.warn('⚠️ Không thể set config audit log:', setErr);
-    }
+    } catch (e) { /* ignore */ }
 
     console.log('✅ Đăng nhập Staff thành công:', data.staff.full_name);
     return data;
   },
 
-  /**
-   * LOGOUT - Đăng xuất sạch sẽ cả Admin & Staff
-   */
   async logout() {
     try {
-      // 1. Đăng xuất Supabase Admin
       await supabase.auth.signOut().catch(() => {});
     } finally {
-      // 2. Xóa toàn bộ LocalStorage liên quan đến Auth
       this.clearStaffSession();
       localStorage.removeItem('mee_role');
       localStorage.removeItem('mee_visibility');
-      // 3. Clear session config
-      try {
-        await supabase.rpc('set_config', {
-          key: 'app.current_profile_id',
-          value: '',
-          is_global: false
-        });
-      } catch (setErr) {
-        // ignore
-      }
       console.log('✅ Đã đăng xuất hoàn toàn');
     }
   },
 
-  /**
-   * Xóa bộ nhớ tạm của Staff PIN
-   */
   clearStaffSession() {
     localStorage.removeItem(STAFF_TOKEN_KEY);
     localStorage.removeItem(STAFF_PROFILE_KEY);
   },
 
-  /**
-   * Lấy staff hiện tại từ localStorage
-   */
   getCurrentStaff() {
     const raw = localStorage.getItem(STAFF_PROFILE_KEY);
     if (!raw) return null;
@@ -164,16 +141,10 @@ export const authService = {
     }
   },
 
-  /**
-   * Lấy token staff hiện tại
-   */
   getToken() {
     return localStorage.getItem(STAFF_TOKEN_KEY);
   },
 
-  /**
-   * Kiểm tra phiên đăng nhập Staff còn hạn hay không
-   */
   isAuthenticated() {
     const token = this.getToken();
     if (!token) return false;
@@ -191,27 +162,18 @@ export const authService = {
     }
   },
 
-  /**
-   * Kiểm tra quyền Admin
-   */
   isAdmin() {
     const staff = this.getCurrentStaff();
     if (!staff) return false;
     return staff.role === 'Admin' || staff.role === 'admin';
   },
 
-  /**
-   * Kiểm tra xem người dùng có phải Nhân viên thường không
-   */
   isStaff() {
     const staff = this.getCurrentStaff();
     if (!staff) return false;
     return !this.isAdmin();
   },
 
-  /**
-   * SET PIN cho staff - Gọi RPC hash_and_update_pin
-   */
   async setStaffPin(staffId: string, pin: string) {
     if (!pin || pin.length !== 6 || !/^\d{6}$/.test(pin)) {
       throw new Error('Mã PIN phải gồm đúng 6 chữ số');
@@ -234,9 +196,6 @@ export const authService = {
     return data;
   },
 
-  /**
-   * Lấy danh sách staff (Chỉ Admin)
-   */
   async getStaffList() {
     if (!this.isAdmin()) {
       throw new Error('Chỉ Admin mới có quyền xem danh sách nhân viên');
@@ -251,9 +210,6 @@ export const authService = {
     return data || [];
   },
 
-  /**
-   * Tạo staff mới kèm PIN (Chỉ Admin)
-   */
   async createStaffWithPin(staffData: {
     full_name: string;
     phone: string;
@@ -290,15 +246,11 @@ export const authService = {
 
     if (staffError) throw staffError;
 
-    // Cập nhật PIN mã hóa cho Staff vừa tạo
     await this.setStaffPin(staff.id, staffData.pin);
 
     return staff;
   },
 
-  /**
-   * Cập nhật thông tin staff (Chỉ Admin)
-   */
   async updateStaff(
     staffId: string,
     data: {
@@ -323,7 +275,6 @@ export const authService = {
 
     if (error) throw error;
 
-    // Đăng nhập lại nếu đang tự sửa chính mình để cập nhật local storage
     const current = this.getCurrentStaff();
     if (current && current.id === staffId) {
       localStorage.setItem(STAFF_PROFILE_KEY, JSON.stringify({ ...current, ...data }));
@@ -332,9 +283,6 @@ export const authService = {
     return true;
   },
 
-  /**
-   * Vô hiệu hóa staff (Soft delete)
-   */
   async deactivateStaff(staffId: string) {
     if (!this.isAdmin()) {
       throw new Error('Chỉ Admin mới có quyền vô hiệu hóa nhân viên');
@@ -352,9 +300,6 @@ export const authService = {
     return true;
   },
 
-  /**
-   * Kích hoạt lại staff
-   */
   async activateStaff(staffId: string) {
     if (!this.isAdmin()) {
       throw new Error('Chỉ Admin mới có quyền kích hoạt nhân viên');

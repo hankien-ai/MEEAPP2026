@@ -499,3 +499,52 @@ export const getStaffRecentActivity = async (staffId: string, limit: number = 20
   activities.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
   return activities.slice(0, limit);
 };
+
+// ============================================================
+// CREATE STAFF WITH PROFILE (RPC) – THÊM MỚI
+// ============================================================
+
+/**
+ * Tạo nhân viên mới với profile và auth user tự động.
+ * Gọi RPC create_staff_with_profile (cần service role key).
+ */
+export const createStaffWithProfile = async (input: {
+  full_name: string;
+  phone: string;
+  role: string;
+  pin: string;
+  base_salary?: number;
+  status?: string;
+  started_on?: string;
+}): Promise<StaffMemberDomain> => {
+  const { data, error } = await supabase.rpc('create_staff_with_profile', {
+    p_full_name: input.full_name,
+    p_phone: input.phone,
+    p_role: input.role,
+    p_pin: input.pin,
+    p_base_salary: input.base_salary || 0,
+    p_status: input.status || 'ACTIVE',
+    p_started_on: input.started_on || new Date().toISOString().split('T')[0],
+  });
+
+  if (error) {
+    throw new Error(`Lỗi khi tạo nhân viên qua RPC: ${error.message}`);
+  }
+
+  if (!data || !data.success) {
+    throw new Error(data?.error || 'Không thể tạo nhân viên');
+  }
+
+  // Lấy lại staff vừa tạo để trả về đúng kiểu StaffMemberDomain
+  const { data: staff, error: fetchError } = await supabase
+    .from('staff')
+    .select('*')
+    .eq('id', data.staff_id)
+    .single();
+
+  if (fetchError) {
+    throw new Error(`Lỗi khi lấy thông tin nhân viên mới: ${fetchError.message}`);
+  }
+
+  return staff as StaffMemberDomain;
+};
